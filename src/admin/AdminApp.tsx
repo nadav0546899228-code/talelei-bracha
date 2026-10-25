@@ -837,20 +837,22 @@ export default function AdminApp() {
       </div>
       <div className="adm-tabs" ref={barScrollRef}>
         {barNav}
-        <button
-          type="button"
-          className="adm-bar-grip"
-          aria-label="גרירת סרגל הניווט לצדדים"
-          title="גרירה לצדדים"
-          onPointerDown={gripPointerDown}
-          onPointerMove={gripPointerMove}
-          onPointerUp={gripPointerEnd}
-          onPointerCancel={gripPointerEnd}
-        >
-          <span className="adm-bar-grip__dots" aria-hidden="true">
-            <i /><i /><i /><i /><i /><i />
-          </span>
-        </button>
+        {barEntries.length > 4 ? (
+          <button
+            type="button"
+            className="adm-bar-grip"
+            aria-label="גרירת סרגל הניווט לצדדים"
+            title="גרירה לצדדים"
+            onPointerDown={gripPointerDown}
+            onPointerMove={gripPointerMove}
+            onPointerUp={gripPointerEnd}
+            onPointerCancel={gripPointerEnd}
+          >
+            <span className="adm-bar-grip__dots" aria-hidden="true">
+              <i /><i /><i /><i /><i /><i />
+            </span>
+          </button>
+        ) : null}
       </div>
       {searchOpen ? <SearchModal initialQuery={searchSeed} onClose={() => { setSearchOpen(false); setSearchSeed(""); }} onGo={go} /> : null}
       {profileOpen ? (
