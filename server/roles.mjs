@@ -2,7 +2,7 @@
  * תפקידים, תצוגות והרשאות - המקור הקובע (השרת אוכף, הממשק רק מציג).
  *
  * מבנה ארגוני (בשני תחומים: כולל ערב ובנות צילה):
- *   מנכ״ל ← רכז ראשי (מעל כל הרכזים) ← רכז עיר ← מנהל סניף ← אברכים
+ *   מנכ״ל ← רכז ארצי ← רכז אזור ← רכז עיר ← מנהל סניף ← אנשים/פעילות
  */
 
 export const VIEWS = ["dashboard", "smart", "activity", "messages", "isha", "bnot", "inquiries", "kollel", "payroll", "reports", "org", "broadcast", "donations", "content", "users", "audit", "developer"];
@@ -30,7 +30,9 @@ export const VIEW_LABELS = {
 export const ROLES = {
   developer: { label: "מתכנת", views: VIEWS },
   ceo: { label: "מנכ״ל", views: VIEWS.filter((v) => v !== "developer" && v !== "audit") },
-  chief_coordinator: { label: "רכז ראשי", views: ["dashboard", "smart", "activity", "messages", "kollel", "payroll", "reports", "isha", "bnot", "org", "broadcast"] },
+  chief_coordinator: { label: "רכז ארצי", views: ["dashboard", "smart", "activity", "messages", "kollel", "payroll", "reports", "isha", "bnot", "org", "broadcast"] },
+  kollel_region: { label: "רכז אזור - כולל ערב", views: ["dashboard", "smart", "activity", "messages", "kollel", "org", "broadcast", "reports"] },
+  bnot_region: { label: "רכזת אזור - בנות צילה", views: ["dashboard", "smart", "activity", "messages", "isha", "bnot", "org", "broadcast", "reports"] },
   kollel_city: { label: "רכז עיר - כולל ערב", views: ["dashboard", "smart", "activity", "messages", "kollel", "org", "broadcast"] },
   kollel_branch: { label: "מנהל סניף - כולל ערב", views: ["dashboard", "smart", "activity", "messages", "kollel", "broadcast"] },
   bnot_city: { label: "רכזת עיר - בנות צילה", views: ["dashboard", "smart", "activity", "messages", "isha", "bnot", "org", "broadcast"] },
@@ -41,8 +43,10 @@ export const ROLES = {
   bnot_caller: { label: "טלפנית - בנות צילה", views: ["dashboard", "smart", "bnot", "messages"] },
 };
 
-/** תפקידים שמשויכים לעיר או לסניף */
+/** תפקידים שמשויכים לאזור, עיר או סניף */
 export const ROLE_SCOPE = {
+  kollel_region: { domain: "kollel", level: "region" },
+  bnot_region: { domain: "bnot", level: "region" },
   kollel_city: { domain: "kollel", level: "city" },
   kollel_branch: { domain: "kollel", level: "branch" },
   bnot_city: { domain: "bnot", level: "city" },
@@ -59,7 +63,9 @@ export function grantableRoles(roles) {
   if (roles.includes("developer")) return Object.keys(ROLES);
   if (roles.includes("ceo")) return Object.keys(ROLES).filter((r) => r !== "developer");
   const out = new Set();
-  if (roles.includes("chief_coordinator")) ["kollel_city", "kollel_branch", "bnot_city", "bnot_branch", "bnot_caller"].forEach((r) => out.add(r));
+  if (roles.includes("chief_coordinator")) ["kollel_region", "bnot_region", "kollel_city", "kollel_branch", "bnot_city", "bnot_branch", "bnot_caller"].forEach((r) => out.add(r));
+  if (roles.includes("kollel_region")) ["kollel_city", "kollel_branch"].forEach((r) => out.add(r));
+  if (roles.includes("bnot_region")) ["bnot_city", "bnot_branch", "bnot_caller"].forEach((r) => out.add(r));
   if (roles.includes("kollel_city")) out.add("kollel_branch");
   if (roles.includes("bnot_city")) ["bnot_branch", "bnot_caller"].forEach((r) => out.add(r));
   return [...out];
