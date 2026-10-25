@@ -110,6 +110,35 @@ export const isDevSite =
   /(\.replit\.dev|localhost|127\.0\.0\.1)$/.test(window.location.hostname);
 
 export type NavItem = { to: string; label: string; children?: NavItem[] };
+export type PublicSiteMode = "home" | "kollel" | "bnot";
+
+export function publicSiteMode(path: string): PublicSiteMode {
+  if (path === "/") return "home";
+  if (path === "/bnot-tzila" || path === "/isha-le-isha" || path === "/register") return "bnot";
+  if (path === "/keren-talelei-bracha") return "kollel";
+  const saved = typeof sessionStorage !== "undefined" ? sessionStorage.getItem("tb-public-site") : null;
+  return saved === "bnot" ? "bnot" : saved === "kollel" ? "kollel" : "home";
+}
+
+export const kollelNav: NavItem[] = [
+  { to: "/keren-talelei-bracha", label: "בית הקרן" },
+  { to: "/about", label: "אודות" },
+  { to: "/lessons", label: "שיעורים ותוכן" },
+  { to: "/events", label: "אירועים" },
+  { to: "/gallery", label: "גלריה" },
+  { to: "/join", label: "הצטרפות" },
+  { to: "/contact", label: "צור קשר" },
+];
+
+export const bnotNav: NavItem[] = [
+  { to: "/bnot-tzila", label: "בית בנות צילה" },
+  { to: "/isha-le-isha", label: "אישה לאישה" },
+  { to: "/lessons", label: "שיעורים ותוכן" },
+  { to: "/events", label: "אירועים" },
+  { to: "/gallery", label: "גלריה" },
+  { to: "/join", label: "הצטרפות" },
+  { to: "/contact", label: "צור קשר" },
+];
 
 export const mainNav: NavItem[] = [
   { to: "/", label: "בית" },
