@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Icon, type IconName } from "../../components/Icon";
-import { api } from "../api";
+import { api, type View } from "../api";
 import { useLive } from "../live";
 
 type ActivityItem = {
@@ -59,7 +59,7 @@ function pinPos(lat:number,lng:number){
   return {left:`${left}%`,top:`${top}%`};
 }
 
-export function ActivityCenterView() {
+export function ActivityCenterView({ go }: { go: (view: View, tab?: string) => void }) {
   const [data,setData]=useState<Data|null>(null);
   const [err,setErr]=useState("");
   const [selectedDate,setSelectedDate]=useState(todayIso());
@@ -181,13 +181,20 @@ export function ActivityCenterView() {
           <div className="adm-panel__head"><div><span className="adm-eyebrow">ציר שעות</span><h2>{heDay(selectedDate)}</h2></div><span className="adm-section-count">{dayItems.length}</span></div>
           {dayItems.length?(
             <div className="adm-day-timeline">
-              {dayItems.map((x)=><article className={`adm-time-event adm-time-event--${sourceClass(x.source)}`} key={x.id}>
+              {dayItems.map((x)=><article
+                className={`adm-time-event adm-time-event--${sourceClass(x.source)}`}
+                key={x.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => x.source === "challah" ? go("bnot","challah") : x.source === "bnotActivity" ? go("bnot","activities") : x.source === "kollelStudy" ? go("kollel","attendance") : go("content", x.source === "scheduledLesson" ? "lessons" : "events")}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") e.currentTarget.click(); }}
+              >
                 <div className="adm-time-event__time">{x.time||"—"}</div>
                 <div className="adm-time-event__dot"><Icon name={sourceIcon(x.source)}/></div>
                 <div className="adm-time-event__body">
                   <div><strong>{x.title}</strong>{x.demo?<span className="flag">דמה</span>:null}</div>
                   <span>{x.sourceLabel} · {x.city||"ללא עיר"}{x.branch?` · ${x.branch}`:""}</span>
-                  <small>{x.place||x.address||"המיקום לפי הסניף"}{x.participants!=null?` · ${x.participants} משתתפים/נרשמים`:""}</small>
+                  <small>{x.place||x.address||"המיקום לפי הסניף"}{x.participants!=null?` · ${x.participants} משתתפים/נרשמים`:""} · לחיצה לניהול</small>
                 </div>
               </article>)}
             </div>
