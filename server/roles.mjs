@@ -5,10 +5,11 @@
  *   מנכ״ל ← רכז ראשי (מעל כל הרכזים) ← רכז עיר ← מנהל סניף ← אברכים
  */
 
-export const VIEWS = ["dashboard", "activity", "messages", "isha", "bnot", "inquiries", "kollel", "payroll", "reports", "org", "broadcast", "donations", "content", "users", "audit", "developer"];
+export const VIEWS = ["dashboard", "smart", "activity", "messages", "isha", "bnot", "inquiries", "kollel", "payroll", "reports", "org", "broadcast", "donations", "content", "users", "audit", "developer"];
 
 export const VIEW_LABELS = {
   dashboard: "לוח בקרה",
+  smart: "ניהול חכם",
   activity: "לוח פעילות ארצי",
   messages: "הודעות",
   bnot: "סניפי בנות צילה",
@@ -29,14 +30,15 @@ export const VIEW_LABELS = {
 export const ROLES = {
   developer: { label: "מתכנת", views: VIEWS },
   ceo: { label: "מנכ״ל", views: VIEWS.filter((v) => v !== "developer" && v !== "audit") },
-  chief_coordinator: { label: "רכז ראשי", views: ["dashboard", "activity", "messages", "kollel", "payroll", "reports", "isha", "bnot", "org", "broadcast"] },
-  kollel_city: { label: "רכז עיר - כולל ערב", views: ["dashboard", "activity", "messages", "kollel", "org", "broadcast"] },
-  kollel_branch: { label: "מנהל סניף - כולל ערב", views: ["dashboard", "activity", "messages", "kollel", "broadcast"] },
-  bnot_city: { label: "רכזת עיר - בנות צילה", views: ["dashboard", "activity", "messages", "isha", "bnot", "org", "broadcast"] },
-  bnot_branch: { label: "מנהלת סניף - בנות צילה", views: ["dashboard", "activity", "messages", "bnot", "broadcast"] },
-  isha_coordinator: { label: "רכזת אישה לאישה", views: ["dashboard", "activity", "messages", "isha", "broadcast"] },
-  office: { label: "משרד ופניות", views: ["dashboard", "activity", "messages", "inquiries", "broadcast", "donations"] },
+  chief_coordinator: { label: "רכז ראשי", views: ["dashboard", "smart", "activity", "messages", "kollel", "payroll", "reports", "isha", "bnot", "org", "broadcast"] },
+  kollel_city: { label: "רכז עיר - כולל ערב", views: ["dashboard", "smart", "activity", "messages", "kollel", "org", "broadcast"] },
+  kollel_branch: { label: "מנהל סניף - כולל ערב", views: ["dashboard", "smart", "activity", "messages", "kollel", "broadcast"] },
+  bnot_city: { label: "רכזת עיר - בנות צילה", views: ["dashboard", "smart", "activity", "messages", "isha", "bnot", "org", "broadcast"] },
+  bnot_branch: { label: "מנהלת סניף - בנות צילה", views: ["dashboard", "smart", "activity", "messages", "bnot", "broadcast"] },
+  isha_coordinator: { label: "רכזת אישה לאישה", views: ["dashboard", "smart", "activity", "messages", "isha", "broadcast"] },
+  office: { label: "משרד ופניות", views: ["dashboard", "smart", "activity", "messages", "inquiries", "broadcast", "donations"] },
   content_editor: { label: "עריכת תוכן", views: ["dashboard", "activity", "messages", "content"] },
+  bnot_caller: { label: "טלפנית - בנות צילה", views: ["dashboard", "smart", "bnot", "messages"] },
 };
 
 /** תפקידים שמשויכים לעיר או לסניף */
@@ -45,6 +47,7 @@ export const ROLE_SCOPE = {
   kollel_branch: { domain: "kollel", level: "branch" },
   bnot_city: { domain: "bnot", level: "city" },
   bnot_branch: { domain: "bnot", level: "branch" },
+  bnot_caller: { domain: "bnot", level: "branch" },
 };
 
 /** שמות תפקידים מגרסה קודמת */
@@ -56,9 +59,9 @@ export function grantableRoles(roles) {
   if (roles.includes("developer")) return Object.keys(ROLES);
   if (roles.includes("ceo")) return Object.keys(ROLES).filter((r) => r !== "developer");
   const out = new Set();
-  if (roles.includes("chief_coordinator")) ["kollel_city", "kollel_branch", "bnot_city", "bnot_branch"].forEach((r) => out.add(r));
+  if (roles.includes("chief_coordinator")) ["kollel_city", "kollel_branch", "bnot_city", "bnot_branch", "bnot_caller"].forEach((r) => out.add(r));
   if (roles.includes("kollel_city")) out.add("kollel_branch");
-  if (roles.includes("bnot_city")) out.add("bnot_branch");
+  if (roles.includes("bnot_city")) ["bnot_branch", "bnot_caller"].forEach((r) => out.add(r));
   return [...out];
 }
 
