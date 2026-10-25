@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { mainNav } from "../config/site";
+import { bnotNav, kollelNav, mainNav, publicSiteMode } from "../config/site";
 import { Link, useRouter } from "../router/Router";
 import { Icon } from "./Icon";
 import { Logo } from "./Logo";
 
 export function Header() {
   const { path } = useRouter();
+  const mode = publicSiteMode(path);
+  const nav = mode === "bnot" ? bnotNav : mode === "kollel" ? kollelNav : mainNav;
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
@@ -20,11 +22,12 @@ export function Header() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  // סגירת תפריטים במעבר עמוד
+  // סגירת תפריטים במעבר עמוד ושמירת הבחירה בין שני אתרי התדמית
   useEffect(() => {
     setMenuOpen(false);
     setOpenDropdown(null);
-  }, [path]);
+    if (mode === "bnot" || mode === "kollel") sessionStorage.setItem("tb-public-site", mode);
+  }, [path, mode]);
 
   // תפריט מובייל: נעילת גלילה, Escape, פוקוס
   useEffect(() => {
@@ -80,15 +83,23 @@ export function Header() {
   const header = (
     <header className={`site-header ${scrolled ? "is-scrolled" : ""}`}>
       <div className="container site-header__bar">
-        <Link to="/" className="brand-mark" aria-label="קרן טללי ברכה ובנות צילה - לדף הבית">
-          <Logo org="taleiBracha" height={54} priority />
-          <span className="brand-mark__sep" aria-hidden="true" />
-          <Logo org="bnotTzila" height={40} priority />
+        <Link
+          to={mode === "bnot" ? "/bnot-tzila" : mode === "kollel" ? "/keren-talelei-bracha" : "/"}
+          className={`brand-mark brand-mark--${mode}`}
+          aria-label={mode === "bnot" ? "בנות צילה - לדף הבית" : mode === "kollel" ? "קרן טללי ברכה - לדף הבית" : "קרן טללי ברכה ובנות צילה - לדף הבית"}
+        >
+          {mode === "bnot" ? <Logo org="bnotTzila" height={46} priority /> : mode === "kollel" ? <Logo org="taleiBracha" height={54} priority /> : (
+            <>
+              <Logo org="taleiBracha" height={54} priority />
+              <span className="brand-mark__sep" aria-hidden="true" />
+              <Logo org="bnotTzila" height={40} priority />
+            </>
+          )}
         </Link>
 
         <nav className="site-nav" aria-label="ניווט ראשי">
           <ul className="site-nav__list">
-            {mainNav.map((item) =>
+            {nav.map((item) =>
               item.children ? (
                 <li
                   key={item.label}
@@ -126,6 +137,12 @@ export function Header() {
         </nav>
 
         <div className="header-actions">
+          {mode !== "home" ? (
+            <Link to={mode === "bnot" ? "/keren-talelei-bracha" : "/bnot-tzila"} className="site-mode-switch">
+              {mode === "bnot" ? <Logo org="taleiBracha" height={26} /> : <Logo org="bnotTzila" height={25} />}
+              <span>{mode === "bnot" ? "לאתר הקרן" : "לאתר בנות צילה"}</span>
+            </Link>
+          ) : null}
           <Link to="/admin" className="btn btn--ghost btn--sm staff-link" aria-label="כניסת צוות" title="כניסת צוות">
             <Icon name="lock" />
             <span className="staff-link__text">כניסת צוות</span>
@@ -178,7 +195,7 @@ export function Header() {
           </div>
           <div className="mobile-menu__body">
             <ul className="mobile-menu__list">
-              {mainNav.flatMap((item) => {
+              {nav.flatMap((item) => {
                 const rows = item.children
                   ? [
                       <li key={item.label + "-h"} className="is-group">
