@@ -8,6 +8,7 @@ import { buildXlsx, downloadBlob, parsePasted } from "../xlsx";
 import { useLive } from "../live";
 import { MitchPanel, type Mitch } from "./MitchView";
 import { SheetTable } from "../SheetTable";
+import { BranchExpenses } from "./BranchExpenses";
 
 export type Overview = {
   me: { manager: boolean; canEditAvrechim: boolean; canPayroll: boolean };
@@ -353,7 +354,6 @@ function EntriesTab({ ov }: { ov: Overview }) {
   const open = ov.months.filter((m) => !m.locked);
   const [month, setMonth] = useState<string>(open[0]?.id ?? ov.months[0]?.id ?? "");
   const [entries, setEntries] = useState<Entry[] | null>(null);
-  const [expense, setExpense] = useState<{ avrechId: string; amount: string; description: string } | null>(null);
   const [full, setFull] = useState(false);
   const [form, setForm] = useState<{ avrechId: string; type: EntryType; amount: string; description: string }>({ avrechId: "", type: "bonus", amount: "", description: "" });
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -419,7 +419,7 @@ function EntriesTab({ ov }: { ov: Overview }) {
       {!locked ? (
         <section className="adm-panel">
           <div className="adm-panel__head">
-            <h2>דיווח מהיר</h2>
+            <h2>נסיעות · דיווח מהיר</h2>
             <input className="input adm-search" type="search" placeholder="חיפוש" value={q} onChange={(e) => setQ(e.target.value)} aria-label="חיפוש אברך" style={{ maxWidth: 180 }} />
           </div>
           <div className="adm-quick">
@@ -437,29 +437,6 @@ function EntriesTab({ ov }: { ov: Overview }) {
                   <button type="button" className="adm-qbtn adm-qbtn--minus" dir="ltr" aria-label={`הפחתה ${STEP} ש״ח ל${a.name}`} onClick={() => send({ avrechId: a.id, type: "travel", amount: -STEP, description: "הפחתת נסיעות" })}>
                     −{STEP}
                   </button>
-                  <button type="button" className="adm-qbtn" aria-label={`הוצאה ל${a.name}`} title="הוצאה" onClick={() => setExpense({ avrechId: a.id, amount: "", description: "" })}>
-                    <Icon name="file" />
-                  </button>
-                  {expense?.avrechId === a.id ? (
-                    <div className="adm-quick__exp">
-                      <input className="input" type="number" inputMode="decimal" placeholder="₪" autoFocus value={expense.amount} onChange={(e) => setExpense({ ...expense, amount: e.target.value })} />
-                      <input className="input" placeholder="על מה?" value={expense.description} onChange={(e) => setExpense({ ...expense, description: e.target.value })} />
-                      <button
-                        type="button"
-                        className="adm-icon-btn adm-icon-btn--ok"
-                        aria-label="שמירה"
-                        disabled={!Number(expense.amount)}
-                        onClick={async () => {
-                          if (await send({ avrechId: a.id, type: "expense", amount: Number(expense.amount), description: expense.description })) setExpense(null);
-                        }}
-                      >
-                        <Icon name="check" />
-                      </button>
-                      <button type="button" className="adm-icon-btn" aria-label="ביטול" onClick={() => setExpense(null)}>
-                        <Icon name="close" />
-                      </button>
-                    </div>
-                  ) : null}
                 </div>
               );
             })}
@@ -468,7 +445,7 @@ function EntriesTab({ ov }: { ov: Overview }) {
           {manager ? (
             <>
               <button type="button" className="btn btn--ghost btn--sm" style={{ marginTop: 12 }} onClick={() => setFull(!full)}>
-                <Icon name={full ? "arrowUp" : "plus"} /> מענק, בונוס או הורדה
+                <Icon name={full ? "arrowUp" : "plus"} /> חריגים: מענק, בונוס, שונות או הורדה
               </button>
               {full ? (
                 <div className="adm-fields adm-fields--2" style={{ marginTop: 10 }}>
@@ -478,7 +455,7 @@ function EntriesTab({ ov }: { ov: Overview }) {
                   </div>
                   <div className="field">
                     <span className="field__label">סוג</span>
-                    <Chips<EntryType> value={form.type} onChange={(type) => setForm({ ...form, type })} items={(["bonus", "grant", "deduction"] as EntryType[]).map((t) => ({ id: t, label: ENTRY_LABELS[t] }))} />
+                    <Chips<EntryType> value={form.type} onChange={(type) => setForm({ ...form, type })} items={(["bonus", "grant", "other", "deduction"] as EntryType[]).map((t) => ({ id: t, label: ENTRY_LABELS[t] }))} />
                   </div>
                   <label className="field">
                     <span className="field__label">סכום (₪)</span>
@@ -509,6 +486,8 @@ function EntriesTab({ ov }: { ov: Overview }) {
           ) : null}
         </section>
       ) : null}
+
+      <BranchExpenses ov={ov} month={month} locked={locked} />
 
       <section className="adm-panel">
         <div className="adm-panel__head">

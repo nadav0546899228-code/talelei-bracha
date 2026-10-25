@@ -34,7 +34,7 @@ function tree(mode: Mode): NavHub[] {
     ],
   };
   const common = {
-    home: { id: "home", label: "בית", icon: "grid" as IconName, items: [leaf("dashboard", "לוח בקרה", "grid", "dashboard")] },
+    home: { id: "home", label: "לוח בקרה", icon: "dashboard" as IconName, items: [leaf("dashboard", "לוח בקרה", "dashboard", "dashboard")] },
     smart: { id: "smart-center", label: "ניהול חכם", icon: "sparkle" as IconName, items: [leaf("smart", "ניהול חכם", "sparkle", "smart", { hint: "משימות, אישורים, משפכים, בריאות סניפים ופעולות מרוכזות" })] },
     activity: { id: "activity-center", label: "פעילות", icon: "calendar" as IconName, items: [leaf("activity", "לוח פעילות ארצי", "calendar", "activity", { hint: "לוח שנה, שעות ומפת הפעילות בארץ" })] },
   };

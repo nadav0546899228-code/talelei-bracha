@@ -1,14 +1,21 @@
 /** משכורות כולל ערב - חודש בכל פעם, לפי הכללים הקבועים, עם סגירה לתשלום וייצוא לאקסל */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "../../components/Icon";
-import { api, put, type Me } from "../api";
-import { Chips, Combo, money, ToneLegend } from "../components";
+import { api, del, post, put, type Me } from "../api";
+import { BranchExpenses, branchExpensesSheet, useBranchExpenses } from "./BranchExpenses";
+import { Chips, Combo, money } from "../components";
 import {
   computePayroll,
   hebrewMonthLabel,
+  hebrewYearLabel,
+  hebrewYearMonthLabels,
+  hebrewYearNum,
+  yearOfMonthLabel,
   SIMCHA_LABELS,
   type AttendanceSession,
+  ENTRY_LABELS,
   type Entry,
+  type EntryType,
   type KollelSettings,
   type MonthDoc,
   type MonthRow,
@@ -16,9 +23,17 @@ import {
   type Simcha,
 } from "../kollelCalc";
 import { buildXlsx, downloadBlob, type Sheet } from "../xlsx";
+import { buildMasav } from "../masav";
 import type { Overview } from "./KollelView";
 import { useLive } from "../live";
 
+/** שנה עברית מלאה (5787) מתווית חודש */
+const yearNumOf = (label: string) => {
+  const y = yearOfMonthLabel(label);
+  const now = hebrewYearNum();
+  for (let k = now - 6; k <= now + 2; k++) if (hebrewYearLabel(k) === y) return k;
+  return 0;
+};
 const emptyMonth = (label: string): MonthDoc => ({ label, order: Date.now(), rows: {}, extraIds: [], simchas: [], locked: false, notes: "" });
 
 function monthSheet(label: string, lines: PayrollLine[]): Sheet {
@@ -41,6 +56,33 @@ export function PayrollView({ me }: { me: Me }) {
   const [onlyMissing, setOnlyMissing] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [exOpen, setExOpen] = useState<string | null>(null);
+  const [year, setYear] = useState<number>(() => hebrewYearNum());
+  // לשוניות החודשים נצמדות לתחתית - מעל הסרגל התחתון / ליד סרגל צד ותפריט
+  const [tabsPos, setTabsPos] = useState<{ bottom?: number; left?: number; right?: number }>({});
+  useEffect(() => {
+    const place = () => {
+      const vw = window.innerWidth, vh = window.innerHeight;
+      let bottom = 0, left = 0, right = 0;
+      document.querySelectorAll<HTMLElement>(".adm-tabs, .adm-side, aside.adm-nav").forEach((el) => {
+        const r = el.getBoundingClientRect();
+        if (!r.width || !r.height || getComputedStyle(el).display === "none") return;
+        if (r.width > vw * 0.6 && r.top > vh * 0.5) bottom = Math.max(bottom, vh - r.top);
+        else if (r.height > vh * 0.5 && r.left < 4) left = Math.max(left, r.right);
+        else if (r.height > vh * 0.5 && r.right > vw - 4) right = Math.max(right, vw - r.left);
+      });
+      setTabsPos({ bottom, left, right });
+    };
+    place();
+    const t = window.setInterval(place, 1500);
+    window.addEventListener("resize", place);
+    return () => {
+      window.clearInterval(t);
+      window.removeEventListener("resize", place);
+    };
+  }, []);
+  const [exForm, setExForm] = useState<{ type: EntryType; amount: string; description: string }>({ type: "travel", amount: "", description: "" });
+  const bx = useBranchExpenses(key);
   const privileged = me.user.roles.includes("ceo") || me.user.roles.includes("developer");
 
   const loadOv = useCallback(async () => {
@@ -50,7 +92,7 @@ export function PayrollView({ me }: { me: Me }) {
   }, []);
 
   useEffect(() => {
-    loadOv().then((o) => setKey((k) => k || o.months[0]?.id || ""));
+    loadOv().then((o) => setKey((k) => k || (o.months.some((m) => m.id === hebrewMonthLabel()) ? hebrewMonthLabel() : o.months[0]?.id || "")));
   }, [loadOv]);
 
   // עדכון חי - בלי לדרוס עריכה שלא נשמרה
@@ -82,6 +124,10 @@ export function PayrollView({ me }: { me: Me }) {
     if (!key) return;
     api<{ cities: { id: string; name: string; approved: unknown }[] }>(`/api/kollel/status?month=${encodeURIComponent(key)}`).then(setStage).catch(() => setStage(null));
   }, [key, tick]);
+  useEffect(() => {
+    const y = yearNumOf(key);
+    if (y) setYear(y);
+  }, [key]);
   const lines = useMemo(() => (ov && month ? computePayroll(ov.avrechim, month, entries, ov.settings, sessions) : []), [ov, month, entries, sessions]);
 
   if (!ov) return <p className="muted">טוען…</p>;
@@ -136,9 +182,51 @@ export function PayrollView({ me }: { me: Me }) {
     if (missingBank.length) setMsg({ ok: false, text: `חסרים פרטי בנק ל-${missingBank.length} אברכים: ${missingBank.slice(0, 6).map((l) => l.avrech.name).join(", ")}${missingBank.length > 6 ? "…" : ""}` });
   };
 
+  // קובץ מס״ב - זיכוי ישיר לחשבונות האברכים
+  const exportMasav = () => {
+    if (!month) return;
+    const cfg = s.masav;
+    if (!cfg?.institutionCode) {
+      setMsg({ ok: false, text: "חסר קוד מוסד למס״ב - ממלאים בהגדרות (כפתור העיפרון למעלה)" });
+      setSettingsOpen(true);
+      return;
+    }
+    const when = window.prompt("תאריך זיכוי (יום/חודש/שנה):", new Date(Date.now() + 2 * 864e5).toLocaleDateString("he-IL"));
+    if (!when) return;
+    const [dd, mm, yy] = when.split(/[./-]/).map(Number);
+    const payDate = new Date(yy < 100 ? 2000 + yy : yy, (mm || 1) - 1, dd || 1, 12);
+    if (Number.isNaN(payDate.getTime())) return setMsg({ ok: false, text: "תאריך לא תקין" });
+    const pay = lines.filter((l) => l.total > 0);
+    const ok = pay.filter((l) => l.avrech.bank?.account && l.avrech.bank?.bankCode && l.avrech.bank?.branchCode);
+    const bad = pay.filter((l) => !ok.includes(l));
+    const r = buildMasav(cfg, ok.map((l) => ({ name: l.avrech.bank?.holder || l.avrech.name.replace(" (דמה)", ""), idNumber: l.avrech.bank?.idNumber || "", bankCode: l.avrech.bank!.bankCode, branchCode: l.avrech.bank!.branchCode, account: l.avrech.bank!.account, amount: l.total, ref: month.label })), payDate);
+    downloadBlob(r.blob, `מסב ${month.label}.txt`);
+    setMsg({ ok: !bad.length, text: `קובץ מס״ב: ${r.count} מוטבים · ${money(r.total)}${bad.length ? ` · לא נכללו ${bad.length} בלי פרטי בנק: ${bad.slice(0, 5).map((l) => l.avrech.name).join(", ")}${bad.length > 5 ? "…" : ""}` : ""}` });
+  };
+
   const exportMonth = () => {
     if (!month) return;
-    downloadBlob(buildXlsx([monthSheet(month.label, lines)]), `משכורות ${month.label}.xlsx`);
+    downloadBlob(buildXlsx([monthSheet(month.label, lines), branchExpensesSheet(ov, month.label, bx.list ?? [])]), `משכורות ${month.label}.xlsx`);
+  };
+
+  const reloadEntries = () => api<{ entries: Entry[] }>(`/api/kollel/entries?month=${encodeURIComponent(key)}`).then((e) => setEntries(e.entries));
+  const addException = async (avrechId: string) => {
+    try {
+      await post("/api/kollel/entries", { avrechId, month: key, type: exForm.type, amount: Number(exForm.amount), description: exForm.description });
+      setExForm({ ...exForm, amount: "", description: "" });
+      await reloadEntries();
+    } catch (e) {
+      setMsg({ ok: false, text: e instanceof Error ? e.message : "שגיאה" });
+    }
+  };
+  const removeEntry = async (id: string) => {
+    if (!window.confirm("למחוק?")) return;
+    try {
+      await del(`/api/kollel/entries/${id}`);
+      await reloadEntries();
+    } catch (e) {
+      setMsg({ ok: false, text: e instanceof Error ? e.message : "שגיאה" });
+    }
   };
 
   const exportAll = async () => {
@@ -197,55 +285,31 @@ export function PayrollView({ me }: { me: Me }) {
         <div className="adm-panel adm-empty">אין עדיין חודשים. לוחצים "חודש חדש" כדי לפתוח את החודש הנוכחי.</div>
       ) : (
         <>
-          <Chips<string>
-            value={key}
-            onChange={(v) => (dirty && !window.confirm("יש שינויים שלא נשמרו. לעבור בכל זאת?") ? null : setKey(v))}
-            items={ov.months.map((m) => ({ id: m.id, label: `${m.locked ? "🔒 " : ""}${m.label}` }))}
-          />
-          <div className="adm-toolbar">
-            <span className={`adm-status ${locked ? "adm-status--done" : "adm-status--in_progress"}`}>
-              <Icon name={locked ? "lock" : "edit"} width={14} height={14} style={{ verticalAlign: "-2px" }} /> {locked ? "סגור לתשלום" : "פתוח לעריכה"}
+          <div className="adm-xl-sum">
+            <span className={`adm-xl-sum__st${locked ? " is-locked" : ""}`}>
+              <Icon name={locked ? "lock" : "edit"} width={14} height={14} /> {month?.label || key} · {locked ? "סגור" : "פתוח"}
             </span>
-            <button type="button" className="adm-chip" aria-pressed={onlyMissing} onClick={() => setOnlyMissing(!onlyMissing)}>
-              מי חסר? <span className="adm-chip__n">{missing.length}</span>
+            <span><strong>{money(total)}</strong> לתשלום</span>
+            <span><strong>{lines.length}</strong> אברכים</span>
+            <button type="button" className={`adm-xl-sum__miss${onlyMissing ? " is-on" : ""}`} onClick={() => setOnlyMissing(!onlyMissing)}>
+              <strong>{missing.length}</strong> לא נבדקו
             </button>
             {stage && stage.cities.length ? (
-              <span className={`adm-status ${stage.cities.every((c) => c.approved) ? "adm-status--done" : "adm-status--new"}`} title={stage.cities.filter((c) => !c.approved).map((c) => c.name).join(", ")}>
-                <Icon name="checkCircle" width={14} height={14} style={{ verticalAlign: "-2px" }} /> ערים אישרו {stage.cities.filter((c) => c.approved).length}/{stage.cities.length}
+              <span title={stage.cities.filter((c) => !c.approved).map((c) => c.name).join(", ")}>
+                ערים אישרו <strong>{stage.cities.filter((c) => c.approved).length}/{stage.cities.length}</strong>
               </span>
             ) : null}
           </div>
 
-          <div className="adm-stats">
-            <div className="adm-stat">
-              <div className="adm-stat__n">{money(total)}</div>
-              <div className="adm-stat__l">סה״כ לתשלום</div>
-            </div>
-            <div className="adm-stat">
-              <div className="adm-stat__n">{lines.length}</div>
-              <div className="adm-stat__l">אברכים בטבלה</div>
-            </div>
-            <div className="adm-stat adm-stat--rose">
-              <div className="adm-stat__n">{missing.length}</div>
-              <div className="adm-stat__l">טרם סומנו כבדוקים</div>
-            </div>
-          </div>
-
-          <ToneLegend
-            items={[
-              { tone: "red", label: "טרם נבדק" },
-              { tone: "green", label: "נבדק" },
-              { tone: "grey", label: "0 ₪" },
-            ]}
-          />
-          <div className="adm-table-wrap">
-            <table className="adm-table adm-pay">
+          <div className="adm-table-wrap adm-xl-wrap">
+            <table className="adm-table adm-pay adm-xl">
               <thead>
                 <tr>
                   <th scope="col">נבדק</th>
                   <th scope="col">שם</th>
                   <th scope="col">בסיס</th>
-                  <th scope="col">נסיעות קבועות</th>
+                  <th scope="col">נסיעות</th>
+                  <th scope="col">חריגים</th>
                   <th scope="col">פירוט</th>
                   <th scope="col">סכום</th>
                 </tr>
@@ -256,7 +320,9 @@ export function PayrollView({ me }: { me: Me }) {
                   .map((l) => {
                     const row = month?.rows[l.avrech.id];
                     const tone = l.total === 0 ? "grey" : l.confirmed ? "green" : "red";
-                    return (
+                    const own = entries.filter((e) => e.avrechId === l.avrech.id);
+                    const isOpen = exOpen === l.avrech.id;
+                    return [
                       <tr key={l.avrech.id} className={`adm-tr--${tone} ${l.total === 0 ? "is-zero" : ""}`}>
                         <td>
                           <input type="checkbox" checked={l.confirmed} disabled={locked} onChange={(e) => setRow(l.avrech.id, { confirmed: e.target.checked })} aria-label={`סימון ${l.avrech.name} כנבדק`} style={{ width: 20, height: 20 }} />
@@ -290,6 +356,11 @@ export function PayrollView({ me }: { me: Me }) {
                             aria-label={`נסיעות ל${l.avrech.name}`}
                           />
                         </td>
+                        <td>
+                          <button type="button" className={`adm-pay-ex${isOpen ? " is-on" : ""}`} onClick={() => setExOpen(isOpen ? null : l.avrech.id)} aria-label={`חריגים ל${l.avrech.name}`} aria-expanded={isOpen}>
+                            {own.length ? <strong>{own.length}</strong> : <Icon name="plus" width={16} height={16} />}
+                          </button>
+                        </td>
                         <td className="detail">
                           {l.attendance ? (
                             <span className={`adm-attpill${l.attendance.came < l.attendance.total ? " is-miss" : ""}`} title="נוכחות בחודש">
@@ -299,22 +370,57 @@ export function PayrollView({ me }: { me: Me }) {
                           {l.detail || (l.attendance ? null : <span className="muted">-</span>)}
                         </td>
                         <td style={{ whiteSpace: "nowrap", fontWeight: 800 }}>{money(l.total)}</td>
-                      </tr>
-                    );
+                      </tr>,
+                      isOpen ? (
+                        <tr key={`${l.avrech.id}:ex`} className="adm-pay-exrow">
+                          <td colSpan={7}>
+                            <div className="adm-pay-exbox">
+                            {own.map((e) => (
+                              <span key={e.id} className={`adm-pay-exchip${e.amount < 0 ? " is-neg" : ""}`}>
+                                {ENTRY_LABELS[e.type]}
+                                {e.description ? ` · ${e.description}` : ""} <strong>{money(e.amount)}</strong>
+                                {!locked ? (
+                                  <button type="button" aria-label="מחיקה" onClick={() => removeEntry(e.id)}>
+                                    ✕
+                                  </button>
+                                ) : null}
+                              </span>
+                            ))}
+                            {!locked ? (
+                              <div className="adm-pay-exform">
+                                <Chips<EntryType>
+                                  value={exForm.type}
+                                  onChange={(type) => setExForm({ ...exForm, type })}
+                                  items={(["travel", "other", "deduction", "bonus", "grant"] as EntryType[]).map((t) => ({ id: t, label: t === "travel" ? "נסיעות" : t === "other" ? "זכות +" : t === "deduction" ? "חובה −" : ENTRY_LABELS[t] }))}
+                                />
+                                <div className="adm-bx__row">
+                                  <input className="input" type="number" inputMode="decimal" placeholder={exForm.type === "deduction" ? "₪ לחיוב" : "₪"} value={exForm.amount} onChange={(e) => setExForm({ ...exForm, amount: e.target.value })} aria-label="סכום" />
+                                  <input className="input" placeholder="פירוט" value={exForm.description} onChange={(e) => setExForm({ ...exForm, description: e.target.value })} aria-label="פירוט" />
+                                  <button type="button" className="adm-icon-btn adm-icon-btn--ok" aria-label="הוספה" disabled={!Number(exForm.amount)} onClick={() => addException(l.avrech.id)}>
+                                    <Icon name="check" />
+                                  </button>
+                                </div>
+                              </div>
+                            ) : null}
+                            </div>
+                          </td>
+                        </tr>
+                      ) : null,
+                    ];
                   })}
               </tbody>
               <tfoot>
                 <tr>
                   <td />
                   <td>סה״כ</td>
-                  <td colSpan={3}>{lines.length} אברכים</td>
+                  <td colSpan={4}>{lines.length} אברכים</td>
                   <td style={{ whiteSpace: "nowrap" }}>{money(total)}</td>
                 </tr>
               </tfoot>
             </table>
           </div>
           <p className="muted" style={{ fontSize: "0.88rem" }}>
-            בסיס ריק = מלא. נסיעות ריקות = הסכום הקבוע של האברך; התאמות שדיווח רכז המשנה מתווספות לפירוט. בעמודת הפירוט לא נרשם "מלא".
+            בסיס ריק = מלא. נסיעות ריקות = הסכום הקבוע של האברך. "חריגים" = תוספת נסיעות, בונוס, מענק, שונות או הורדה לחודש הזה. הוצאות הסניף - בנפרד למטה.
           </p>
 
           <div className="adm-split" style={{ marginTop: 16 }}>
@@ -367,6 +473,8 @@ export function PayrollView({ me }: { me: Me }) {
             </section>
           </div>
 
+          {key ? <BranchExpenses ov={ov} month={key} locked={locked} /> : null}
+
           <div className="adm-savebar">
             <span>
               <strong>{money(total)}</strong> · {dirty ? "יש שינויים שלא נשמרו" : msg?.text ?? (locked ? "החודש סגור לתשלום" : "הכל שמור")}
@@ -375,7 +483,10 @@ export function PayrollView({ me }: { me: Me }) {
               <button type="button" className="btn btn--light btn--sm" onClick={exportMonth}>
                 <Icon name="download" /> אקסל
               </button>
-              <button type="button" className="btn btn--light btn--sm" onClick={exportBank} title="קובץ להעברה בנקאית מרוכזת">
+              <button type="button" className="btn btn--light btn--sm" onClick={exportMasav} title="קובץ זיכויים למס״ב">
+                <Icon name="download" /> מס״ב
+              </button>
+              <button type="button" className="btn btn--light btn--sm" onClick={exportBank} title="רשימת העברות באקסל">
                 <Icon name="download" /> לבנק
               </button>
               {!locked ? (
@@ -407,6 +518,50 @@ export function PayrollView({ me }: { me: Me }) {
           {msg && !msg.ok ? <div className="adm-alert adm-alert--error">{msg.text}</div> : null}
         </>
       )}
+
+      <div className="adm-xl-tabs" role="tablist" aria-label="חודשים" style={tabsPos}>
+        <select className="adm-xl-tabs__year" value={year} onChange={(e) => setYear(Number(e.target.value))} aria-label="שנה">
+          {Array.from(new Set([hebrewYearNum() + 1, hebrewYearNum(), ...ov.months.map((m) => yearNumOf(m.label)).filter(Boolean), hebrewYearNum() - 1, hebrewYearNum() - 2]))
+            .sort((a, b) => b - a)
+            .map((y) => (
+              <option key={y} value={y}>
+                {hebrewYearLabel(y)}
+              </option>
+            ))}
+        </select>
+        <div className="adm-xl-tabs__list">
+          {hebrewYearMonthLabels(year).map((label) => {
+            const m = ov.months.find((x) => x.id === label || x.label === label);
+            return (
+              <button
+                key={label}
+                type="button"
+                role="tab"
+                aria-selected={m ? key === m.id : false}
+                className={`adm-xl-tab${m && key === m.id ? " is-on" : ""}${!m ? " is-empty" : ""}${m?.locked ? " is-locked" : ""}`}
+                onClick={async () => {
+                  if (dirty && !window.confirm("יש שינויים שלא נשמרו. לעבור בכל זאת?")) return;
+                  if (m) return setKey(m.id);
+                  if (!window.confirm(`לפתוח את ${label}?`)) return;
+                  await put(`/api/kollel/months/${encodeURIComponent(label)}`, emptyMonth(label));
+                  await loadOv();
+                  setKey(label);
+                }}
+              >
+                {m?.locked ? <Icon name="lock" width={11} height={11} /> : null}
+                {label.replace(` ${yearOfMonthLabel(label)}`, "")}
+              </button>
+            );
+          })}
+          {ov.months
+            .filter((m) => yearNumOf(m.label) === year && !hebrewYearMonthLabels(year).includes(m.label))
+            .map((m) => (
+              <button key={m.id} type="button" role="tab" aria-selected={key === m.id} className={`adm-xl-tab${key === m.id ? " is-on" : ""}`} onClick={() => setKey(m.id)}>
+                {m.label}
+              </button>
+            ))}
+        </div>
+      </div>
 
       {settingsOpen ? <SettingsModal settings={s} onClose={() => setSettingsOpen(false)} onSaved={() => loadOv()} /> : null}
     </>
@@ -513,6 +668,20 @@ function SettingsModal({ settings, onClose, onSaved }: { settings: KollelSetting
             <span className="field__label">הורדה ליום היעדרות (₪)</span>
             <input className="input" type="number" value={s.absenceRate ?? 0} onChange={(e) => setS({ ...s, absenceRate: Number(e.target.value) })} />
             <span className="field__hint">0 = בלי הורדה. ההורדה מחושבת לפי מפגשים שסומנו בלשונית "נוכחות".</span>
+          </label>
+          <h3 className="span-2" style={{ margin: "8px 0 0" }}>מס״ב</h3>
+          <label className="field">
+            <span className="field__label">קוד מוסד (8 ספרות)</span>
+            <input className="input" inputMode="numeric" dir="ltr" value={s.masav?.institutionCode ?? ""} onChange={(e) => setS({ ...s, masav: { institutionCode: e.target.value, senderCode: s.masav?.senderCode ?? "", institutionName: s.masav?.institutionName ?? "" } })} />
+          </label>
+          <label className="field">
+            <span className="field__label">קוד מוסד שולח (5 ספרות)</span>
+            <input className="input" inputMode="numeric" dir="ltr" value={s.masav?.senderCode ?? ""} onChange={(e) => setS({ ...s, masav: { institutionCode: s.masav?.institutionCode ?? "", senderCode: e.target.value, institutionName: s.masav?.institutionName ?? "" } })} />
+          </label>
+          <label className="field span-2">
+            <span className="field__label">שם המוסד</span>
+            <input className="input" value={s.masav?.institutionName ?? ""} onChange={(e) => setS({ ...s, masav: { institutionCode: s.masav?.institutionCode ?? "", senderCode: s.masav?.senderCode ?? "", institutionName: e.target.value } })} />
+            <span className="field__hint">את הקודים מקבלים מהבנק כשפותחים הסכם מס״ב.</span>
           </label>
         </div>
         {err ? <div className="adm-alert adm-alert--error">{err}</div> : null}

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { IsraelMap3D } from "../IsraelMap3D";
 import { Icon, type IconName } from "../../components/Icon";
 import { apiCached, del, post, type View } from "../api";
@@ -74,15 +74,32 @@ type CalendarView = "day" | "month" | "year" | "list";
 
 const calLocale = (system:CalendarSystem, hebrewLabels=true) =>
   system==="hebrew" ? (hebrewLabels ? "he-IL-u-ca-hebrew" : "en-US-u-ca-hebrew") : "he-IL-u-ca-gregory";
-const heDay = (iso:string,system:CalendarSystem) => new Intl.DateTimeFormat(calLocale(system),{weekday:"long",day:"numeric",month:"long",year:"numeric"}).format(new Date(`${iso}T12:00:00`));
-const monthTitle = (d:Date,system:CalendarSystem) => new Intl.DateTimeFormat(calLocale(system),{month:"long",year:"numeric"}).format(d);
-const yearTitle = (d:Date,system:CalendarSystem) => new Intl.DateTimeFormat(calLocale(system),{year:"numeric"}).format(d);
+/** מספר בגימטריה: 4 → ד׳, 15 → ט״ו, 786 → תשפ״ו */
+const gem = (num:number) => {
+  const ones=["","א","ב","ג","ד","ה","ו","ז","ח","ט"], tens=["","י","כ","ל","מ","נ","ס","ע","פ","צ"], hund=["","ק","ר","ש","ת","תק","תר","תש","תת","תתק"];
+  let n=num%1000; let out=hund[Math.floor(n/100)]; n%=100;
+  if(n===15) out+="טו"; else if(n===16) out+="טז"; else out+=tens[Math.floor(n/10)]+ones[n%10];
+  return out.length>1?`${out.slice(0,-1)}״${out.slice(-1)}`:`${out}׳`;
+};
+const hebParts = (d:Date) => {
+  const p=new Intl.DateTimeFormat("en-US-u-ca-hebrew",{day:"numeric",year:"numeric"}).formatToParts(d);
+  return { day:Number(p.find((x)=>x.type==="day")?.value||1), year:Number(p.find((x)=>x.type==="year")?.value||0), month:new Intl.DateTimeFormat("he-IL-u-ca-hebrew",{month:"long"}).format(d) };
+};
+const weekday = (d:Date) => new Intl.DateTimeFormat("he-IL",{weekday:"long"}).format(d);
+/** תאריך מלא - בעברי הכל באותיות (בלי מספרים), בלועזי הכל במספרים */
+const heDay = (iso:string,system:CalendarSystem) => {
+  const d=new Date(`${iso}T12:00:00`);
+  if(system==="hebrew"){const h=hebParts(d);return `${weekday(d)}, ${gem(h.day)} ${h.month} ${gem(h.year)}`;}
+  return new Intl.DateTimeFormat("he-IL",{weekday:"long",day:"numeric",month:"long",year:"numeric"}).format(d);
+};
+const monthTitle = (d:Date,system:CalendarSystem) => system==="hebrew" ? `${hebParts(d).month} ${gem(hebParts(d).year)}` : new Intl.DateTimeFormat("he-IL",{month:"long",year:"numeric"}).format(d);
+const yearTitle = (d:Date,system:CalendarSystem) => system==="hebrew" ? gem(hebParts(d).year) : String(d.getFullYear());
+const dayLabelOf = (d:Date,system:CalendarSystem) => system==="hebrew" ? gem(hebParts(d).day) : String(d.getDate());
 const calendarKey = (d:Date,system:CalendarSystem) => {
   const parts=new Intl.DateTimeFormat(calLocale(system,false),{year:"numeric",month:"long"}).formatToParts(d);
   return `${parts.find((p)=>p.type==="year")?.value||""}|${parts.find((p)=>p.type==="month")?.value||""}`;
 };
 const calendarYearKey = (d:Date,system:CalendarSystem) => new Intl.DateTimeFormat(calLocale(system,false),{year:"numeric"}).format(d);
-const calendarDayNum = (d:Date,system:CalendarSystem) => new Intl.DateTimeFormat(calLocale(system,false),{day:"numeric"}).format(d);
 const startOfCalendarMonth = (cursor:Date,system:CalendarSystem) => {
   const key=calendarKey(cursor,system); const d=new Date(cursor); d.setHours(12,0,0,0);
   for(let i=0;i<40;i++){const prev=new Date(d);prev.setDate(d.getDate()-1);if(calendarKey(prev,system)!==key)break;d.setDate(d.getDate()-1);}
@@ -114,6 +131,69 @@ function monthCells(cursor: Date, system: CalendarSystem) {
 }
 
 
+/** בורר תאריך בגלילה - שלוש עמודות: יום, חודש, שנה (עברי באותיות או לועזי) */
+function DateWheel({ value, system, onPick, onClose }: { value: string; system: CalendarSystem; onPick: (d: Date) => void; onClose: () => void }) {
+  const base = new Date(`${value}T12:00:00`);
+  const years = useMemo(() => {
+    const yearStart = (d: Date) => calendarYearMonths(d, system)[0];
+    const cur = yearStart(base);
+    const list: Date[] = [cur];
+    let f = cur, b = cur;
+    for (let i = 0; i < 5; i++) {
+      const months = calendarYearMonths(f, system); f = nextCalendarMonth(months[months.length - 1], system, 1); list.push(f);
+      const prev = new Date(b); prev.setDate(prev.getDate() - 1); b = yearStart(prev); list.unshift(b);
+    }
+    return list;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value, system]);
+  const [yi, setYi] = useState(5);
+  const months = useMemo(() => calendarYearMonths(years[yi], system), [years, yi, system]);
+  const curMonthStart = startOfCalendarMonth(base, system).getTime();
+  const [mi, setMi] = useState(() => Math.max(0, calendarYearMonths(years[5], system).findIndex((m) => m.getTime() === curMonthStart)));
+  const mIdx = Math.min(mi, months.length - 1);
+  const mStart = months[mIdx];
+  const mLen = Math.round((nextCalendarMonth(mStart, system, 1).getTime() - mStart.getTime()) / 864e5);
+  const [day, setDay] = useState(() => Math.round((base.getTime() - startOfCalendarMonth(base, system).getTime()) / 864e5) + 1);
+  const dIdx = Math.min(day, mLen);
+  const dateOf = (n: number) => { const d = new Date(mStart); d.setDate(d.getDate() + n - 1); return d; };
+  const monthName = (d: Date) => system === "hebrew" ? hebParts(d).month : new Intl.DateTimeFormat("he-IL", { month: "long" }).format(d);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    ref.current?.querySelectorAll<HTMLElement>(".is-on").forEach((el) => el.scrollIntoView({ block: "center" }));
+  }, [yi, mIdx, dIdx]);
+  const chosen = dateOf(dIdx);
+  return (
+    <div className="adm-wheel-back" onClick={onClose}>
+      <div className="adm-wheel" ref={ref} onClick={(e) => e.stopPropagation()} role="dialog" aria-label="בחירת תאריך">
+        <div className="adm-wheel__head">
+          <strong>{system === "hebrew" ? `${weekday(chosen)}, ${gem(hebParts(chosen).day)} ${hebParts(chosen).month} ${gem(hebParts(chosen).year)}` : new Intl.DateTimeFormat("he-IL", { weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(chosen)}</strong>
+        </div>
+        <div className="adm-wheel__cols">
+          <div className="adm-wheel__col" aria-label="יום">
+            {Array.from({ length: mLen }, (_, i) => i + 1).map((n) => (
+              <button type="button" key={n} className={n === dIdx ? "is-on" : ""} onClick={() => setDay(n)}>{dayLabelOf(dateOf(n), system)}</button>
+            ))}
+          </div>
+          <div className="adm-wheel__col" aria-label="חודש">
+            {months.map((m, i) => (
+              <button type="button" key={m.getTime()} className={i === mIdx ? "is-on" : ""} onClick={() => setMi(i)}>{monthName(m)}</button>
+            ))}
+          </div>
+          <div className="adm-wheel__col" aria-label="שנה">
+            {years.map((y, i) => (
+              <button type="button" key={y.getTime()} className={i === yi ? "is-on" : ""} onClick={() => setYi(i)}>{yearTitle(y, system)}</button>
+            ))}
+          </div>
+        </div>
+        <div className="adm-wheel__foot">
+          <button type="button" className="btn btn--ghost btn--sm" onClick={() => { onPick(new Date()); }}>היום</button>
+          <button type="button" className="btn btn--sm" onClick={() => onPick(chosen)}>אישור</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function ActivityCenterView({ go, mode }: { go: (view: View, tab?: string) => void; mode: "boys" | "girls" }) {
   const [data,setData]=useState<Data|null>(null);
   const [err,setErr]=useState("");
@@ -123,6 +203,7 @@ export function ActivityCenterView({ go, mode }: { go: (view: View, tab?: string
   const domain: "kollel" | "bnot" = mode === "girls" ? "bnot" : "kollel";
   const [source,setSource]=useState("all");
   const [city,setCity]=useState("all");
+  const [pickOpen,setPickOpen]=useState(false);
   const [calendarSystem,setCalendarSystem]=useState<CalendarSystem>(()=>(localStorage.getItem("tb-calendar-system")==="gregorian"?"gregorian":"hebrew"));
   const [calendarView,setCalendarView]=useState<CalendarView>("month");
   const [wall,setWall]=useState<WallData|null>(null);
@@ -241,6 +322,7 @@ export function ActivityCenterView({ go, mode }: { go: (view: View, tab?: string
 
   return (
     <div className="adm-activity-center">
+      {pickOpen ? <DateWheel value={selectedDate} system={calendarSystem} onClose={()=>setPickOpen(false)} onPick={(d)=>{d.setHours(12,0,0,0);setSelectedDate(dayIso(d));setCursor(d);setPickOpen(false);}}/> : null}
       <div className="adm-head">
         <div>
           <span className="adm-eyebrow">תמונת מצב ארצית</span>
@@ -320,9 +402,9 @@ export function ActivityCenterView({ go, mode }: { go: (view: View, tab?: string
         <section className="adm-panel adm-calendar-panel">
           <div className="adm-calendar-nav">
             <button type="button" className="adm-icon-btn" onClick={()=>movePeriod(-1)} aria-label="תקופה קודמת"><Icon name="arrowRight"/></button>
-            <button type="button" className="adm-calendar-nav__title" onClick={()=>calendarView==="day"?setCalendarView("month"):calendarView==="month"?setCalendarView("year"):jumpToday()}>
+            <button type="button" className="adm-calendar-nav__title" onClick={()=>setPickOpen(true)}>
               <strong>{calendarView==="day"?heDay(selectedDate,calendarSystem):calendarView==="year"?yearTitle(cursor,calendarSystem):monthTitle(cursor,calendarSystem)}</strong>
-              <small>{calendarView==="day"?"לחיצה למעבר לחודש":calendarView==="month"||calendarView==="list"?"לחיצה למעבר לשנה":"לחיצה לחזרה להיום"}</small>
+              <small>לחיצה לבחירת יום, חודש ושנה</small>
             </button>
             <button type="button" className="adm-icon-btn" onClick={()=>movePeriod(1)} aria-label="תקופה הבאה"><Icon name="arrowLeft"/></button>
             <button type="button" className="btn btn--ghost btn--sm adm-calendar-today" onClick={jumpToday}>היום</button>
@@ -334,7 +416,7 @@ export function ActivityCenterView({ go, mode }: { go: (view: View, tab?: string
               {cells.map((d)=>{
                 const iso=dayIso(d);const items=dayCounts.get(iso)||[];const inMonth=calendarKey(d,calendarSystem)===calendarKey(cursor,calendarSystem);
                 return <button type="button" key={iso} className={`adm-calendar-day${selectedDate===iso?" is-selected":""}${iso===todayIso()?" is-today":""}${!inMonth?" is-out":""}`} onClick={()=>{setSelectedDate(iso);setCursor(d);setCalendarView("day");}}>
-                  <span>{calendarDayNum(d,calendarSystem)}</span>
+                  <span>{dayLabelOf(d,calendarSystem)}</span>
                   {items.length?<strong>{items.length}</strong>:null}
                   {items.length?<i className={items.some((x)=>x.domain==="bnot")&&items.some((x)=>x.domain==="kollel")?"is-mixed":items[0].domain==="bnot"?"is-bnot":"is-kollel"}/>:null}
                 </button>;
@@ -354,21 +436,23 @@ export function ActivityCenterView({ go, mode }: { go: (view: View, tab?: string
                 return true;
               }).length;
               return <button type="button" key={key} onClick={()=>{setCursor(m);setSelectedDate(dayIso(m));setCalendarView("month");}}>
-                <span>{new Intl.DateTimeFormat(calLocale(calendarSystem),{month:"long"}).format(m)}</span><strong>{count}</strong><small>פעילויות</small>
+                <span>{calendarSystem==="hebrew"?hebParts(m).month:new Intl.DateTimeFormat("he-IL",{month:"long"}).format(m)}</span><strong>{count}</strong><small>פעילויות</small>
               </button>;
             })}
           </div> : null}
 
           {calendarView==="day" ? <div className="adm-calendar-day-focus">
-            <span>{new Intl.DateTimeFormat(calLocale(calendarSystem),{weekday:"long"}).format(new Date(`${selectedDate}T12:00:00`))}</span>
-            <strong>{new Intl.DateTimeFormat(calLocale(calendarSystem),{day:"numeric"}).format(new Date(`${selectedDate}T12:00:00`))}</strong>
-            <h3>{new Intl.DateTimeFormat(calLocale(calendarSystem),{month:"long",year:"numeric"}).format(new Date(`${selectedDate}T12:00:00`))}</h3>
+            <span>{weekday(new Date(`${selectedDate}T12:00:00`))}</span>
+            <button type="button" className="adm-cal-pickbtn" onClick={()=>setPickOpen(true)} aria-label="בחירת תאריך בגלילה">
+              <strong>{dayLabelOf(new Date(`${selectedDate}T12:00:00`),calendarSystem)}</strong>
+              <h3>{monthTitle(new Date(`${selectedDate}T12:00:00`),calendarSystem)}</h3>
+            </button>
             <small>{dayItems.length} פעילויות ביום זה</small>
           </div> : null}
 
           {calendarView==="list" ? <div className="adm-calendar-list">
             {filtered.slice().sort((a,b)=>`${a.date}T${a.time||"99:99"}`.localeCompare(`${b.date}T${b.time||"99:99"}`)).map((x)=><button type="button" key={x.id} onClick={()=>{setSelectedDate(x.date);setCalendarView("day");}}>
-              <span className="adm-calendar-list__date">{new Intl.DateTimeFormat(calLocale(calendarSystem),{day:"numeric",month:"short"}).format(new Date(`${x.date}T12:00:00`))}</span>
+              <span className="adm-calendar-list__date">{calendarSystem==="hebrew"?`${gem(hebParts(new Date(`${x.date}T12:00:00`)).day)} ${hebParts(new Date(`${x.date}T12:00:00`)).month}`:new Intl.DateTimeFormat("he-IL",{day:"numeric",month:"short"}).format(new Date(`${x.date}T12:00:00`))}</span>
               <span><strong>{x.title}</strong><small>{[x.time,x.city,x.branch,x.place].filter(Boolean).join(" · ")}</small></span>
               <span className="adm-calendar-list__kind">{x.sourceLabel}</span>
               <Icon name="arrowLeft"/>

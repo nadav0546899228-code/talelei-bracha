@@ -240,7 +240,7 @@ export function UsersView({ me, mode }: { me: Me; mode: "boys" | "girls" }) {
             {filtered.map((r) => (
               <tr key={r.key} className={!r.active ? "is-off" : r.lock?.locked ? "is-locked" : ""}>
                 <td>
-                  <div className="adm-ut-name">{r.name || "—"}</div>
+                  <div className="adm-ut-name" title={r.email}>{r.name || r.email || "—"}</div>
                   {r.email ? <div className="adm-ut-sub" dir="ltr">{r.email}</div> : null}
                   {r.bootstrap ? <div className="adm-ut-sub"><Icon name="lock" /> משתמש יסוד</div> : null}
                 </td>

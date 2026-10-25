@@ -26,12 +26,15 @@ export type Avrech = {
   bank?: { idNumber: string; bankCode: string; branchCode: string; account: string; holder: string } | null;
 };
 
-export type EntryType = "travel" | "expense" | "bonus" | "grant" | "deduction";
+export type EntryType = "travel" | "expense" | "bonus" | "grant" | "deduction" | "other";
+export type BranchExpense = { id: string; month: string; branchId: string; amount: number; category: string; description: string; by: string; byName: string; createdAt?: string };
+export const EXPENSE_CATEGORIES = ["כיבוד", "ספרים", "שכירות", "ציוד", "אירוע", "שונות"];
 export type Entry = { id: string; avrechId: string; month: string; type: EntryType; amount: number; description: string; by: string; byName: string; createdAt: string };
 export type Simcha = { id: string; celebrantId: string; type: "bat" | "ben" | "barmitzva"; note: string };
 export type MonthRow = { base: number | null; travel: number | null; confirmed: boolean; note: string };
 export type MonthDoc = { label: string; order: number; rows: Record<string, MonthRow>; extraIds: string[]; simchas: Simcha[]; locked: boolean; notes: string };
-export type KollelSettings = { fullBase: number; simchaRates: { bat: number; ben: number; barmitzva: number }; absenceRate?: number };
+export type MasavSettings = { institutionCode: string; senderCode: string; institutionName: string };
+export type KollelSettings = { fullBase: number; simchaRates: { bat: number; ben: number; barmitzva: number }; absenceRate?: number; masav?: MasavSettings };
 export type AttendanceSession = { branchId: string; date: string; present: string[] };
 
 export const ENTRY_LABELS: Record<EntryType, string> = {
@@ -40,6 +43,7 @@ export const ENTRY_LABELS: Record<EntryType, string> = {
   bonus: "בונוס",
   grant: "מענק",
   deduction: "הורדה",
+  other: "זכות",
 };
 
 export const SIMCHA_LABELS = { bat: "הולדת הבת", ben: "הולדת הבן", barmitzva: "בר מצווה" } as const;
@@ -79,7 +83,7 @@ export function computePayroll(avrechim: Avrech[], month: MonthDoc | null, entri
     const travel = (row?.travel ?? a.monthlyTravel) + travelAdj;
     const additions: { label: string; amount: number }[] = [];
     if (travel) additions.push({ label: "נסיעות", amount: travel });
-    for (const type of ["expense", "bonus", "grant", "deduction"] as EntryType[]) {
+    for (const type of ["expense", "bonus", "grant", "other", "deduction"] as EntryType[]) {
       for (const e of own.filter((x) => x.type === type)) {
         additions.push({ label: e.description ? `${ENTRY_LABELS[type]} - ${e.description}` : ENTRY_LABELS[type], amount: e.amount });
       }
@@ -124,4 +128,31 @@ function gem(n: number): string {
   const r = n % 100;
   s += r === 15 ? "טו" : r === 16 ? "טז" : tens[Math.floor(r / 10)] + ones[r % 10];
   return s.length === 1 ? s + "׳" : s.slice(0, -1) + "״" + s.slice(-1);
+}
+
+/** מספר השנה העברית (למשל 5787) */
+export function hebrewYearNum(d = new Date()): number {
+  return Number(new Intl.DateTimeFormat("en-US-u-ca-hebrew", { year: "numeric" }).formatToParts(d).find((p) => p.type === "year")?.value || 0);
+}
+/** "תשפ״ז" משנה עברית מלאה */
+export const hebrewYearLabel = (y: number) => gem(y % 1000);
+/** השנה מתוך תווית חודש ("חשון תשפ״ז" → "תשפ״ז") */
+export const yearOfMonthLabel = (label: string) => label.trim().split(/\s+/).pop() || "";
+
+const yearMonthsCache = new Map<number, string[]>();
+/** כל חודשי השנה העברית לפי הסדר (12, או 13 בשנה מעוברת) - באותו פורמט של hebrewMonthLabel */
+export function hebrewYearMonthLabels(y: number): string[] {
+  const hit = yearMonthsCache.get(y);
+  if (hit) return hit;
+  const out: string[] = [];
+  const d = new Date(y - 3761, 7, 1, 12);
+  for (let i = 0; i < 440; i++) {
+    if (hebrewYearNum(d) === y) {
+      const l = hebrewMonthLabel(d);
+      if (out[out.length - 1] !== l) out.push(l);
+    }
+    d.setDate(d.getDate() + 1);
+  }
+  yearMonthsCache.set(y, out);
+  return out;
 }

@@ -43,17 +43,26 @@ export function ImpersonateModal({ onClose, onSwitched, current, onBack, backLab
     }
   };
 
+  // נגלל למטה מתוך כפתור התצוגה (כמו בנוסעים בן טובים) - לא חלון קופץ
+  const [pos] = useState(() => {
+    const b = document.querySelector(".adm-viewbtn")?.getBoundingClientRect();
+    if (!b) return { top: 70, left: 8 };
+    const w = Math.min(340, window.innerWidth - 16);
+    const left = Math.max(8, Math.min(b.left, window.innerWidth - w - 8));
+    return { top: b.bottom + 6, left, width: w };
+  });
+  useEffect(() => {
+    const k = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", k);
+    return () => window.removeEventListener("keydown", k);
+  }, [onClose]);
+
   const cityName = (id: string | null) => t?.cities.find((c) => c.id === id)?.name ?? "";
 
   return (
-    <div className="adm-modal-back" role="dialog" aria-modal="true" aria-label="תצוגות" onClick={onClose}>
-      <div className="adm-modal adm-views" onClick={(e) => e.stopPropagation()}>
-        <div className="adm-panel__head">
-          <h2>תצוגות · {mode === "boys" ? "טללי ברכה" : "בנות צילה"}</h2>
-          <button type="button" className="adm-icon-btn" aria-label="סגירה" onClick={onClose}>
-            ✕
-          </button>
-        </div>
+    <div className="adm-vdrop-back" role="dialog" aria-modal="true" aria-label="תצוגות" onClick={onClose}>
+      <div className="adm-vdrop adm-views" style={pos} onClick={(e) => e.stopPropagation()}>
+        <div className="adm-vdrop__head">תצוגות · {mode === "boys" ? "טללי ברכה" : "בנות צילה"}</div>
         {err ? <div className="adm-alert adm-alert--error">{err}</div> : null}
         {onBack ? (
           <button type="button" className="adm-views__btn adm-views__btn--me" onClick={onBack}>

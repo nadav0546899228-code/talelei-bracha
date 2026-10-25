@@ -9,8 +9,9 @@ import { isKollelManager, isPrivileged } from "./roles.mjs";
 import { normalizePhone } from "./phoneAuth.mjs";
 import { branchScope, loadOrg } from "./org.mjs";
 
-const SUB_TYPES = ["travel", "expense"];
-const ALL_TYPES = ["travel", "expense", "bonus", "grant", "deduction"];
+// הוצאות כבר לא לפי אברך - הן על הסניף (kollelBranchExpenses). "expense" נשאר לקריאה של דיווחים ישנים
+const SUB_TYPES = ["travel"];
+const ALL_TYPES = ["travel", "bonus", "grant", "deduction", "other"];
 
 export const DEFAULT_SETTINGS = {
   fullBase: 1500,
@@ -311,6 +312,48 @@ export async function handleKollel(req, res, url, ctx) {
     return send(200, { ok: true }), true;
   }
 
+  // ---- הוצאות סניף (כלליות, לא לאברך מסוים)
+  if (pathname === "/api/kollel/branch-expenses" && method === "GET") {
+    const month = url.searchParams.get("month");
+    const all = url.searchParams.get("all") === "1";
+    const ids = new Set(myBranches.map((b) => b.id));
+    const rows = (await store.list("kollelBranchExpenses", 50000)).filter((x) => (all || x.month === month) && (scope === null || ids.has(x.branchId)));
+    return send(200, { expenses: rows }), true;
+  }
+  if (pathname === "/api/kollel/branch-expenses" && method === "POST") {
+    const b = await readBody(req);
+    const month = clean(b.month, 40);
+    const branchId = String(b.branchId || "");
+    if (!myBranches.some((x) => x.id === branchId)) return send(403, { error: "הסניף אינו באחריותך" }), true;
+    const m = await monthDoc(month);
+    if (!m) return send(400, { error: "החודש לא נפתח עדיין" }), true;
+    if (m.locked) return send(400, { error: "החודש נסגר - לא ניתן לשנות" }), true;
+    const amount = num(b.amount);
+    if (!amount || amount < 0) return send(400, { error: "חסר סכום" }), true;
+    const id = randomUUID();
+    await store.put("kollelBranchExpenses", id, {
+      month, branchId, amount,
+      category: clean(b.category, 40),
+      description: clean(b.description, 200),
+      by: user.id,
+      byName: user.name || user.email || user.phone,
+      createdAt: new Date().toISOString(),
+    });
+    await audit(user, "הוצאת סניף", `${org.branches.find((x) => x.id === branchId)?.name || branchId} · ${amount}`);
+    return send(200, { ok: true, id }), true;
+  }
+  const bxMatch = pathname.match(/^\/api\/kollel\/branch-expenses\/([\w-]+)$/);
+  if (bxMatch && method === "DELETE") {
+    const e = await store.get("kollelBranchExpenses", bxMatch[1]);
+    if (!e) return send(404, { error: "לא נמצא" }), true;
+    if (!manager && e.by !== user.id) return send(403, { error: "אפשר למחוק רק הוצאה שלך" }), true;
+    const m = await monthDoc(e.month);
+    if (m?.locked) return send(400, { error: "החודש נסגר" }), true;
+    await store.del("kollelBranchExpenses", e.id);
+    await audit(user, "מחיקת הוצאת סניף", `${e.amount}`);
+    return send(200, { ok: true }), true;
+  }
+
   // ---- נוכחות: מפגש = סניף + תאריך. רשומת הנוכחות שייכת לחודש המשכורת הפתוח
   if (pathname === "/api/kollel/attendance" && method === "GET") {
     const month = url.searchParams.get("month");
@@ -408,6 +451,12 @@ export async function handleKollel(req, res, url, ctx) {
         barmitzva: num(b.simchaRates?.barmitzva, 50),
       },
       absenceRate: Math.max(0, num(b.absenceRate, 0)),
+      // פרטי מוסד למס״ב (מקבלים מהבנק)
+      masav: {
+        institutionCode: String(b.masav?.institutionCode || "").replace(/\D/g, "").slice(0, 8),
+        senderCode: String(b.masav?.senderCode || "").replace(/\D/g, "").slice(0, 5),
+        institutionName: clean(b.masav?.institutionName, 30),
+      },
     };
     await store.put("kollelSettings", "main", doc);
     await audit(user, "עדכון הגדרות כולל", JSON.stringify(doc));
