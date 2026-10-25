@@ -9,7 +9,9 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "build": "vite build && node scripts/generate-sitemap.mjs",
     "check": "tsc --noEmit -p tsconfig.json && vite build",
-    "start": "node server/index.mjs"
+    "start": "node server/index.mjs",
+    "demo:seed": "node scripts/seed-demo.mjs",
+    "demo:clear": "node scripts/clear-demo.mjs"
   },
   "dependencies": {
     "pg": "^8.13.0",
