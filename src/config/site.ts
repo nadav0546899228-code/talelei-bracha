@@ -41,8 +41,8 @@ export const site: SiteConfig = {
         png: "/brand/logo-keren-talelei-bracha.png",
         /** יחס רוחב/גובה של הקובץ המקורי - לשמירה על הלוגו ללא עיוות */
         ratio: 1505 / 1433,
-        /** הלבן שבתוך השער והספר הוא חלק מהעיצוב - הלוגו מוצג תמיד על משטח לבן */
-        requiresWhiteSurface: true,
+        /** קובץ הלוגו מוצג על רקע שקוף, ללא משטח מלאכותי מסביב. */
+        requiresWhiteSurface: false,
       },
     },
     bnotTzila: {
