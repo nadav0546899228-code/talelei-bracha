@@ -1,4 +1,4 @@
-/** חיפוש כללי: אברכים, משתתפות, פניות, רכזים, אנשי קשר ותורמים - לפי ההרשאות */
+/** חיפוש כללי: אנשים, פניות, צוות, פעילות ותוצאות חכמות - לפי ההרשאות */
 import { useEffect, useRef, useState } from "react";
 import { Icon, type IconName } from "../components/Icon";
 import { api, type View } from "./api";
@@ -12,7 +12,6 @@ const KIND: Record<string, { label: string; icon: IconName }> = {
   submission: { label: "פנייה", icon: "inbox" },
   staff: { label: "צוות", icon: "users" },
   contact: { label: "איש קשר", icon: "phone" },
-  donation: { label: "תרומה", icon: "gift" },
   smart: { label: "תוצאה חכמה", icon: "sparkle" },
   activity: { label: "פעילות", icon: "calendar" },
 };
