@@ -16,7 +16,7 @@ import {
   type Submission,
 } from "../api";
 import type { AdminCtx } from "../AdminApp";
-import { ContactActions, IconActions, SwipeRow, ToneLegend, toneFor } from "../components";
+import { ContactActions, IconActions, SwipeRow, ToneLegend, toneFor, waLink } from "../components";
 import { buildXlsx, downloadBlob } from "../xlsx";
 
 function toSheet(rows: Submission[], name: string) {
@@ -29,6 +29,54 @@ function toSheet(rows: Submission[], name: string) {
       ...rows.map((r) => [fmtDateTime(r.createdAt), FORM_LABELS[r.form], STATUS_LABELS[r.status], ...keys.map((k) => valueText(r.data[k]))]),
     ],
   };
+}
+
+const arr = (v: unknown) => Array.isArray(v) ? v.map(String) : typeof v === "string" && v ? [v] : [];
+
+function mentorMatch(request: Submission, mentor: Submission, all: Submission[]) {
+  let score = 20;
+  const reasons: string[] = [];
+  const bestTime = typeof request.data.bestTime === "string" ? request.data.bestTime : "";
+  const availability = arr(mentor.data.availability);
+  if (bestTime === "לא משנה") {
+    score += 25;
+    reasons.push("זמינות גמישה");
+  } else if (bestTime && availability.includes(bestTime)) {
+    score += 35;
+    reasons.push(`זמינה ב${bestTime}`);
+  } else if (availability.length) {
+    reasons.push("זמינות שונה");
+  }
+
+  const community = typeof request.data.community === "string" ? request.data.community.trim().toLowerCase() : "";
+  const mentorCommunity = typeof mentor.data.community === "string" ? mentor.data.community.trim().toLowerCase() : "";
+  if (community && mentorCommunity && (community.includes(mentorCommunity) || mentorCommunity.includes(community))) {
+    score += 15;
+    reasons.push("שיוך דומה");
+  }
+
+  const preferredLanguage = typeof request.data.preferredLanguage === "string" ? request.data.preferredLanguage : "";
+  const languages = arr(mentor.data.languages);
+  if (preferredLanguage && languages.includes(preferredLanguage)) {
+    score += 15;
+    reasons.push(`שפה: ${preferredLanguage}`);
+  } else if (!preferredLanguage && languages.includes("עברית")) {
+    score += 5;
+  }
+
+  if (typeof mentor.data.experience === "string" && mentor.data.experience.trim()) {
+    score += 8;
+    reasons.push("ניסיון רלוונטי");
+  }
+
+  const load = all.filter((x) => x.form === "ishaRequest" && x.assignedMentorId === mentor.id && !["done", "archived"].includes(x.status)).length;
+  const loadBonus = Math.max(0, 22 - load * 7);
+  score += loadBonus;
+  if (load === 0) reasons.push("פנויה כרגע");
+  else if (load <= 2) reasons.push(`עומס נמוך: ${load}`);
+  else reasons.push(`עומס: ${load}`);
+
+  return { score: Math.min(100, score), reasons: reasons.slice(0, 3), load };
 }
 
 export function SubmissionsView({ me, subs, refreshSubs, forms, title, initialForm }: AdminCtx & { forms: FormKey[]; title: string; initialForm?: FormKey }) {
@@ -88,6 +136,35 @@ export function SubmissionsView({ me, subs, refreshSubs, forms, title, initialFo
     return m ? displayName(m) : null;
   };
 
+  const isIsha = forms.includes("ishaRequest");
+  const ishaRequests = all.filter((x) => x.form === "ishaRequest");
+  const openRequests = ishaRequests.filter((x) => !["done", "archived"].includes(x.status));
+  const unassignedRequests = openRequests.filter((x) => !x.assignedMentorId);
+  const assignedRequests = openRequests.filter((x) => x.assignedMentorId);
+  const doneRequests = ishaRequests.filter((x) => x.status === "done");
+
+  const recommendations = selected?.form === "ishaRequest"
+    ? mentors
+        .map((m) => ({ mentor: m, ...mentorMatch(selected, m, all) }))
+        .sort((a, b) => b.score - a.score || a.load - b.load)
+        .slice(0, 3)
+    : [];
+
+  const assignMentor = async (mentorId: string | null) => {
+    if (!selected) return;
+    setBusy(true);
+    setMsg(null);
+    try {
+      await patch(`/api/admin/submissions/${selected.id}`, { assignedMentorId: mentorId });
+      await refreshSubs();
+      setMsg(mentorId ? "המלווה שובצה והבקשה עברה לטיפול" : "השיבוץ הוסר");
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "שגיאה בשיבוץ");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <>
       <div className="adm-head">
@@ -108,6 +185,26 @@ export function SubmissionsView({ me, subs, refreshSubs, forms, title, initialFo
           ) : null}
         </div>
       </div>
+
+      {isIsha ? (
+        <section className="adm-isha-command" aria-label="תמונת מצב אישה לאישה">
+          <button type="button" onClick={() => { setForm("ishaRequest"); setStatus("open"); }}>
+            <span>פתוחות</span><strong>{openRequests.length}</strong>
+          </button>
+          <button type="button" className={unassignedRequests.length ? "is-alert" : ""} onClick={() => { setForm("ishaRequest"); setStatus("open"); }}>
+            <span>בלי מלווה</span><strong>{unassignedRequests.length}</strong>
+          </button>
+          <button type="button" onClick={() => { setForm("ishaRequest"); setStatus("in_progress"); }}>
+            <span>בטיפול</span><strong>{assignedRequests.length}</strong>
+          </button>
+          <button type="button" onClick={() => { setForm("ishaMentor"); setStatus("approved"); }}>
+            <span>מלוות פעילות</span><strong>{mentors.length}</strong>
+          </button>
+          <button type="button" onClick={() => { setForm("ishaRequest"); setStatus("done"); }}>
+            <span>הושלמו</span><strong>{doneRequests.length}</strong>
+          </button>
+        </section>
+      ) : null}
 
       <div className="adm-toolbar" role="group" aria-label="סוג פנייה">
         {forms.map((f) => (
@@ -234,6 +331,44 @@ export function SubmissionsView({ me, subs, refreshSubs, forms, title, initialFo
                 ))}
             </dl>
 
+            {selected.form === "ishaRequest" && !selected.assignedMentorId ? (
+              <section className="adm-matchbox">
+                <div className="adm-matchbox__head">
+                  <div><Icon name="sparkle" /><strong>התאמות מומלצות</strong></div>
+                  <small>לפי זמינות, עומס, ניסיון ונתונים קיימים</small>
+                </div>
+                {recommendations.length ? (
+                  <div className="adm-match-grid">
+                    {recommendations.map(({ mentor, score, reasons, load }, i) => (
+                      <article className="adm-match-card" key={mentor.id}>
+                        <div className="adm-match-card__rank">{i + 1}</div>
+                        <div className="adm-match-card__body">
+                          <strong>{displayName(mentor)}</strong>
+                          <span>{reasons.join(" · ")}</span>
+                          <small>{load ? `${load} שיבוצים פעילים` : "ללא שיבוצים פעילים"}</small>
+                        </div>
+                        <div className="adm-match-card__score">{score}%</div>
+                        <button type="button" className="btn btn--sm" disabled={busy} onClick={() => assignMentor(mentor.id)}>שיבוץ</button>
+                      </article>
+                    ))}
+                  </div>
+                ) : <div className="adm-empty">אין מלוות מאושרות להתאמה.</div>}
+              </section>
+            ) : null}
+
+            {selected.form === "ishaRequest" && selected.assignedMentorId ? (() => {
+              const mentor = mentors.find((m) => m.id === selected.assignedMentorId);
+              const phone = mentor && typeof mentor.data.phone === "string" ? mentor.data.phone : "";
+              const bestTime = typeof selected.data.bestTime === "string" ? selected.data.bestTime : "";
+              const text = mentor ? `שלום ${displayName(mentor)}, שובצה אלייך פנייה חדשה במיזם אישה לאישה${bestTime ? `. הזמן המועדף לשיחה: ${bestTime}` : ""}. לפרטים נוספים פני לרכזת המיזם.` : "";
+              return mentor ? (
+                <div className="adm-assigned-banner">
+                  <div><Icon name="checkCircle" /><span><strong>משובצת ל{displayName(mentor)}</strong><small>הבקשה נמצאת בטיפול</small></span></div>
+                  {phone ? <a className="btn btn--ghost btn--sm" href={waLink(phone, text)} target="_blank" rel="noopener noreferrer"><Icon name="whatsapp" /> הודעה למלווה</a> : null}
+                </div>
+              ) : null;
+            })() : null}
+
             <div className="adm-fields adm-fields--2">
               <label className="field">
                 <span className="field__label">סטטוס</span>
@@ -247,12 +382,12 @@ export function SubmissionsView({ me, subs, refreshSubs, forms, title, initialFo
               </label>
               {selected.form === "ishaRequest" ? (
                 <label className="field">
-                  <span className="field__label">שיבוץ מלווה</span>
+                  <span className="field__label">בחירה ידנית של מלווה</span>
                   <select
                     className="select"
                     value={selected.assignedMentorId ?? ""}
                     disabled={busy}
-                    onChange={(e) => update({ assignedMentorId: e.target.value || null })}
+                    onChange={(e) => assignMentor(e.target.value || null)}
                   >
                     <option value="">- ללא -</option>
                     {mentors.map((m) => (
