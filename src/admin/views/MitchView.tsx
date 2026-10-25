@@ -38,7 +38,7 @@ type SelfUpdate = {
   reviewedAt?: string;
   reviewedBy?: string;
 };
-type Workflow = { stages: string[]; attention: { contactDays: number; stageDays: number; missedMeetings: number } };
+type Workflow = { stages: string[]; attention: { contactDays: number; stageDays: number; missedMeetings: number }; whatsappTemplates: string[] };
 type AttentionSummary = { total: number; high: number; unassigned: number; followup: number; noContact: number; stageStuck: number; missedMeetings: number };
 type MonthStats = { active: number; newThisMonth: number; stageChanges: number; contacts: number };
 type Data = {
@@ -195,11 +195,12 @@ function WorkflowSettings({ domain, workflow, onSaved }: { domain: "kollel" | "b
   const [open, setOpen] = useState(false);
   const [stages, setStages] = useState(workflow.stages.join("\n"));
   const [attention, setAttention] = useState({ ...workflow.attention });
+  const [templates, setTemplates] = useState(workflow.whatsappTemplates.join("\n"));
   const [msg, setMsg] = useState("");
   const save = async () => {
     try {
       const nextStages = stages.split(/\n/).map((x) => x.trim()).filter(Boolean);
-      await put(`/api/mitch/settings?domain=${domain}`, { stages: nextStages, attention });
+      await put(`/api/mitch/settings?domain=${domain}`, { stages: nextStages, attention, whatsappTemplates: templates.split(/\n/).map((x) => x.trim()).filter(Boolean) });
       setMsg("נשמר");
       onSaved();
     } catch (e) {
@@ -219,6 +220,7 @@ function WorkflowSettings({ domain, workflow, onSaved }: { domain: "kollel" | "b
             <label className="field"><span className="field__label">ללא קשר — אחרי כמה ימים</span><input className="input" type="number" min={1} max={365} value={attention.contactDays} onChange={(e) => setAttention({ ...attention, contactDays: Number(e.target.value) })} /></label>
             <label className="field"><span className="field__label">תקוע באותו שלב — ימים</span><input className="input" type="number" min={1} max={730} value={attention.stageDays} onChange={(e) => setAttention({ ...attention, stageDays: Number(e.target.value) })} /></label>
             {domain === "kollel" ? <label className="field"><span className="field__label">נעדר ברצף — מספר מפגשים</span><input className="input" type="number" min={1} max={12} value={attention.missedMeetings} onChange={(e) => setAttention({ ...attention, missedMeetings: Number(e.target.value) })} /></label> : null}
+            <label className="field span-2"><span className="field__label">תבניות WhatsApp — תבנית בכל שורה. אפשר להשתמש ב־{"{שם}"}</span><textarea className="textarea" rows={Math.max(3, workflow.whatsappTemplates.length)} value={templates} onChange={(e) => setTemplates(e.target.value)} /></label>
           </div>
           <div className="btn-row"><button type="button" className="btn btn--sm" onClick={save}><Icon name="check" /> שמירה</button>{msg ? <span className="muted">{msg}</span> : null}</div>
         </div>
@@ -234,6 +236,7 @@ function MitchCard({ d, m: initial, domain, word, onClose, onSaved }: { d: Data;
   const [updates, setUpdates] = useState<SelfUpdate[]>([]);
   const [linkBusy, setLinkBusy] = useState(false);
   const [transferReason, setTransferReason] = useState("");
+  const [waTemplate, setWaTemplate] = useState(d.workflow.whatsappTemplates[0] || "שלום {שם}, ");
   const originalAvrechId = initial.avrechId;
   const live = d.mitch.find((x) => x.id === m.id);
   const entries = live?.log ?? m.log ?? [];
@@ -321,6 +324,21 @@ function MitchCard({ d, m: initial, domain, word, onClose, onSaved }: { d: Data;
 
       {m.id ? (
         <>
+          {m.phone ? (
+            <div className="adm-mitch-wa-tools">
+              <div>
+                <strong>WhatsApp מהיר</strong>
+                <small>בחירת תבנית פותחת WhatsApp בלבד — השליחה ידנית.</small>
+              </div>
+              <select className="select" value={waTemplate} onChange={(e) => setWaTemplate(e.target.value)}>
+                {d.workflow.whatsappTemplates.map((t, i) => <option value={t} key={i}>{t.replace("{שם}", m.name)}</option>)}
+              </select>
+              <button type="button" className="btn btn--ghost btn--sm" onClick={() => window.open(waLink(m.phone, waTemplate.replaceAll("{שם}", m.name)), "_blank", "noopener,noreferrer")}>
+                <Icon name="whatsapp" /> פתיחת הודעה
+              </button>
+            </div>
+          ) : null}
+
           <div className="adm-mitch-share-tools">
             <div>
               <strong>קישור אישי לעדכונים</strong>
