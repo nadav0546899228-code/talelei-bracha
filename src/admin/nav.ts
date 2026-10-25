@@ -51,6 +51,7 @@ function tree(mode: Mode): NavHub[] {
         items: [
           leaf("avrechim", "אברכים", "users", "kollel", { tab: "avrechim", hint: "לפי ערים וסניפים" }),
           leaf("entries", "נסיעות והוצאות", "file", "kollel", { tab: "entries", hint: "דיווח ואישור בחודש הפתוח" }),
+          leaf("attendance", "נוכחות", "calendar", "kollel", { tab: "attendance", hint: "סימון מי הגיע בכל מפגש" }),
           leaf("payroll", "משכורות", "file", "payroll", { hint: "טבלת החודש, שמחות, ייצוא לאקסל" }),
           leaf("org-kollel", "ערים, סניפים ורכזים", "pin", "org", { hint: "מבנה הכולל ומי אחראי על מה" }),
         ],

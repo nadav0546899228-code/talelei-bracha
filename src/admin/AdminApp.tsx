@@ -26,6 +26,7 @@ import { UsersView } from "./views/UsersView";
 import { KollelView } from "./views/KollelView";
 import { PayrollView } from "./views/PayrollView";
 import { BroadcastView } from "./views/BroadcastView";
+import { useLive, useLiveConnection } from "./live";
 
 
 /* ------------------------------------------------------------------ כניסה */
@@ -248,6 +249,9 @@ export default function AdminApp() {
     }
   }, []);
 
+  useLiveConnection(state === "ready");
+  useLive(["submissions"], () => state === "ready" && refreshSubs());
+
   useEffect(() => {
     if (state !== "ready") return;
     refreshSubs();
@@ -408,17 +412,6 @@ export default function AdminApp() {
   return (
     <div className="adm" data-mode={mode}>
       {isDevSite ? <div className="dev-banner">אתר פיתוח</div> : null}
-      {by ? (
-        <div className="adm-viewas" role="status">
-          <span>
-            {me.user.kind === "virtual" ? "תצוגה: " : "בשם: "}
-            <strong>{me.user.kind === "virtual" ? me.user.name.replace(" (תצוגה לדוגמה)", "") : me.user.name || me.user.email || me.user.phone}</strong>
-          </span>
-          <button type="button" className="adm-viewas__back" onClick={stopImpersonate}>
-            חזרה
-          </button>
-        </div>
-      ) : null}
       <header className="adm-top">
         {modes.length > 1 ? (
           <button type="button" className="adm-mode" onClick={switchMode} aria-label={`מעבר ל${MODE_LABELS[mode === "boys" ? "girls" : "boys"]}`} title={`מעבר ל${MODE_LABELS[mode === "boys" ? "girls" : "boys"]}`}>
@@ -436,23 +429,24 @@ export default function AdminApp() {
         </div>
         <div className="adm-top__spacer" />
         <div className="adm-user">
-          <button type="button" className="adm-avatar-btn" onClick={() => (by ? openImpersonate() : setProfileOpen(true))} aria-label="הפרופיל שלי" title="הפרופיל שלי">
+          <button type="button" className="adm-avatar-btn" onClick={() => setProfileOpen(true)} aria-label="הפרופיל שלי" title="הפרופיל שלי">
             {me.user.picture ? <img src={me.user.picture} alt="" referrerPolicy="no-referrer" /> : <span className="adm-avatar">{initial}</span>}
           </button>
           <div className="adm-user__meta">
             <strong>{me.user.name || me.user.email}</strong>
             <span>{roleText}</span>
           </div>
-          {me.canImpersonate || by ? (
-            <button type="button" className="btn btn--ghost btn--sm adm-as-btn" onClick={openImpersonate} title="מעבר בין תצוגות">
-              <Icon name="eye" /> <span>תצוגות</span>
+          {me.canImpersonate ? (
+            <button type="button" className={`adm-viewbtn${by ? " is-as" : ""}`} onClick={openImpersonate} title="מעבר בין תצוגות">
+              <span>{by ? (me.user.kind === "virtual" ? me.user.name.replace(" (תצוגה לדוגמה)", "") : me.user.name || me.user.email || me.user.phone) : me.roleLabels[me.user.roles[0]]}</span>
+              <Icon name="chevronDown" />
             </button>
           ) : null}
           <button type="button" className="adm-icon-btn adm-bell" onClick={() => setBellOpen(!bellOpen)} aria-label={`התראות${dash.active.length ? ` (${dash.active.length})` : ""}`} title="התראות">
             <Icon name="bell" />
             {dash.active.length ? <span className="adm-badge">{dash.active.length}</span> : null}
           </button>
-          <button type="button" className="adm-icon-btn" onClick={logout} aria-label="יציאה מהמערכת" title="יציאה">
+          <button type="button" className="adm-icon-btn adm-logout" onClick={logout} aria-label="יציאה מהמערכת" title="יציאה">
             <Icon name="logout" />
           </button>
         </div>
@@ -548,6 +542,7 @@ export default function AdminApp() {
       {profileOpen ? (
         <Profile
           me={me}
+          onLogout={logout}
           onClose={() => setProfileOpen(false)}
           onCode={() => {
             setProfileOpen(false);
@@ -579,7 +574,7 @@ export default function AdminApp() {
   );
 }
 
-function Profile({ me, onClose, onCode, onSaved }: { me: Me; onClose: () => void; onCode: () => void; onSaved: () => void }) {
+function Profile({ me, onClose, onCode, onSaved, onLogout }: { me: Me; onClose: () => void; onCode: () => void; onSaved: () => void; onLogout: () => void }) {
   const [name, setName] = useState(me.user.name || "");
   const [phone, setPhone] = useState(me.user.phone || "");
   const [err, setErr] = useState<string | null>(null);
@@ -619,11 +614,14 @@ function Profile({ me, onClose, onCode, onSaved }: { me: Me; onClose: () => void
           <button type="button" className="btn btn--sm" onClick={save}>
             <Icon name="check" /> שמירה
           </button>
-          {me.user.kind === "phone" ? (
+          {me.user.kind === "phone" && !me.user.impersonatedBy ? (
             <button type="button" className="btn btn--ghost btn--sm" onClick={onCode}>
               <Icon name="lock" /> החלפת קוד
             </button>
           ) : null}
+          <button type="button" className="btn btn--ghost btn--sm" onClick={onLogout}>
+            <Icon name="logout" /> יציאה
+          </button>
         </div>
       </div>
     </div>

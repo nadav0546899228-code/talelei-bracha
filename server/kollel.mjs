@@ -15,6 +15,7 @@ const ALL_TYPES = ["travel", "expense", "bonus", "grant", "deduction"];
 export const DEFAULT_SETTINGS = {
   fullBase: 1500,
   simchaRates: { bat: 10, ben: 30, barmitzva: 50 },
+  absenceRate: 0, // הורדה ליום היעדרות - 0 = בלי הורדה
 };
 
 const num = (v, d = 0) => {
@@ -189,6 +190,45 @@ export async function handleKollel(req, res, url, ctx) {
     return send(200, { ok: true }), true;
   }
 
+  // ---- נוכחות: מפגש = סניף + תאריך. רשומת הנוכחות שייכת לחודש המשכורת הפתוח
+  if (pathname === "/api/kollel/attendance" && method === "GET") {
+    const month = url.searchParams.get("month");
+    const ids = new Set(myBranches.map((b) => b.id));
+    const rows = (await store.list("kollelAttendance")).filter((x) => (!month || x.month === month) && (manager || ids.has(x.branchId)));
+    return send(200, { sessions: rows }), true;
+  }
+  if (pathname === "/api/kollel/attendance" && method === "PUT") {
+    const b = await readBody(req, 64 * 1024);
+    const branchId = String(b.branchId || "");
+    if (!myBranches.some((x) => x.id === branchId)) return send(403, { error: "הסניף אינו באחריותך" }), true;
+    const date = String(b.date || "");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return send(400, { error: "תאריך לא תקין" }), true;
+    const month = clean(b.month, 40);
+    const m = await monthDoc(month);
+    if (!m) return send(400, { error: "החודש לא נפתח עדיין" }), true;
+    if (m.locked) return send(400, { error: "החודש נסגר לתשלום" }), true;
+    const inBranch = new Set((await allAvrechim()).filter((a) => a.branchId === branchId).map((a) => a.id));
+    const present = (Array.isArray(b.present) ? b.present : []).map(String).filter((id) => inBranch.has(id));
+    const id = `${branchId}_${date}`;
+    const prev = await store.get("kollelAttendance", id);
+    if (prev && prev.month !== month) {
+      const pm = await monthDoc(prev.month);
+      if (pm?.locked) return send(400, { error: "המפגש שייך לחודש סגור" }), true;
+    }
+    await store.put("kollelAttendance", id, { branchId, date, month, present, by: user.id, byName: user.name || user.email || user.phone });
+    if (!prev) await audit(user, "פתיחת מפגש נוכחות", `${date} · ${myBranches.find((x) => x.id === branchId)?.name || ""}`);
+    return send(200, { ok: true, id }), true;
+  }
+  const atMatch = pathname.match(/^\/api\/kollel\/attendance\/([\w-]+)$/);
+  if (atMatch && method === "DELETE") {
+    const doc = await store.get("kollelAttendance", atMatch[1]);
+    if (!doc || !myBranches.some((x) => x.id === doc.branchId)) return send(404, { error: "לא נמצא" }), true;
+    if ((await monthDoc(doc.month))?.locked) return send(400, { error: "החודש נסגר לתשלום" }), true;
+    await store.del("kollelAttendance", doc.id);
+    await audit(user, "מחיקת מפגש נוכחות", doc.date);
+    return send(200, { ok: true }), true;
+  }
+
   // ---- חודשי משכורת (מנהל בלבד)
   const moMatch = pathname.match(/^\/api\/kollel\/months\/(.+)$/);
   if (moMatch) {
@@ -239,6 +279,7 @@ export async function handleKollel(req, res, url, ctx) {
         ben: num(b.simchaRates?.ben, 30),
         barmitzva: num(b.simchaRates?.barmitzva, 50),
       },
+      absenceRate: Math.max(0, num(b.absenceRate, 0)),
     };
     await store.put("kollelSettings", "main", doc);
     await audit(user, "עדכון הגדרות כולל", JSON.stringify(doc));

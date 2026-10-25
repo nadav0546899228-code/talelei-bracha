@@ -40,6 +40,38 @@ const STARTED = Date.now();
 
 const store = await createStore();
 
+/* ---- עדכונים בזמן אמת (Server-Sent Events): כל שינוי נתונים מודיע לכל המחוברים איזה אוסף השתנה */
+const liveClients = new Set();
+const QUIET = new Set(["audit"]); // לא מודיעים על רישומי יומן
+function notifyChange(collection) {
+  if (QUIET.has(collection)) return;
+  const msg = `data: ${JSON.stringify({ c: collection })}\n\n`;
+  for (const c of liveClients) {
+    try {
+      c.write(msg);
+    } catch {
+      liveClients.delete(c);
+    }
+  }
+}
+for (const fn of ["put", "del"]) {
+  const orig = store[fn].bind(store);
+  store[fn] = async (collection, ...rest) => {
+    const r = await orig(collection, ...rest);
+    notifyChange(collection);
+    return r;
+  };
+}
+setInterval(() => {
+  for (const c of liveClients) {
+    try {
+      c.write(": ping\n\n");
+    } catch {
+      liveClients.delete(c);
+    }
+  }
+}, 25_000).unref();
+
 /* ------------------------------------------------------------------ עזרים */
 
 const SECURITY = {
@@ -339,6 +371,14 @@ async function api(req, res, url) {
   const renew = shouldRenew(session) ? { "Set-Cookie": createSessionCookie(real.id, isSecure(req), asId) } : {};
   const can = (view) => user.views.includes(view);
   const send = (status, body) => json(res, status, body, renew);
+
+  if (pathname === "/api/events" && method === "GET") {
+    res.writeHead(200, { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-store", Connection: "keep-alive", "X-Accel-Buffering": "no" });
+    res.write("retry: 5000\n\n");
+    liveClients.add(res);
+    req.on("close", () => liveClients.delete(res));
+    return;
+  }
 
   if (pathname === "/api/auth/me" && method === "GET") {
     return send(200, {

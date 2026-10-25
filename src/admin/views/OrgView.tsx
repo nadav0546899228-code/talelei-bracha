@@ -6,9 +6,11 @@ import type { Avrech } from "../kollelCalc";
 import { useOrg, type OrgPerson } from "../org";
 import { PhoneUsersPanel } from "./PhoneUsersPanel";
 import { Fab, IconActions } from "../components";
+import { useLive } from "../live";
 
 export function OrgView({ me, domain }: { me: Me; domain: Domain }) {
   const { org, reload } = useOrg();
+  useLive(["orgUnits", "users", "phoneUsers"], reload);
   const roles = me.user.roles;
   const seesAll = roles.includes("developer") || roles.includes("ceo") || roles.includes("chief_coordinator");
   const [avrechim, setAvrechim] = useState<Avrech[]>([]);

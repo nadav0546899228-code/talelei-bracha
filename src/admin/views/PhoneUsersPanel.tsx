@@ -5,6 +5,7 @@ import { api, del, fmtDateTime, post, ROLE_SCOPE, type Me, type Role, type Scope
 import { ScopePicker, scopeText, useOrg, type OrgData } from "../org";
 import { enterAs } from "../Impersonate";
 import { ContactActions } from "../components";
+import { useLive } from "../live";
 
 type PU = {
   id: string;
@@ -32,6 +33,7 @@ export function PhoneUsersPanel({ me, onChange, title = "כניסה בטלפון
   const roles = PHONE_ROLES.filter((r) => me.assignableRoles.includes(r));
 
   const load = useCallback(() => api<{ users: PU[] }>("/api/admin/phone-users").then((r) => setUsers(r.users)), []);
+  useLive(["phoneUsers"], load);
   useEffect(() => {
     load();
   }, [load]);

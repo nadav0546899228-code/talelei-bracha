@@ -1,12 +1,13 @@
 /** משכורות כולל ערב - חודש בכל פעם, לפי הכללים הקבועים, עם סגירה לתשלום וייצוא לאקסל */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "../../components/Icon";
 import { api, put, type Me } from "../api";
-import { Chips, money, ToneLegend } from "../components";
+import { Chips, Combo, money, ToneLegend } from "../components";
 import {
   computePayroll,
   hebrewMonthLabel,
   SIMCHA_LABELS,
+  type AttendanceSession,
   type Entry,
   type KollelSettings,
   type MonthDoc,
@@ -16,6 +17,7 @@ import {
 } from "../kollelCalc";
 import { buildXlsx, downloadBlob, type Sheet } from "../xlsx";
 import type { Overview } from "./KollelView";
+import { useLive } from "../live";
 
 const emptyMonth = (label: string): MonthDoc => ({ label, order: Date.now(), rows: {}, extraIds: [], simchas: [], locked: false, notes: "" });
 
@@ -51,19 +53,31 @@ export function PayrollView({ me }: { me: Me }) {
     loadOv().then((o) => setKey((k) => k || o.months[0]?.id || ""));
   }, [loadOv]);
 
+  // עדכון חי - בלי לדרוס עריכה שלא נשמרה
+  const [tick, setTick] = useState(0);
+  useLive(["avrechim", "kollelMonths", "kollelEntries", "kollelSettings", "kollelAttendance"], () => {
+    loadOv();
+    if (!dirtyRef.current) setTick((t) => t + 1);
+  });
+  const dirtyRef = useRef(false);
+  dirtyRef.current = dirty;
+
   useEffect(() => {
     if (!key) return;
     setDirty(false);
     Promise.all([
       api<{ month: MonthDoc | null }>(`/api/kollel/months/${encodeURIComponent(key)}`),
       api<{ entries: Entry[] }>(`/api/kollel/entries?month=${encodeURIComponent(key)}`),
-    ]).then(([m, e]) => {
+      api<{ sessions: AttendanceSession[] }>(`/api/kollel/attendance?month=${encodeURIComponent(key)}`).catch(() => ({ sessions: [] })),
+    ]).then(([m, e, a]) => {
       setMonth(m.month ?? emptyMonth(key));
       setEntries(e.entries);
+      setSessions(a.sessions);
     });
-  }, [key]);
+  }, [key, tick]);
 
-  const lines = useMemo(() => (ov && month ? computePayroll(ov.avrechim, month, entries, ov.settings) : []), [ov, month, entries]);
+  const [sessions, setSessions] = useState<AttendanceSession[]>([]);
+  const lines = useMemo(() => (ov && month ? computePayroll(ov.avrechim, month, entries, ov.settings, sessions) : []), [ov, month, entries, sessions]);
 
   if (!ov) return <p className="muted">טוען…</p>;
 
@@ -113,7 +127,8 @@ export function PayrollView({ me }: { me: Me }) {
     const all = await api<{ entries: Entry[] }>("/api/kollel/entries?all=1");
     const months = [...ov.months].sort((a, b) => a.order - b.order);
     const docs = await Promise.all(months.map((m) => api<{ month: MonthDoc | null }>(`/api/kollel/months/${encodeURIComponent(m.id)}`)));
-    const per = months.map((m, i) => ({ label: m.label, lines: computePayroll(ov.avrechim, docs[i].month, all.entries.filter((e) => e.month === m.id), s) }));
+    const att = await api<{ sessions: (AttendanceSession & { month: string })[] }>("/api/kollel/attendance").catch(() => ({ sessions: [] }));
+    const per = months.map((m, i) => ({ label: m.label, lines: computePayroll(ov.avrechim, docs[i].month, all.entries.filter((e) => e.month === m.id), s, att.sessions.filter((x) => x.month === m.id)) }));
     const names = Array.from(new Set(per.flatMap((p) => p.lines.map((l) => l.avrech.name))));
     const summary: Sheet = {
       name: "סיכום כל התקופות",
@@ -146,9 +161,6 @@ export function PayrollView({ me }: { me: Me }) {
       <div className="adm-head">
         <div>
           <h1>משכורות</h1>
-          <p>
-            בסיס מלא {money(s.fullBase)} · שמחות: בת {s.simchaRates.bat} ₪, בן {s.simchaRates.ben} ₪, בר מצווה {s.simchaRates.barmitzva} ₪ לאברך
-          </p>
         </div>
         <div className="adm-item__actions">
           <button type="button" className="adm-icon-btn adm-icon-btn--ok" onClick={createMonth} aria-label="חודש חדש" title="חודש חדש">
@@ -255,7 +267,14 @@ export function PayrollView({ me }: { me: Me }) {
                             aria-label={`נסיעות ל${l.avrech.name}`}
                           />
                         </td>
-                        <td className="detail">{l.detail || <span className="muted">-</span>}</td>
+                        <td className="detail">
+                          {l.attendance ? (
+                            <span className={`adm-attpill${l.attendance.came < l.attendance.total ? " is-miss" : ""}`} title="נוכחות בחודש">
+                              <Icon name="calendar" width={13} height={13} /> {l.attendance.came}/{l.attendance.total}
+                            </span>
+                          ) : null}
+                          {l.detail || (l.attendance ? null : <span className="muted">-</span>)}
+                        </td>
                         <td style={{ whiteSpace: "nowrap", fontWeight: 800 }}>{money(l.total)}</td>
                       </tr>
                     );
@@ -291,24 +310,18 @@ export function PayrollView({ me }: { me: Me }) {
               <h2>הוספת אברך שאינו בטבלה הקבועה</h2>
               <p className="muted">למשל מי שמשתתף רק החודש. יופיע רק בחודש זה.</p>
               <div className="adm-toolbar">
-                <select
-                  className="select adm-select-sm"
-                  disabled={locked}
-                  value=""
-                  onChange={(e) => {
-                    if (!month || !e.target.value) return;
-                    setMonth({ ...month, extraIds: [...month.extraIds, e.target.value] });
-                    setDirty(true);
-                  }}
-                  aria-label="הוספת אברך לחודש"
-                >
-                  <option value="">בחירה…</option>
-                  {nonMembers.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.name}
-                    </option>
-                  ))}
-                </select>
+                {!locked ? (
+                  <Combo
+                    label="הוספת אברך לחודש"
+                    value=""
+                    onChange={(id) => {
+                      if (!month || !id) return;
+                      setMonth({ ...month, extraIds: [...month.extraIds, id] });
+                      setDirty(true);
+                    }}
+                    options={nonMembers.map((a) => ({ id: a.id, label: a.name }))}
+                  />
+                ) : null}
               </div>
               {month?.extraIds.length ? (
                 <div className="adm-roles">
@@ -402,17 +415,10 @@ function SimchasPanel({ month, lines, settings, locked, onChange }: { month: Mon
       ))}
       {!locked ? (
         <div className="adm-fields adm-fields--2" style={{ marginTop: 10 }}>
-          <label className="field">
+          <div className="field">
             <span className="field__label">בעל השמחה</span>
-            <select className="select" value={form.celebrantId} onChange={(e) => setForm({ ...form, celebrantId: e.target.value })}>
-              <option value="">בחירה…</option>
-              {lines.map((l) => (
-                <option key={l.avrech.id} value={l.avrech.id}>
-                  {l.avrech.name}
-                </option>
-              ))}
-            </select>
-          </label>
+            <Combo label="בעל השמחה" value={form.celebrantId} onChange={(celebrantId) => setForm({ ...form, celebrantId })} options={lines.map((l) => ({ id: l.avrech.id, label: l.avrech.name }))} />
+          </div>
           <div className="field">
             <span className="field__label">סוג</span>
             <Chips<Simcha["type"]>
@@ -475,6 +481,11 @@ function SettingsModal({ settings, onClose, onSaved }: { settings: KollelSetting
               <input className="input" type="number" value={s.simchaRates[k]} onChange={(e) => setS({ ...s, simchaRates: { ...s.simchaRates, [k]: Number(e.target.value) } })} />
             </label>
           ))}
+          <label className="field span-2">
+            <span className="field__label">הורדה ליום היעדרות (₪)</span>
+            <input className="input" type="number" value={s.absenceRate ?? 0} onChange={(e) => setS({ ...s, absenceRate: Number(e.target.value) })} />
+            <span className="field__hint">0 = בלי הורדה. ההורדה מחושבת לפי מפגשים שסומנו בלשונית "נוכחות".</span>
+          </label>
         </div>
         {err ? <div className="adm-alert adm-alert--error">{err}</div> : null}
         <div className="btn-row" style={{ marginTop: 14 }}>

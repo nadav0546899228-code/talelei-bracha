@@ -5,6 +5,7 @@ import { ScopePicker, scopeText, useOrg } from "../org";
 import { PhoneUsersPanel } from "./PhoneUsersPanel";
 import { enterAs } from "../Impersonate";
 import { Fab } from "../components";
+import { useLive } from "../live";
 
 type U = { email: string; name: string; phone?: string; picture: string; roles: Role[]; scope?: Scope; active: boolean; bootstrap: boolean; lastLoginAt: string | null };
 
@@ -28,6 +29,7 @@ export function UsersView({ me }: { me: Me }) {
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   const load = useCallback(() => api<{ users: U[] }>("/api/admin/users").then((r) => setUsers(r.users)), []);
+  useLive(["users"], load);
   useEffect(() => {
     load();
   }, [load]);

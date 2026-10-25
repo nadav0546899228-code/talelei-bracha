@@ -5,6 +5,7 @@ import { api, type Me, type Submission, type View } from "./api";
 import type { Mode } from "./nav";
 import type { OrgData } from "./org";
 import type { Overview } from "./views/KollelView";
+import { useLive } from "./live";
 
 export type Alert = { id: string; icon: IconName; label: string; count: number; tone: "red" | "yellow"; view: View; tab?: string };
 
@@ -25,9 +26,8 @@ export function useAlerts(me: Me | null, mode: Mode, subs: Submission[] | null) 
 
   useEffect(() => {
     load();
-    const id = window.setInterval(load, 60_000);
-    return () => window.clearInterval(id);
   }, [load]);
+  useLive(["avrechim", "kollelMonths", "orgUnits", "phoneUsers", "users"], load);
 
   const alerts: Alert[] = [];
   const list = subs ?? [];

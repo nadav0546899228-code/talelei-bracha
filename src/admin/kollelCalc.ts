@@ -29,7 +29,8 @@ export type Entry = { id: string; avrechId: string; month: string; type: EntryTy
 export type Simcha = { id: string; celebrantId: string; type: "bat" | "ben" | "barmitzva"; note: string };
 export type MonthRow = { base: number | null; travel: number | null; confirmed: boolean; note: string };
 export type MonthDoc = { label: string; order: number; rows: Record<string, MonthRow>; extraIds: string[]; simchas: Simcha[]; locked: boolean; notes: string };
-export type KollelSettings = { fullBase: number; simchaRates: { bat: number; ben: number; barmitzva: number } };
+export type KollelSettings = { fullBase: number; simchaRates: { bat: number; ben: number; barmitzva: number }; absenceRate?: number };
+export type AttendanceSession = { branchId: string; date: string; present: string[] };
 
 export const ENTRY_LABELS: Record<EntryType, string> = {
   travel: "נסיעות",
@@ -51,6 +52,8 @@ export type PayrollLine = {
   detail: string;
   confirmed: boolean;
   note: string;
+  /** נוכחות בחודש (רק אם סומנו מפגשים בסניף שלו) */
+  attendance: { came: number; total: number } | null;
 };
 
 const fmt = (n: number) => n.toLocaleString("he-IL");
@@ -60,7 +63,7 @@ export function monthMembers(avrechim: Avrech[], month: MonthDoc | null): Avrech
   return avrechim.filter((a) => (a.active && a.inPayroll) || extra.has(a.id));
 }
 
-export function computePayroll(avrechim: Avrech[], month: MonthDoc | null, entries: Entry[], s: KollelSettings): PayrollLine[] {
+export function computePayroll(avrechim: Avrech[], month: MonthDoc | null, entries: Entry[], s: KollelSettings, sessions: AttendanceSession[] = []): PayrollLine[] {
   const members = monthMembers(avrechim, month);
   const fund = members.filter((a) => a.simchaFund);
   const fundCount = fund.length;
@@ -87,10 +90,15 @@ export function computePayroll(avrechim: Avrech[], month: MonthDoc | null, entri
     for (const x of simchas.filter((x) => x.celebrantId === a.id)) {
       additions.push({ label: x.note || SIMCHA_LABELS[x.type], amount: s.simchaRates[x.type] * fundCount });
     }
+    // נוכחות: הורדה ליום היעדרות רק אם הוגדר תעריף בהגדרות
+    const mine = a.branchId ? sessions.filter((x) => x.branchId === a.branchId) : [];
+    const came = mine.filter((x) => x.present.includes(a.id)).length;
+    const missed = mine.length - came;
+    if (missed > 0 && (s.absenceRate ?? 0) > 0) additions.push({ label: `היעדרות ${missed} ימים`, amount: -missed * (s.absenceRate ?? 0) });
     const total = base + additions.reduce((t, x) => t + x.amount, 0);
     // סימן LRM לפני המינוס כדי שיוצג נכון בתוך טקסט מימין לשמאל
     const detail = additions.map((x) => `${x.label} ${x.amount < 0 ? "\u200E-" : ""}${fmt(Math.abs(x.amount))}`).join(" · ");
-    return { avrech: a, base, isFull: base === s.fullBase, travel, additions, total, detail, confirmed: Boolean(row?.confirmed), note: row?.note ?? "" };
+    return { avrech: a, base, isFull: base === s.fullBase, travel, additions, total, detail, confirmed: Boolean(row?.confirmed), note: row?.note ?? "", attendance: mine.length ? { came, total: mine.length } : null };
   });
 }
 

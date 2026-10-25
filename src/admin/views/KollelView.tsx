@@ -1,10 +1,11 @@
 /** כולל ערב: אברכים לפי ערים וסניפים, דיווח נסיעות והוצאות */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Icon } from "../../components/Icon";
-import { api, del, post, type Me, type OrgUnit } from "../api";
-import { Chips, ContactActions, ExportBtn, Fab, IconActions, money, SwipeRow, ToneLegend } from "../components";
+import { api, del, post, put, type Me, type OrgUnit } from "../api";
+import { Chips, Combo, ContactActions, ExportBtn, Fab, IconActions, money, SwipeRow, ToneLegend } from "../components";
 import { ENTRY_LABELS, type Avrech, type Entry, type EntryType, type KollelSettings } from "../kollelCalc";
 import { buildXlsx, downloadBlob, parsePasted } from "../xlsx";
+import { useLive } from "../live";
 
 export type Overview = {
   me: { manager: boolean; canEditAvrechim: boolean; canPayroll: boolean };
@@ -15,7 +16,7 @@ export type Overview = {
   months: { id: string; label: string; locked: boolean; order: number }[];
 };
 
-type Tab = "avrechim" | "entries";
+type Tab = "avrechim" | "entries" | "attendance";
 
 const blankAvrech = (branchId: string | null): Avrech => ({ id: "", name: "", phone: "", email: "", branchId, monthlyTravel: 0, inPayroll: true, simchaFund: true, simchaExternal: false, active: true, notes: "" });
 
@@ -34,9 +35,10 @@ export function branchLabel(ov: Pick<Overview, "cities" | "branches">, id: strin
 
 export function KollelView({ me, go, initialTab }: { me: Me; go?: (v: "org") => void; initialTab?: string }) {
   const [ov, setOv] = useState<Overview | null>(null);
-  const [tab, setTab] = useState<Tab>(initialTab?.startsWith("entries") ? "entries" : "avrechim");
+  const [tab, setTab] = useState<Tab>(initialTab?.startsWith("entries") ? "entries" : initialTab === "attendance" ? "attendance" : "avrechim");
   const [err, setErr] = useState<string | null>(null);
   const load = useCallback(() => api<Overview>("/api/kollel/overview").then(setOv).catch((e) => setErr(e.message)), []);
+  useLive(["avrechim", "kollelMonths", "orgUnits", "kollelSettings"], load);
   useEffect(() => {
     load();
   }, [load]);
@@ -68,11 +70,15 @@ export function KollelView({ me, go, initialTab }: { me: Me; go?: (v: "org") => 
           אברכים ({ov.avrechim.filter((a) => a.active).length})
         </button>
         <button type="button" role="tab" className="adm-chip" aria-pressed={tab === "entries"} onClick={() => setTab("entries")}>
-          נסיעות והוצאות
+          <Icon name="file" width={16} height={16} /> דיווחים
+        </button>
+        <button type="button" role="tab" className="adm-chip" aria-pressed={tab === "attendance"} onClick={() => setTab("attendance")}>
+          <Icon name="calendar" width={16} height={16} /> נוכחות
         </button>
       </div>
       {tab === "avrechim" ? <AvrechimTab ov={ov} reload={load} initialFilter={filterFromTab(initialTab)} /> : null}
       {tab === "entries" ? <EntriesTab ov={ov} /> : null}
+      {tab === "attendance" ? <AttendanceTab ov={ov} /> : null}
     </>
   );
 }
@@ -212,24 +218,16 @@ function AvrechimTab({ ov, reload, initialFilter }: { ov: Overview; reload: () =
                     <span className="field__label">טלפון</span>
                     <input className="input" type="tel" dir="ltr" style={{ textAlign: "right" }} value={sel.phone} onChange={(e) => setSel({ ...sel, phone: e.target.value })} />
                   </label>
-                  <label className="field">
+                  <div className="field">
                     <span className="field__label">סניף</span>
-                    <select className="select" value={sel.branchId ?? ""} onChange={(e) => setSel({ ...sel, branchId: e.target.value || null })}>
-                      {manager || !sel.branchId ? <option value="">{manager ? "ללא סניף" : "בחירת סניף…"}</option> : null}
-                      {ov.cities.map((c) => (
-                        <optgroup key={c.id} label={c.name}>
-                          {ov.branches
-                            .filter((b) => b.parentId === c.id)
-                            .map((b) => (
-                              <option key={b.id} value={b.id}>
-                                {b.name}
-                              </option>
-                            ))}
-                        </optgroup>
-                      ))}
-                    </select>
+                    <Combo
+                      label="סניף"
+                      value={sel.branchId ?? ""}
+                      onChange={(id) => setSel({ ...sel, branchId: id || null })}
+                      options={[...(manager ? [{ id: "", label: "ללא סניף" }] : []), ...ov.branches.map((b) => ({ id: b.id, label: b.name, sub: ov.cities.find((c) => c.id === b.parentId)?.name }))]}
+                    />
                     {!ov.branches.length ? <span className="field__hint">אין עדיין סניפים. מוסיפים במסך "ערים, סניפים ורכזים".</span> : null}
-                  </label>
+                  </div>
                   <label className="field">
                     <span className="field__label">נסיעות - סכום קבוע חודשי (₪)</span>
                     <input className="input" type="number" inputMode="numeric" disabled={!manager} value={sel.monthlyTravel || ""} onChange={(e) => setSel({ ...sel, monthlyTravel: Number(e.target.value) || 0 })} />
@@ -368,6 +366,7 @@ function EntriesTab({ ov }: { ov: Overview }) {
   useEffect(() => {
     load();
   }, [load]);
+  useLive(["kollelEntries"], load);
 
   if (!ov.months.length) {
     return <div className="adm-panel adm-empty">עדיין לא נפתח חודש. הרכז הראשי פותח חודש חדש במסך "משכורות".</div>;
@@ -470,19 +469,10 @@ function EntriesTab({ ov }: { ov: Overview }) {
               </button>
               {full ? (
                 <div className="adm-fields adm-fields--2" style={{ marginTop: 10 }}>
-                  <label className="field">
+                  <div className="field">
                     <span className="field__label">אברך</span>
-                    <select className="select" value={form.avrechId} onChange={(e) => setForm({ ...form, avrechId: e.target.value })}>
-                      <option value="">בחירה…</option>
-                      {ov.avrechim
-                        .filter((a) => a.active)
-                        .map((a) => (
-                          <option key={a.id} value={a.id}>
-                            {a.name}
-                          </option>
-                        ))}
-                    </select>
-                  </label>
+                    <Combo label="אברך" value={form.avrechId} onChange={(avrechId) => setForm({ ...form, avrechId })} options={ov.avrechim.filter((a) => a.active).map((a) => ({ id: a.id, label: a.name, sub: branchLabel(ov, a.branchId) }))} />
+                  </div>
                   <div className="field">
                     <span className="field__label">סוג</span>
                     <Chips<EntryType> value={form.type} onChange={(type) => setForm({ ...form, type })} items={(["bonus", "grant", "deduction"] as EntryType[]).map((t) => ({ id: t, label: ENTRY_LABELS[t] }))} />
@@ -547,6 +537,144 @@ function EntriesTab({ ov }: { ov: Overview }) {
           ))}
         </div>
         {entries && !entries.length ? <p className="muted">אין דיווחים בחודש הזה.</p> : null}
+      </section>
+    </>
+  );
+}
+
+/* ------------------------------------------------------------------ נוכחות */
+
+export type Session = { id: string; branchId: string; date: string; month: string; present: string[]; byName: string };
+
+const today = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+const dayLabel = (iso: string) => new Intl.DateTimeFormat("he-IL", { weekday: "short", day: "numeric", month: "numeric" }).format(new Date(`${iso}T12:00:00`));
+
+function AttendanceTab({ ov }: { ov: Overview }) {
+  const open = ov.months.filter((m) => !m.locked);
+  const [month, setMonth] = useState<string>(open[0]?.id ?? ov.months[0]?.id ?? "");
+  const [branch, setBranch] = useState<string>(ov.branches[0]?.id ?? "");
+  const [date, setDate] = useState(today());
+  const [sessions, setSessions] = useState<Session[] | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  const locked = ov.months.find((m) => m.id === month)?.locked ?? false;
+
+  const load = useCallback(() => {
+    if (!month) return;
+    api<{ sessions: Session[] }>(`/api/kollel/attendance?month=${encodeURIComponent(month)}`).then((r) => setSessions(r.sessions));
+  }, [month]);
+  useEffect(() => {
+    load();
+  }, [load]);
+  useLive(["kollelAttendance"], load);
+
+  if (!ov.months.length) return <div className="adm-panel adm-empty">עדיין לא נפתח חודש. הרכז הראשי פותח חודש במסך "משכורות".</div>;
+  if (!ov.branches.length) return <div className="adm-panel adm-empty">אין סניפים. נוכחות מסמנים לפי סניף.</div>;
+
+  const avs = ov.avrechim.filter((a) => a.active && a.branchId === branch);
+  const branchSessions = (sessions ?? []).filter((x) => x.branchId === branch).sort((a, b) => b.date.localeCompare(a.date));
+  const cur = branchSessions.find((x) => x.date === date);
+  const present = new Set(cur?.present ?? []);
+
+  const save = async (next: string[]) => {
+    setMsg(null);
+    // עדכון מיידי במסך, ואז שמירה
+    setSessions((list) => {
+      const rest = (list ?? []).filter((x) => !(x.branchId === branch && x.date === date));
+      return [...rest, { id: `${branch}_${date}`, branchId: branch, date, month, present: next, byName: "" }];
+    });
+    try {
+      await put("/api/kollel/attendance", { branchId: branch, date, month, present: next });
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "שגיאה");
+      load();
+    }
+  };
+  const toggle = (id: string) => save(present.has(id) ? [...present].filter((x) => x !== id) : [...present, id]);
+  const removeSession = async () => {
+    if (!cur || !window.confirm(`למחוק את המפגש של ${dayLabel(date)}?`)) return;
+    await del(`/api/kollel/attendance/${cur.id}`).catch((e) => setMsg(e.message));
+    load();
+  };
+
+  const stats = (id: string) => ({ total: branchSessions.length, came: branchSessions.filter((x) => x.present.includes(id)).length });
+  const exportXlsx = () => {
+    const dates = [...branchSessions].reverse();
+    const rows = [["אברך", ...dates.map((d) => dayLabel(d.date)), "נכח", "מתוך"], ...avs.map((a) => [a.name, ...dates.map((d) => (d.present.includes(a.id) ? "✓" : "✗")), stats(a.id).came, stats(a.id).total])];
+    const label = ov.months.find((m) => m.id === month)?.label ?? month;
+    downloadBlob(buildXlsx([{ name: "נוכחות", rows, widths: [22, ...dates.map(() => 10), 8, 8] }]), `נוכחות ${branchLabel(ov, branch)} ${label}.xlsx`);
+  };
+
+  return (
+    <>
+      <Chips<string> value={month} onChange={setMonth} items={ov.months.map((m) => ({ id: m.id, label: `${m.locked ? "🔒 " : ""}${m.label}` }))} />
+      {ov.branches.length > 1 ? <Chips<string> value={branch} onChange={setBranch} items={ov.branches.map((b) => ({ id: b.id, label: b.name }))} /> : null}
+      {msg ? <div className="adm-alert adm-alert--error">{msg}</div> : null}
+
+      <section className="adm-panel">
+        <div className="adm-panel__head">
+          <h2>
+            <Icon name="calendar" width={20} height={20} style={{ verticalAlign: "-4px" }} /> {dayLabel(date)}
+          </h2>
+          <span className="adm-item__actions">
+            <input className="input adm-date" type="date" value={date} max={today()} onChange={(e) => e.target.value && setDate(e.target.value)} aria-label="תאריך" />
+            {cur && !locked ? (
+              <button type="button" className="adm-icon-btn adm-icon-btn--danger" onClick={removeSession} aria-label="מחיקת המפגש" title="מחיקת המפגש">
+                <Icon name="trash" />
+              </button>
+            ) : null}
+          </span>
+        </div>
+        {!locked ? (
+          <div className="btn-row" style={{ marginBottom: 10 }}>
+            <button type="button" className="btn btn--sm" onClick={() => save(avs.map((a) => a.id))}>
+              <Icon name="checkCircle" /> כולם הגיעו
+            </button>
+            {cur ? (
+              <button type="button" className="btn btn--ghost btn--sm" onClick={() => save([])}>
+                ניקוי
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+        <div className="adm-att">
+          {avs.map((a) => {
+            const on = present.has(a.id);
+            const st = stats(a.id);
+            return (
+              <button key={a.id} type="button" className={`adm-att__btn${on ? " is-on" : cur ? " is-off" : ""}`} disabled={locked} onClick={() => toggle(a.id)} aria-pressed={on}>
+                <span className="adm-att__mark">
+                  <Icon name={on ? "check" : "close"} />
+                </span>
+                <span className="adm-att__name">{a.name}</span>
+                <small>
+                  {st.came}/{st.total}
+                </small>
+              </button>
+            );
+          })}
+          {!avs.length ? <p className="muted">אין אברכים בסניף הזה.</p> : null}
+        </div>
+        {!cur && avs.length && !locked ? <p className="muted" style={{ marginBottom: 0 }}>לחיצה על אברך מסמנת שהגיע. המפגש נשמר מיד.</p> : null}
+      </section>
+
+      <section className="adm-panel">
+        <div className="adm-panel__head">
+          <h2>
+            מפגשים בחודש <span className="muted">({branchSessions.length})</span>
+          </h2>
+          <ExportBtn onClick={exportXlsx} />
+        </div>
+        <div className="adm-chips" style={{ flexWrap: "wrap" }}>
+          {branchSessions.map((x) => (
+            <button key={x.id} type="button" className="adm-chip" aria-pressed={x.date === date} onClick={() => setDate(x.date)}>
+              {dayLabel(x.date)} <span className="adm-chip__n">{x.present.length}</span>
+            </button>
+          ))}
+          {!branchSessions.length ? <p className="muted">עדיין לא סומנה נוכחות בחודש הזה.</p> : null}
+        </div>
       </section>
     </>
   );

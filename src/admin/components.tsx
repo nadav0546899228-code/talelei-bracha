@@ -227,3 +227,68 @@ export function ExportBtn({ onClick }: { onClick: () => void }) {
     </button>
   );
 }
+
+/** בחירה עם השלמה אוטומטית לפי תחילת הקלדה */
+export function Combo({
+  value,
+  onChange,
+  options,
+  placeholder = "הקלדה לחיפוש…",
+  label,
+}: {
+  value: string;
+  onChange: (id: string) => void;
+  options: { id: string; label: string; sub?: string }[];
+  placeholder?: string;
+  label?: string;
+}) {
+  const selected = options.find((o) => o.id === value);
+  const [text, setText] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
+  const q = (text ?? "").trim();
+  const matches = (q
+    ? [...options.filter((o) => o.label.startsWith(q)), ...options.filter((o) => !o.label.startsWith(q) && (o.label.includes(q) || o.sub?.includes(q)))]
+    : options
+  ).slice(0, 8);
+  const pick = (id: string) => {
+    onChange(id);
+    setText(null);
+    setOpen(false);
+  };
+  return (
+    <div className="adm-combo">
+      <input
+        className="input"
+        aria-label={label}
+        placeholder={placeholder}
+        value={text ?? selected?.label ?? ""}
+        onFocus={() => {
+          setText("");
+          setOpen(true);
+        }}
+        onChange={(e) => {
+          setText(e.target.value);
+          setOpen(true);
+        }}
+        onBlur={() => window.setTimeout(() => (setOpen(false), setText(null)), 150)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && matches[0]) {
+            e.preventDefault();
+            pick(matches[0].id);
+          }
+          if (e.key === "Escape") setOpen(false);
+        }}
+      />
+      {open && matches.length ? (
+        <div className="adm-combo__list" role="listbox">
+          {matches.map((o) => (
+            <button key={o.id} type="button" role="option" aria-selected={o.id === value} onMouseDown={(e) => e.preventDefault()} onClick={() => pick(o.id)}>
+              {o.label}
+              {o.sub ? <small>{o.sub}</small> : null}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
