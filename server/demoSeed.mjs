@@ -199,7 +199,7 @@ export async function seedDemo(store) {
     });
   }
 
-  const tags=["תורם","מתנדב","קהילה","עדכונים"];
+  const tags=["מתנדב","קהילה","עדכונים","קשר כללי"];
   for (let i=0;i<12;i++) {
     await put("contacts","contact-"+(i+1),{
       name:"איש קשר "+(i+1)+" (דמה)",
