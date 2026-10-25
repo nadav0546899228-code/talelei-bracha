@@ -2226,3 +2226,6 @@
     padding-inline: 20px;
   }
 }
+
+.adm-scope-chip{display:inline-flex;align-items:center;gap:5px;min-height:29px;padding:3px 10px;border-radius:999px;background:#edf5f4;color:#406467;font-size:.82rem;font-weight:700}
+.adm[data-mode="girls"] .adm-scope-chip{background:#fbe9f0;color:#8d3158}
