@@ -207,6 +207,17 @@ function screenFromUrl(): Screen {
   return v.startsWith("hub-") ? { hub: v.slice(4) } : { view: v as View, tab: p.get("t") || undefined };
 }
 
+type DisplayMode = "auto" | "desktop" | "mobile";
+
+function loadDisplayMode(userId: string): DisplayMode {
+  try {
+    const value = localStorage.getItem(`tb-display-mode:${userId}`);
+    return value === "desktop" || value === "mobile" ? value : "auto";
+  } catch {
+    return "auto";
+  }
+}
+
 export default function AdminApp() {
   const [me, setMe] = useState<Me | null>(null);
   const [state, setState] = useState<"loading" | "login" | "ready" | "error">("loading");
@@ -227,6 +238,7 @@ export default function AdminApp() {
   const [subs, setSubs] = useState<Submission[] | null>(null);
   const [codeOpen, setCodeOpen] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
+  const [displayMode, setDisplayMode] = useState<DisplayMode>("auto");
 
   const loadMe = useCallback(async () => {
     try {
@@ -291,6 +303,10 @@ export default function AdminApp() {
   }, [me, mode, entries]);
 
   useEffect(() => {
+    if (me) setDisplayMode(loadDisplayMode(me.user.id));
+  }, [me?.user.id]);
+
+  useEffect(() => {
     if (!me || state !== "ready") return;
     try {
       setGuideOpen(!localStorage.getItem(guideKey(me, mode)));
@@ -328,6 +344,17 @@ export default function AdminApp() {
     setModeState(next);
     saveMode(me, next);
     show({ view: "dashboard" });
+  };
+
+  const setPreferredDisplay = (next: DisplayMode) => {
+    setDisplayMode(next);
+    if (!me) return;
+    try {
+      if (next === "auto") localStorage.removeItem(`tb-display-mode:${me.user.id}`);
+      else localStorage.setItem(`tb-display-mode:${me.user.id}`, next);
+    } catch {
+      /* העדפה מקומית בלבד */
+    }
   };
 
   const logout = async () => {
@@ -438,7 +465,7 @@ export default function AdminApp() {
   const by = me.user.impersonatedBy;
 
   return (
-    <div className="adm" data-mode={mode}>
+    <div className="adm" data-mode={mode} data-display={displayMode}>
       {isDevSite ? <div className="dev-banner">אתר פיתוח</div> : null}
       <header className="adm-top">
         {modes.length > 1 ? (
@@ -582,6 +609,12 @@ export default function AdminApp() {
             setProfileOpen(false);
             setCodeOpen(true);
           }}
+          displayMode={displayMode}
+          onDisplayMode={setPreferredDisplay}
+          onGuide={() => {
+            setProfileOpen(false);
+            setGuideOpen(true);
+          }}
           onSaved={() => {
             setProfileOpen(false);
             loadMe();
@@ -609,14 +642,34 @@ export default function AdminApp() {
   );
 }
 
-function Profile({ me, onClose, onCode, onSaved, onLogout }: { me: Me; onClose: () => void; onCode: () => void; onSaved: () => void; onLogout: () => void }) {
+function Profile({
+  me,
+  onClose,
+  onCode,
+  onSaved,
+  onLogout,
+  onGuide,
+  displayMode,
+  onDisplayMode,
+}: {
+  me: Me;
+  onClose: () => void;
+  onCode: () => void;
+  onSaved: () => void;
+  onLogout: () => void;
+  onGuide: () => void;
+  displayMode: DisplayMode;
+  onDisplayMode: (mode: DisplayMode) => void;
+}) {
   const [name, setName] = useState(me.user.name || "");
   const [phone, setPhone] = useState(me.user.phone || "");
   const [err, setErr] = useState<string | null>(null);
   const [push, setPush] = useState<"on" | "off" | "blocked" | "unsupported" | "busy">("busy");
+
   useEffect(() => {
     pushState().then(setPush).catch(() => setPush("unsupported"));
   }, []);
+
   const togglePush = async () => {
     setErr(null);
     const prev = push;
@@ -633,6 +686,7 @@ function Profile({ me, onClose, onCode, onSaved, onLogout }: { me: Me; onClose: 
       setPush(await pushState());
     }
   };
+
   const save = async () => {
     try {
       await post("/api/auth/profile", { name, phone });
@@ -641,61 +695,113 @@ function Profile({ me, onClose, onCode, onSaved, onLogout }: { me: Me; onClose: 
       setErr(e instanceof Error ? e.message : "שגיאה");
     }
   };
+
+  const roleText = me.user.roles.map((r) => me.roleLabels[r]).join(" · ");
+  const initial = (me.user.name || me.user.email || "?").trim().charAt(0).toUpperCase();
+
   return (
-    <div className="adm-modal-back" role="dialog" aria-modal="true" aria-label="הפרופיל שלי" onClick={onClose}>
-      <div className="adm-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="adm-panel__head">
-          <h2>הפרופיל שלי</h2>
-          <button type="button" className="adm-icon-btn" aria-label="סגירה" onClick={onClose}>
+    <div className="adm-personal-back" role="dialog" aria-modal="true" aria-label="האזור האישי">
+      <div className="adm-personal">
+        <header className="adm-personal__top">
+          <div>
+            <span className="adm-eyebrow">החשבון שלי</span>
+            <h1>האזור האישי</h1>
+          </div>
+          <button type="button" className="adm-icon-btn" aria-label="חזרה למערכת" onClick={onClose}>
             <Icon name="close" />
           </button>
-        </div>
-        <p className="muted" style={{ marginTop: -6 }}>
-          {me.user.roles.map((r) => me.roleLabels[r]).join(" · ")}
-          {me.user.email ? <span dir="ltr"> · {me.user.email}</span> : null}
-        </p>
-        <div className="adm-fields">
-          <label className="field">
-            <span className="field__label">שם</span>
-            <input className="input" value={name} onChange={(e) => setName(e.target.value)} />
-          </label>
-          <label className="field">
-            <span className="field__label">טלפון</span>
-            <input className="input" type="tel" dir="ltr" style={{ textAlign: "right" }} value={phone} onChange={(e) => setPhone(e.target.value)} />
-          </label>
-        </div>
-        {!me.user.impersonatedBy ? (
-          <button type="button" className={`adm-pushrow${push === "on" ? " is-on" : ""}`} onClick={togglePush} disabled={push === "busy" || push === "unsupported" || push === "blocked"}>
-            <Icon name="bell" />
+        </header>
+
+        <section className="adm-personal__profile">
+          {me.user.picture ? <img src={me.user.picture} alt="" referrerPolicy="no-referrer" /> : <span className="adm-personal__avatar">{initial}</span>}
+          <div>
+            <strong>{me.user.name || me.user.email}</strong>
+            <span>{roleText}</span>
+            {me.user.email ? <small dir="ltr">{me.user.email}</small> : null}
+          </div>
+        </section>
+
+        <section className="adm-personal__card">
+          <div className="adm-personal__heading">
+            <span><Icon name="monitor" /></span>
+            <div><h2>תצוגת המערכת</h2><p>בחר איך המערכת תוצג במכשיר הזה.</p></div>
+          </div>
+          <div className="adm-display-picker" role="radiogroup" aria-label="תצוגת המערכת">
+            <button type="button" role="radio" aria-checked={displayMode === "auto"} className={displayMode === "auto" ? "is-active" : ""} onClick={() => onDisplayMode("auto")}>
+              <Icon name="refresh" /><span>אוטומטי</span>
+            </button>
+            <button type="button" role="radio" aria-checked={displayMode === "desktop"} className={displayMode === "desktop" ? "is-active" : ""} onClick={() => onDisplayMode("desktop")}>
+              <Icon name="monitor" /><span>מחשב</span>
+            </button>
+            <button type="button" role="radio" aria-checked={displayMode === "mobile"} className={displayMode === "mobile" ? "is-active" : ""} onClick={() => onDisplayMode("mobile")}>
+              <Icon name="smartphone" /><span>פלאפון</span>
+            </button>
+          </div>
+        </section>
+
+        <section className="adm-personal__card adm-personal__hub">
+          <button type="button" className="adm-personal__row" onClick={togglePush} disabled={push === "busy" || push === "unsupported" || push === "blocked"}>
+            <span className="adm-personal__rowicon"><Icon name="bell" /></span>
             <span>
-              התראות לטלפון
+              <strong>התראות למכשיר</strong>
               <small>
                 {push === "on"
-                  ? "פעיל במכשיר הזה"
+                  ? "פעילות במכשיר הזה"
                   : push === "blocked"
-                    ? "חסום בהגדרות הדפדפן"
+                    ? "חסומות בהגדרות הדפדפן"
                     : push === "unsupported"
-                      ? "במכשיר הזה צריך להתקין את האפליקציה קודם"
-                      : "לחיצה להפעלה"}
+                      ? "לא זמינות במכשיר הזה"
+                      : push === "busy"
+                        ? "בודק..."
+                        : "כבויות — לחיצה להפעלה"}
               </small>
             </span>
-            <span className="adm-switch" aria-hidden="true" />
+            <span className={`adm-switch${push === "on" ? " is-on" : ""}`} aria-hidden="true" />
           </button>
-        ) : null}
-        {err ? <div className="adm-alert adm-alert--error">{err}</div> : null}
-        <div className="btn-row" style={{ marginTop: 14 }}>
-          <button type="button" className="btn btn--sm" onClick={save}>
-            <Icon name="check" /> שמירה
+
+          <button type="button" className="adm-personal__row" onClick={onGuide}>
+            <span className="adm-personal__rowicon"><Icon name="info" /></span>
+            <span><strong>הדרכה למערכת</strong><small>פתיחת ההדרכה הקצרה מחדש</small></span>
+            <Icon name="arrowLeft" className="adm-personal__arrow" />
           </button>
+
           {me.user.kind === "phone" && !me.user.impersonatedBy ? (
-            <button type="button" className="btn btn--ghost btn--sm" onClick={onCode}>
-              <Icon name="lock" /> החלפת קוד
+            <button type="button" className="adm-personal__row" onClick={onCode}>
+              <span className="adm-personal__rowicon"><Icon name="lock" /></span>
+              <span><strong>החלפת קוד אישי</strong><small>עדכון קוד הכניסה למערכת</small></span>
+              <Icon name="arrowLeft" className="adm-personal__arrow" />
             </button>
           ) : null}
-          <button type="button" className="btn btn--ghost btn--sm" onClick={onLogout}>
-            <Icon name="logout" /> יציאה
+
+          <button type="button" className="adm-personal__row adm-personal__row--logout" onClick={onLogout}>
+            <span className="adm-personal__rowicon"><Icon name="logout" /></span>
+            <span><strong>התנתקות</strong><small>יציאה מהחשבון במכשיר הזה</small></span>
+            <Icon name="arrowLeft" className="adm-personal__arrow" />
           </button>
-        </div>
+        </section>
+
+        <section className="adm-personal__card">
+          <div className="adm-personal__heading">
+            <span><Icon name="users" /></span>
+            <div><h2>פרטי חשבון</h2><p>הפרטים שמופיעים בתוך מערכת הניהול.</p></div>
+          </div>
+          <div className="adm-fields">
+            <label className="field">
+              <span className="field__label">שם</span>
+              <input className="input" value={name} onChange={(e) => setName(e.target.value)} />
+            </label>
+            <label className="field">
+              <span className="field__label">טלפון</span>
+              <input className="input" type="tel" dir="ltr" style={{ textAlign: "right" }} value={phone} onChange={(e) => setPhone(e.target.value)} />
+            </label>
+          </div>
+          {err ? <div className="adm-alert adm-alert--error">{err}</div> : null}
+          <div className="btn-row" style={{ marginTop: 14 }}>
+            <button type="button" className="btn btn--sm" onClick={save}>
+              <Icon name="check" /> שמירת פרטים
+            </button>
+          </div>
+        </section>
       </div>
     </div>
   );
