@@ -1,7 +1,7 @@
 /** לוח בקרה - תמונת מצב ניהולית */
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Icon, type IconName } from "../../components/Icon";
-import { api, displayName, FORM_LABELS, fmtDateTime, type FormKey, type View } from "../api";
+import { apiCached, api, displayName, FORM_LABELS, fmtDateTime, type FormKey, type View } from "../api";
 import type { AdminCtx } from "../AdminApp";
 import type { Alert } from "../alerts";
 import type { Overview } from "./KollelView";
@@ -79,6 +79,7 @@ export function DashboardView({ me, subs, go, views: allViews, mode, dash }: Adm
   const views = allViews.filter((v) => (mode === "boys" ? v !== "isha" : v !== "kollel" && v !== "payroll"));
   const [bnot, setBnot] = useState<BnotOverview | null>(null);
   const [mitch, setMitch] = useState<MitchOverview | null>(null);
+  const [challah, setChallah] = useState<{ events: { id: string; title: string; date: string; time?: string; open: boolean; registrations: unknown[] }[] } | null>(null);
   const viewKey = allViews.join(",");
 
   useEffect(() => {
@@ -90,6 +91,8 @@ export function DashboardView({ me, subs, go, views: allViews, mode, dash }: Adm
     if (allViews.includes(domain === "bnot" ? "bnot" : "kollel")) {
       api<MitchOverview>(`/api/mitch?domain=${domain}`).then((x) => alive && setMitch(x)).catch(() => alive && setMitch(null));
     } else setMitch(null);
+    if (mode === "girls" && allViews.includes("bnot")) apiCached<NonNullable<typeof challah>>("/api/challah", (x) => alive && setChallah(x)).catch(() => undefined);
+    else setChallah(null);
     return () => { alive = false; };
   }, [mode, viewKey]);
   const list = (subs ?? []).filter((s) => mode === "girls" || !s.form.startsWith("isha"));
@@ -146,6 +149,65 @@ export function DashboardView({ me, subs, go, views: allViews, mode, dash }: Adm
           <div><strong>{attentionTotal}</strong><span>דורש טיפול</span></div>
           <div><strong>{newTotal}</strong><span>פניות חדשות</span></div>
         </div>
+      </section>
+
+      {/* היום שלי - הפעולות של היום בלחיצה אחת */}
+      <section className="adm-today" aria-label="היום שלי">
+        {mode === "boys" && views.includes("kollel") ? (
+          <>
+            <button type="button" className="adm-today__tile adm-today__tile--main" onClick={() => go("kollel", "attendance")}>
+              <Icon name="calendar" />
+              <strong>סימון נוכחות</strong>
+              <small>ערב הלימוד של היום</small>
+            </button>
+            <button type="button" className={`adm-today__tile${dueMitch ? " is-red" : ""}`} onClick={() => go("kollel", "mitch:due")}>
+              <Icon name="phone" />
+              <strong>{dueMitch} לחזור היום</strong>
+              <small>מתחזקים שמחכים לשיחה</small>
+            </button>
+            <button type="button" className="adm-today__tile" onClick={() => go("kollel", "mitch:new")}>
+              <Icon name="plus" />
+              <strong>מתחזק חדש</strong>
+              <small>שם וטלפון וזהו</small>
+            </button>
+          </>
+        ) : null}
+        {mode === "girls" && views.includes("bnot") ? (() => {
+          const next = (challah?.events ?? []).filter((e) => e.date >= (mitch?.today || "")).sort((a, b) => a.date.localeCompare(b.date))[0];
+          return (
+            <>
+              <button type="button" className={`adm-today__tile adm-today__tile--main${dueMitch ? " is-red" : ""}`} onClick={() => go("bnot", "mitch:due")}>
+                <Icon name="phone" />
+                <strong>{dueMitch} לחזור היום</strong>
+                <small>מתחזקות שמחכות לשיחה</small>
+              </button>
+              <button type="button" className="adm-today__tile" onClick={() => go("bnot", "challah")}>
+                <Icon name="sparkle" />
+                <strong>{next ? `הפרשת חלה ${new Intl.DateTimeFormat("he-IL", { weekday: "short", day: "numeric", month: "numeric" }).format(new Date(`${next.date}T12:00:00`))}` : "הפרשת חלה"}</strong>
+                <small>{next ? `${next.registrations.length} נרשמו` : "אין אירוע קרוב · ליצירה"}</small>
+              </button>
+              <button type="button" className="adm-today__tile" onClick={() => go("bnot", "mitch:new")}>
+                <Icon name="plus" />
+                <strong>מתחזקת חדשה</strong>
+                <small>שם וטלפון וזהו</small>
+              </button>
+            </>
+          );
+        })() : null}
+        {mode === "girls" && views.includes("isha") && unassignedIsha.length ? (
+          <button type="button" className="adm-today__tile is-red" onClick={() => go("isha", "ishaRequest")}>
+            <Icon name="chat" />
+            <strong>{unassignedIsha.length} בקשות שיחה</strong>
+            <small>מחכות למלווה</small>
+          </button>
+        ) : null}
+        {views.includes("inquiries") && newTotal ? (
+          <button type="button" className="adm-today__tile" onClick={() => go("inquiries")}>
+            <Icon name="inbox" />
+            <strong>{newTotal} פניות חדשות</strong>
+            <small>מהאתר</small>
+          </button>
+        ) : null}
       </section>
 
       <section className="adm-command-center">

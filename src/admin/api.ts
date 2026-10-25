@@ -28,6 +28,55 @@ export async function api<T = unknown>(path: string, init: RequestInit & { body?
   return data as T;
 }
 
+/* ---------- פתיחה מהירה: מציגים מיד את הנתונים האחרונים מהמכשיר ומרעננים ברקע ---------- */
+let cacheOwner = "";
+const mem = new Map<string, unknown>();
+/** מי מחובר (כולל "כניסה בשם") - כדי שלא יוצגו נתונים של משתמש אחר */
+export function setCacheOwner(owner: string) {
+  cacheOwner = owner;
+}
+export function clearApiCache() {
+  mem.clear();
+  try {
+    for (const k of Object.keys(localStorage)) if (k.startsWith("tbc:")) localStorage.removeItem(k);
+  } catch {
+    /* לא זמין */
+  }
+}
+const cacheKey = (path: string) => {
+  let scope = "";
+  try { scope = localStorage.getItem("tb-active-org-scope") || ""; } catch { /* */ }
+  return `tbc:${cacheOwner}:${scope}:${path}`;
+};
+/** קורא ל-onData מיד עם מה ששמור (אם יש), ואחר כך שוב עם הנתונים העדכניים מהשרת */
+export async function apiCached<T>(path: string, onData: (d: T) => void): Promise<T> {
+  const key = cacheKey(path);
+  if (cacheOwner) {
+    let hit = mem.get(key) as T | undefined;
+    if (hit === undefined) {
+      try {
+        const raw = localStorage.getItem(key);
+        if (raw) hit = JSON.parse(raw) as T;
+      } catch {
+        /* */
+      }
+    }
+    if (hit !== undefined) onData(hit);
+  }
+  const fresh = await api<T>(path);
+  onData(fresh);
+  if (cacheOwner) {
+    mem.set(key, fresh);
+    try {
+      const raw = JSON.stringify(fresh);
+      if (raw.length < 1_500_000) localStorage.setItem(key, raw);
+    } catch {
+      /* מקום מלא - נשאר רק בזיכרון */
+    }
+  }
+  return fresh;
+}
+
 export const post = <T = unknown>(path: string, body: unknown) => api<T>(path, { method: "POST", body: JSON.stringify(body) });
 export const patch = <T = unknown>(path: string, body: unknown) => api<T>(path, { method: "PATCH", body: JSON.stringify(body) });
 export const put = <T = unknown>(path: string, body: unknown) => api<T>(path, { method: "PUT", body: JSON.stringify(body) });

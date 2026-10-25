@@ -9,7 +9,7 @@ import { Icon, type IconName } from "../components/Icon";
 import { Logo } from "../components/Logo";
 import { runtime } from "../config/contentModel";
 import { Link } from "../router/Router";
-import { api, ApiError, post, type Me, type Submission, type View } from "./api";
+import { api, ApiError, post, type Me, type Submission, type View, setCacheOwner, clearApiCache } from "./api";
 import { ImpersonateModal } from "./Impersonate";
 import { FirstRunGuide, guideKey } from "./FirstRunGuide";
 import { entriesFor, entryActive, hubsFor, loadBar, loadMode, MODE_LABELS, modesFor, saveBar, saveMode, type Mode, type NavEntry, type NavLeaf, type Screen } from "./nav";
@@ -348,6 +348,7 @@ export default function AdminApp() {
   const loadMe = useCallback(async () => {
     try {
       const m = await api<Me>("/api/auth/me");
+      setCacheOwner(`${m.user.id}|${m.user.impersonatedBy?.id || ""}`);
       setMe(m);
       setModeState(loadMode(m, modesFor(m)));
       setState("ready");
@@ -479,6 +480,8 @@ export default function AdminApp() {
 
   const logout = async () => {
     await post("/api/auth/logout", {}).catch(() => undefined);
+    clearApiCache();
+    setCacheOwner("");
     setMe(null);
     setState("login");
   };
@@ -630,7 +633,7 @@ export default function AdminApp() {
   };
 
   const barNav = (
-    <nav aria-label="ניווט ראשי" className={`adm-bar${barSorting ? " is-sorting" : ""}`}>
+    <nav aria-label="ניווט ראשי" className={`adm-bar${barSorting ? " is-sorting" : ""}`} style={{ ["--bar-n" as string]: String(barEntries.length) }}>
       {barEntries.map((e) => {
         const b = entryBadge(e);
         const dragging = draggingBarId === e.id;

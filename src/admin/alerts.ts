@@ -1,7 +1,7 @@
 /** "מה דורש טיפול" - משותף ללוח הבקרה ולפעמון ההתראות */
 import { useCallback, useEffect, useState } from "react";
 import type { IconName } from "../components/Icon";
-import { api, type Me, type Submission, type View } from "./api";
+import { apiCached, api, type Me, type Submission, type View } from "./api";
 import type { Mode } from "./nav";
 import type { OrgData } from "./org";
 import type { Overview } from "./views/KollelView";
@@ -21,9 +21,9 @@ export function useAlerts(me: Me | null, mode: Mode, subs: Submission[] | null) 
 
   const load = useCallback(() => {
     if (!me) return;
-    if (canKollel) api<Overview>("/api/kollel/overview").then(setKollel).catch(() => setKollel(null));
+    if (canKollel) apiCached<Overview>("/api/kollel/overview", setKollel).catch(() => setKollel(null));
     else setKollel(null);
-    if (canOrg) api<OrgData>("/api/org").then(setOrg).catch(() => setOrg(null));
+    if (canOrg) apiCached<OrgData>("/api/org", setOrg).catch(() => setOrg(null));
     else setOrg(null);
   }, [me, canKollel, canOrg]);
   const loadMsgs = useCallback(() => {

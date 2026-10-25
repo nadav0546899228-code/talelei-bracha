@@ -1,7 +1,7 @@
 /** בנות צילה - משתתפות ופעילויות לפי סניף */
 import { useCallback, useEffect, useState } from "react";
 import { Icon } from "../../components/Icon";
-import { api, del, post, type Me, type OrgUnit } from "../api";
+import { apiCached, del, post, type Me, type OrgUnit } from "../api";
 import { Chips, Combo, ContactActions, ExportBtn, Fab, IconActions, SwipeRow } from "../components";
 import { useLive } from "../live";
 import { ChallahPanel } from "./ChallahView";
@@ -26,7 +26,7 @@ export function BnotView({ initialTab }: { me: Me; initialTab?: string }) {
   );
   const [branch, setBranch] = useState("all");
   const [err, setErr] = useState<string | null>(null);
-  const load = useCallback(() => api<Data>("/api/bnot/overview").then(setD).catch((e) => setErr(e.message)), []);
+  const load = useCallback(() => apiCached<Data>("/api/bnot/overview", setD).catch((e) => setErr(e.message)), []);
   useEffect(() => {
     load();
   }, [load]);
@@ -60,7 +60,7 @@ export function BnotView({ initialTab }: { me: Me; initialTab?: string }) {
         </button>
       </div>
       {tab === "challah" ? <ChallahPanel /> : null}
-      {tab === "mitch" ? <MitchPanel domain="bnot" initialQ={initialTab?.startsWith("mitch:q:") ? initialTab.slice(8) : ""} /> : null}
+      {tab === "mitch" ? <MitchPanel domain="bnot" initialTab={initialTab} initialQ={initialTab?.startsWith("mitch:q:") ? initialTab.slice(8) : ""} /> : null}
       {(tab === "members" || tab === "activities") && d.branches.length > 1 ? (
         <Chips<string> value={tab === "activities" && branch === "all" ? d.branches[0].id : branch} onChange={setBranch} items={[...(tab === "members" ? [{ id: "all", label: "כל הסניפים" }] : []), ...d.branches.map((b) => ({ id: b.id, label: b.name }))]} />
       ) : null}

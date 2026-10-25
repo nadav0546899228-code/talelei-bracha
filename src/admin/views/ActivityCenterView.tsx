@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Icon, type IconName } from "../../components/Icon";
-import { api, del, post, type View } from "../api";
+import { apiCached, del, post, type View } from "../api";
 import { useLive } from "../live";
 
 type ActivityItem = {
@@ -138,11 +138,11 @@ export function ActivityCenterView({ go }: { go: (view: View, tab?: string) => v
   const [wallForm,setWallForm]=useState({ domain:"kollel" as "kollel"|"bnot", branchId:"", date:todayIso(), title:"", note:"", photos:[] as string[], shareApproved:false });
 
   const loadWall=useCallback(() =>
-    api<WallData>("/api/activity-wall").then(setWall).catch((e)=>setWallErr(e instanceof Error ? e.message : "שגיאה בטעינת התיעוד")), []);
+    apiCached<WallData>("/api/activity-wall", setWall).catch((e)=>setWallErr(e instanceof Error ? e.message : "שגיאה בטעינת התיעוד")), []);
   const load=useCallback(()=>{
     const from=addDays(todayIso(),-400);
     const to=addDays(todayIso(),730);
-    return api<Data>(`/api/activity-center?from=${from}&to=${to}`).then(setData).catch((e)=>setErr(e.message));
+    return apiCached<Data>(`/api/activity-center?from=${from}&to=${to}`, setData).catch((e)=>setErr(e.message));
   },[]);
   useEffect(()=>{load();loadWall();},[load,loadWall]);
   useLive(["bnotActivities","challahEvents","kollelAttendance","content","orgUnits"],load);

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Icon } from "../../components/Icon";
-import { api, post, type OrgUnit, type View } from "../api";
+import { apiCached, api, post, type OrgUnit, type View } from "../api";
 import { useLive } from "../live";
 import { waLink } from "../components";
 
@@ -26,7 +26,7 @@ export function SmartCenterView({ go, initialTab }: { go:(v:View,tab?:string)=>v
   const [d,setD]=useState<Overview|null>(null);
   const [err,setErr]=useState("");
   const [tab,setTab]=useState(initialTab==="approvals"?"approvals":initialTab==="funnels"?"funnels":initialTab==="health"?"health":initialTab==="callers"?"callers":initialTab==="bulk"?"bulk":"overview");
-  const load=useCallback(()=>api<Overview>("/api/smart/overview").then(setD).catch((e)=>setErr(e.message)),[]);
+  const load=useCallback(()=>apiCached<Overview>("/api/smart/overview", setD).catch((e)=>setErr(e.message)),[]);
   useEffect(()=>{load();},[load]);
   useLive(["mitchUpdates","submissions","mitchazkim","bnotActivities","challahEvents","kollelAttendance","orgUnits","phoneUsers","callerAssignments","smartTasks"],load);
 

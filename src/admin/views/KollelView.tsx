@@ -1,7 +1,7 @@
 /** כולל ערב: אברכים לפי ערים וסניפים, דיווח נסיעות והוצאות */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Icon } from "../../components/Icon";
-import { api, del, post, put, type Me, type OrgUnit } from "../api";
+import { apiCached, api, del, post, put, type Me, type OrgUnit } from "../api";
 import { Chips, Combo, ContactActions, ExportBtn, Fab, IconActions, money, SwipeRow, ToneLegend } from "../components";
 import { computePayroll, ENTRY_LABELS, type Avrech, type Entry, type EntryType, type KollelSettings } from "../kollelCalc";
 import { buildXlsx, downloadBlob, parsePasted } from "../xlsx";
@@ -38,7 +38,7 @@ export function KollelView({ me, go, initialTab }: { me: Me; go?: (v: "org") => 
   const [ov, setOv] = useState<Overview | null>(null);
   const [tab, setTab] = useState<Tab>(initialTab?.startsWith("entries") ? "entries" : initialTab === "attendance" ? "attendance" : initialTab?.startsWith("mitch") ? "mitch" : "avrechim");
   const [err, setErr] = useState<string | null>(null);
-  const load = useCallback(() => api<Overview>("/api/kollel/overview").then(setOv).catch((e) => setErr(e.message)), []);
+  const load = useCallback(() => apiCached<Overview>("/api/kollel/overview", setOv).catch((e) => setErr(e.message)), []);
   useLive(["avrechim", "kollelMonths", "orgUnits", "kollelSettings"], load);
   useEffect(() => {
     load();
@@ -83,7 +83,7 @@ export function KollelView({ me, go, initialTab }: { me: Me; go?: (v: "org") => 
       {tab === "avrechim" ? <AvrechimTab ov={ov} reload={load} initialFilter={filterFromTab(initialTab)} initialQ={initialTab?.startsWith("avrechim:q:") ? initialTab.slice(11) : ""} /> : null}
       {tab === "entries" ? <EntriesTab ov={ov} /> : null}
       {tab === "attendance" ? <AttendanceTab ov={ov} /> : null}
-      {tab === "mitch" ? <MitchPanel domain="kollel" initialQ={initialTab?.startsWith("mitch:q:") ? initialTab.slice(8) : ""} /> : null}
+      {tab === "mitch" ? <MitchPanel domain="kollel" initialTab={initialTab} initialQ={initialTab?.startsWith("mitch:q:") ? initialTab.slice(8) : ""} /> : null}
     </>
   );
 }
