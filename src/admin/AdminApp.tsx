@@ -328,6 +328,8 @@ export default function AdminApp() {
   const [bellOpen, setBellOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [appMenuOpen, setAppMenuOpen] = useState(false);
+  const [appMenuQuery, setAppMenuQuery] = useState("");
   useEffect(() => {
     if (me) setBar(loadBar(me, mode, entries));
   }, [me, mode, entries]);
@@ -349,6 +351,15 @@ export default function AdminApp() {
   const viewOk = (v: View) => leaves.some((l) => l.view === v);
   const current: Screen = "hub" in screen ? (hubs.some((h) => h.id === screen.hub) ? screen : { view: "dashboard" }) : viewOk(screen.view) ? screen : { view: "dashboard" };
 
+  useEffect(() => {
+    if (!appMenuOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setAppMenuOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [appMenuOpen]);
+
   const setUrl = (s: Screen) => {
     const url = new URL(window.location.href);
     url.searchParams.set("v", "hub" in s ? `hub-${s.hub}` : s.view);
@@ -362,6 +373,8 @@ export default function AdminApp() {
   const show = (s: Screen) => {
     setScreen(s);
     setUrl(s);
+    setAppMenuOpen(false);
+    setAppMenuQuery("");
     window.scrollTo({ top: 0 });
   };
   const go = (v: View, tab?: string) => show({ view: v, tab });
@@ -576,10 +589,26 @@ export default function AdminApp() {
       : me.roleLabels[me.user.roles[0]] || me.user.name || ""
     : me.roleLabels[ownRole] || "תצוגות";
   const ownViewLabel = me.roleLabels[ownRole] || "החשבון שלי";
+  const menuQuery = appMenuQuery.trim().toLocaleLowerCase("he");
+  const menuGroups = hubs
+    .map((h) => ({
+      ...h,
+      items: h.items.filter((l) => !menuQuery || `${h.label} ${l.label} ${l.hint || ""}`.toLocaleLowerCase("he").includes(menuQuery)),
+    }))
+    .filter((h) => h.items.length);
 
   return (
     <div className="adm" data-mode={mode} data-display={displayMode}>
       <header className="adm-top">
+        <button
+          type="button"
+          className="adm-appmenu-trigger"
+          onClick={() => setAppMenuOpen(true)}
+          aria-label="פתיחת כל אפשרויות המערכת"
+          title="כל המערכת"
+        >
+          <Icon name="menu" />
+        </button>
         {modes.length > 1 ? (
           <button type="button" className="adm-mode" onClick={switchMode} aria-label={`מעבר ל${MODE_LABELS[mode === "boys" ? "girls" : "boys"]}`} title={`מעבר ל${MODE_LABELS[mode === "boys" ? "girls" : "boys"]}`}>
             <Logo org={mode === "boys" ? "taleiBracha" : "bnotTzila"} height={40} />
@@ -625,6 +654,89 @@ export default function AdminApp() {
           </button>
         </div>
       </header>
+
+      {appMenuOpen ? (
+        <div className="adm-appmenu-back" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && setAppMenuOpen(false)}>
+          <section className="adm-appmenu" role="dialog" aria-modal="true" aria-label="כל אפשרויות המערכת">
+            <header className="adm-appmenu__head">
+              <div>
+                <span className="adm-eyebrow">גישה מהירה</span>
+                <h2>כל המערכת</h2>
+                <small>{MODE_LABELS[mode]} · מוצגות רק אפשרויות שמותר לך לראות</small>
+              </div>
+              <button type="button" className="adm-icon-btn" onClick={() => setAppMenuOpen(false)} aria-label="סגירת התפריט">
+                <Icon name="close" />
+              </button>
+            </header>
+
+            <div className="adm-appmenu__tools">
+              <label className="adm-appmenu__search">
+                <Icon name="search" />
+                <input
+                  type="search"
+                  value={appMenuQuery}
+                  onChange={(e) => setAppMenuQuery(e.target.value)}
+                  placeholder="חיפוש פעולה, מסך או תחום…"
+                  autoFocus
+                />
+                {appMenuQuery ? <button type="button" onClick={() => setAppMenuQuery("")} aria-label="ניקוי חיפוש"><Icon name="close" /></button> : null}
+              </label>
+              {modes.length > 1 ? (
+                <div className="adm-appmenu__modes" role="group" aria-label="בחירת מערכת">
+                  <button type="button" aria-pressed={mode === "boys"} onClick={() => mode !== "boys" && switchMode()}>
+                    <Logo org="taleiBracha" height={28} /> טללי ברכה
+                  </button>
+                  <button type="button" aria-pressed={mode === "girls"} onClick={() => mode !== "girls" && switchMode()}>
+                    <Logo org="bnotTzila" height={27} /> בנות צילה
+                  </button>
+                </div>
+              ) : null}
+            </div>
+
+            <div className="adm-appmenu__body">
+              {menuGroups.map((h) => (
+                <section className="adm-appmenu__group" key={h.id}>
+                  <div className="adm-appmenu__group-head">
+                    <span className="adm-appmenu__group-icon"><Icon name={h.icon} /></span>
+                    <div><strong>{h.label}</strong><small>{h.items.length} אפשרויות</small></div>
+                  </div>
+                  <div className="adm-appmenu__grid">
+                    {h.items.map((l) => {
+                      const b = leafBadge(l);
+                      const active = curView === l.view && (!l.tab || !curTab || l.tab === curTab);
+                      return (
+                        <button type="button" key={l.id} className="adm-appmenu__item" aria-current={active ? "page" : undefined} onClick={() => openLeaf(l)}>
+                          <span className="adm-appmenu__item-icon"><Icon name={l.icon} /></span>
+                          <span className="adm-appmenu__item-copy">
+                            <strong>{l.label}</strong>
+                            {l.hint ? <small>{l.hint}</small> : null}
+                          </span>
+                          {b ? <span className="adm-appmenu__badge">{b}</span> : <Icon name="arrowLeft" className="adm-appmenu__arrow" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </section>
+              ))}
+              {!menuGroups.length ? (
+                <div className="adm-empty-state">
+                  <Icon name="search" />
+                  <strong>לא נמצאה אפשרות כזאת</strong>
+                  <span>נסו מילת חיפוש אחרת.</span>
+                </div>
+              ) : null}
+            </div>
+
+            <footer className="adm-appmenu__foot">
+              <button type="button" onClick={() => { setAppMenuOpen(false); setProfileOpen(true); }}>
+                <span className="adm-avatar">{initial}</span>
+                <span><strong>{account.name || account.email}</strong><small>{ownViewLabel} · אזור אישי והעדפות</small></span>
+                <Icon name="arrowLeft" />
+              </button>
+            </footer>
+          </section>
+        </div>
+      ) : null}
 
       <div className="adm-layout">
         <aside className="adm-side">
