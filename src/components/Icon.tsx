@@ -42,6 +42,8 @@ const paths: Record<string, string> = {
     "M3.5 20.5l1.3-4.6A8.5 8.5 0 1 1 8 19.3zM9 8.5c0 3.3 3.2 6.5 6.5 6.5l1.3-1.6-2-1.1-.9.9c-1.2-.4-2.3-1.5-2.7-2.7l.9-.9-1.1-2L9.4 8.5z",
   external: "M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5",
   grid: "M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z",
+  monitor: "M4 5h16v12H4zM8 21h8M12 17v4",
+  smartphone: "M8 3h8v18H8zM11 18h2",
   inbox: "M3 13h5l1.5 3h5L16 13h5M5 5h14l2 8v6H3v-6z",
   logout: "M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10",
   code: "m8 8-4 4 4 4m8-8 4 4-4 4M14 5l-4 14",
