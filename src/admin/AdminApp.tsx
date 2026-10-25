@@ -1082,6 +1082,7 @@ function Profile({
   const [ok, setOk] = useState<string | null>(null);
   const [alertsOpen, setAlertsOpen] = useState(false);
   const [prefsOpen, setPrefsOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [push, setPush] = useState<"on" | "off" | "blocked" | "unsupported" | "busy">("busy");
 
   useEffect(() => {
@@ -1189,11 +1190,14 @@ function Profile({
         </section>
 
         {/* הפרטים שלי - כל שדה נפתח לעריכה רק בלחיצה */}
-        <section className="adm-personal__card">
-          <div className="adm-personal__heading">
-            <span><Icon name="users" /></span>
-            <div><h2>הפרטים שלי</h2><p>מופיעים בתוך המערכת ובתפוצות.</p></div>
-          </div>
+        <section className="adm-personal__card adm-personal__hub">
+          <button type="button" className="adm-personal__row" onClick={() => setDetailsOpen(!detailsOpen)} aria-expanded={detailsOpen}>
+            <span className="adm-personal__rowicon"><Icon name="users" /></span>
+            <span><strong>הפרטים שלי</strong><small>שם, טלפון{account.kind === "phone" ? " וקוד כניסה" : " ומייל"}</small></span>
+            <Icon name="chevronDown" className={`adm-personal__arrow${detailsOpen ? " is-open" : ""}`} />
+          </button>
+          {detailsOpen ? (
+          <div style={{ padding: "0 14px 10px" }}>
           {detailRow("name", "users", "שם", account.name || "", <input className="input" value={name} onChange={(e) => setName(e.target.value)} autoFocus />)}
           {detailRow("phone", "phone", "טלפון", account.phone || "", <input className="input" type="tel" dir="ltr" style={{ textAlign: "right" }} value={phone} onChange={(e) => setPhone(e.target.value)} autoFocus />)}
           {account.email ? (
@@ -1215,6 +1219,8 @@ function Profile({
           ) : null}
           {err ? <div className="adm-alert adm-alert--error">{err}</div> : null}
           {ok ? <div className="adm-alert adm-alert--ok">{ok}</div> : null}
+          </div>
+          ) : null}
         </section>
 
         {/* העדפות אישיות */}
