@@ -4586,3 +4586,40 @@
 .adm-sheet__t .adm-ut-act svg { width: 15px; height: 15px; }
 .adm-sheet--compact .adm-sheet__t .adm-ut-act { width: 24px; height: 24px; }
 .adm-sheet__t .adm-sheet__tag { white-space: nowrap; }
+
+/* ===== תפריט המערכת: צבע אחיד כהה, שורות לחיצות ===== */
+.adm-appmenu { background: #10393c !important; color: #e8f4f4 !important; }
+.adm[data-mode="girls"] .adm-appmenu { background: #3d1028 !important; }
+.adm-appmenu__head { background: transparent !important; border-bottom: 1px solid rgb(255 255 255 / 0.1) !important; padding-bottom: 12px !important; }
+.adm-appmenu__head h2 { color: #fff !important; font-size: 1.3rem !important; margin: 0 !important; }
+.adm-appmenu__head small, .adm-appmenu__head .adm-eyebrow { color: rgb(255 255 255 / 0.6) !important; background: none !important; padding: 0 !important; }
+.adm-appmenu__head .adm-icon-btn { background: rgb(255 255 255 / 0.1) !important; border-color: transparent !important; color: #fff !important; }
+.adm-appmenu__tools { background: transparent !important; padding-top: 10px !important; }
+.adm-appmenu__search { background: rgb(255 255 255 / 0.1) !important; border: 1px solid rgb(255 255 255 / 0.14) !important; color: #fff !important; }
+.adm-appmenu__search input { background: transparent !important; color: #fff !important; border: 0 !important; box-shadow: none !important; outline: none !important; }
+.adm-appmenu__search input::placeholder { color: rgb(255 255 255 / 0.55) !important; }
+.adm-appmenu__search svg { color: rgb(255 255 255 / 0.7) !important; }
+.adm-appmenu__body { background: transparent !important; padding-top: 4px !important; gap: 14px !important; }
+.adm-appmenu__group { background: transparent !important; border: 0 !important; box-shadow: none !important; padding: 0 !important; }
+.adm-appmenu__group-head { padding: 6px 4px !important; gap: 8px !important; }
+.adm-appmenu__group-head strong { color: rgb(255 255 255 / 0.55) !important; font-size: 0.78rem !important; font-weight: 700 !important; letter-spacing: 0.02em; }
+.adm-appmenu__group-head small { display: none !important; }
+.adm-appmenu__group-icon { display: none !important; }
+.adm-appmenu__grid { display: grid !important; grid-template-columns: 1fr !important; gap: 0 !important; background: rgb(255 255 255 / 0.06) !important; border-radius: 14px !important; overflow: hidden; }
+.adm-appmenu__item { background: transparent !important; border: 0 !important; border-bottom: 1px solid rgb(255 255 255 / 0.07) !important; border-radius: 0 !important; box-shadow: none !important; min-height: 50px !important; padding: 8px 12px !important; color: #fff !important; }
+.adm-appmenu__grid .adm-appmenu__item:last-child { border-bottom: 0 !important; }
+.adm-appmenu__item:active, .adm-appmenu__item:hover { background: rgb(255 255 255 / 0.08) !important; }
+.adm-appmenu__item[aria-current="page"] { background: rgb(255 255 255 / 0.14) !important; }
+.adm-appmenu__item-icon { width: 34px !important; height: 34px !important; border-radius: 10px !important; background: rgb(255 255 255 / 0.1) !important; color: #fff !important; }
+.adm-appmenu__item-icon svg { width: 18px !important; height: 18px !important; stroke-width: 2.2; }
+.adm-appmenu__item-copy strong { color: #fff !important; font-size: 0.95rem !important; }
+.adm-appmenu__item-copy small { color: rgb(255 255 255 / 0.55) !important; font-size: 0.74rem !important; }
+.adm-appmenu__arrow { color: rgb(255 255 255 / 0.45) !important; }
+.adm-appmenu__badge { background: #e53970 !important; color: #fff !important; }
+.adm-appmenu__global-search { background: rgb(255 255 255 / 0.1) !important; color: #fff !important; border-color: rgb(255 255 255 / 0.14) !important; }
+.adm-appmenu__global-search small { color: rgb(255 255 255 / 0.6) !important; }
+.adm-appmenu .adm-empty-state { color: rgb(255 255 255 / 0.7) !important; }
+.adm-appmenu footer, .adm-appmenu__foot { background: rgb(0 0 0 / 0.15) !important; border-top: 1px solid rgb(255 255 255 / 0.08) !important; color: #fff !important; }
+.adm-appmenu__foot strong, .adm-appmenu__foot small, .adm-appmenu__foot svg { color: inherit !important; }
+.adm-appmenu .adm-appmenu__group:nth-child(n) { background: transparent !important; background-image: none !important; }
+.adm-appmenu .adm-appmenu__head .adm-eyebrow { border: 0 !important; font-size: 0.8rem !important; }

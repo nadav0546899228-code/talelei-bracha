@@ -836,16 +836,6 @@ export default function AdminApp() {
                   <Icon name="arrowLeft" />
                 </button>
               ) : null}
-              {modes.length > 1 ? (
-                <div className="adm-appmenu__modes" role="group" aria-label="בחירת מערכת">
-                  <button type="button" aria-pressed={mode === "boys"} onClick={() => mode !== "boys" && switchMode()}>
-                    <Logo org="taleiBracha" height={28} /> טללי ברכה
-                  </button>
-                  <button type="button" aria-pressed={mode === "girls"} onClick={() => mode !== "girls" && switchMode()}>
-                    <Logo org="bnotTzila" height={27} /> בנות צילה
-                  </button>
-                </div>
-              ) : null}
             </div>
 
             <div className="adm-appmenu__body">
