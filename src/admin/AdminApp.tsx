@@ -4,7 +4,7 @@
  * שני מצבים - טללי ברכה (בנים) ובנות צילה (בנות) - בלי ערבוב. החלפה בלוגו שבשורה העליונה.
  * ניווט: כפתורי-על שנכנסים פנימה, ושורה תחתונה שזזה לצדדים וניתנת לעריכה.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { Icon } from "../components/Icon";
 import { Logo } from "../components/Logo";
 import { runtime } from "../config/contentModel";
@@ -383,7 +383,7 @@ export default function AdminApp() {
       barPressTimer.current = null;
     }
   };
-  const barPointerDown = (ev: React.PointerEvent<HTMLButtonElement>, id: string) => {
+  const barPointerDown = (ev: ReactPointerEvent<HTMLButtonElement>, id: string) => {
     if (ev.pointerType === "mouse" && ev.button !== 0) return;
     clearBarTimer();
     suppressBarClick.current = false;
@@ -398,7 +398,7 @@ export default function AdminApp() {
       try { navigator.vibrate?.(18); } catch { /* לא קריטי */ }
     }, 420);
   };
-  const barPointerMove = (ev: React.PointerEvent<HTMLButtonElement>) => {
+  const barPointerMove = (ev: ReactPointerEvent<HTMLButtonElement>) => {
     const p = barPress.current;
     if (!p) return;
     const distance = Math.hypot(ev.clientX - p.x, ev.clientY - p.y);
