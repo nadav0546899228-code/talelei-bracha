@@ -28,17 +28,26 @@ export function useInstall() {
   const install = async (): Promise<"ok" | "manual"> => {
     const p = window.__tbInstall;
     if (!p) return "manual";
-    await p.prompt();
-    const r = await p.userChoice.catch(() => ({ outcome: "dismissed" }));
-    window.__tbInstall = null;
-    setReady(false);
-    if (r.outcome === "accepted") setInstalled(true);
-    return "ok";
+    try {
+      await p.prompt();
+      const r = await p.userChoice.catch(() => ({ outcome: "dismissed" }));
+      window.__tbInstall = null;
+      setReady(false);
+      if (r.outcome === "accepted") {
+        setInstalled(true);
+        return "ok";
+      }
+      return "manual";
+    } catch {
+      window.__tbInstall = null;
+      setReady(false);
+      return "manual";
+    }
   };
   const manualText = isIos()
     ? "באייפון: לוחצים על כפתור השיתוף (ריבוע עם חץ) ← \"הוספה למסך הבית\"."
     : isSamsung()
       ? "בדפדפן סמסונג: תפריט ☰ למטה ← \"הוסף דף אל\" ← \"מסך הבית\"."
-      : "בכרום: תפריט ⋮ למעלה ← \"התקנת האפליקציה\" או \"הוספה למסך הבית\".";
+      : "בכרום: לוחצים על ⋮ למעלה ← \"הוספה למסך הבית\" ← \"התקנה\".";
   return { ready, installed, install, manualText };
 }

@@ -1180,6 +1180,12 @@ async function serveStatic(req, res, url) {
     const dev = file.replace(/icon-(\d+)\.png$/, "icon-dev-$1.png");
     if (await isFile(dev)) file = dev;
   }
+  // מערכת הניהול: מניפסט משלה, כדי שהאפליקציה המותקנת תיפתח ישר למערכת
+  if (file === join(ROOT, "index.html") && (url.pathname === "/admin" || url.pathname.startsWith("/admin/"))) {
+    const html = (await readFile(file, "utf8")).replace('href="/manifest.webmanifest"', 'href="/admin.webmanifest"');
+    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache", "X-Robots-Tag": "noindex, nofollow", ...SECURITY });
+    return res.end(html);
+  }
   const ext = extname(file);
   const cache = file.includes(join(ROOT, "assets")) ? "public, max-age=31536000, immutable" : ext === ".html" ? "no-cache" : "public, max-age=3600";
   const headers = { "Content-Type": TYPES[ext] || "application/octet-stream", "Cache-Control": cache, ...SECURITY };

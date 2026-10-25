@@ -283,16 +283,7 @@ export default function AdminApp() {
   });
   const [instHelp, setInstHelp] = useState<string | null>(null);
   const shownDisplay: DisplayMode = narrow && displayMode === "desktop" ? "auto" : displayMode;
-  // אפליקציית הניהול נפתחת ישר למערכת (ולא לאתר הציבורי)
-  useEffect(() => {
-    const link = document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
-    if (!link) return;
-    const prev = link.href;
-    link.href = "/admin.webmanifest";
-    return () => {
-      link.href = prev;
-    };
-  }, []);
+
   const [barSorting, setBarSorting] = useState(false);
   const [draggingBarId, setDraggingBarId] = useState<string | null>(null);
   const barPressTimer = useRef<number | null>(null);
