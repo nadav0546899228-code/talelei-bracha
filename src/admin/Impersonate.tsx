@@ -16,7 +16,7 @@ export async function enterAs(id: string) {
   window.location.href = "/admin";
 }
 
-export function ImpersonateModal({ onClose, onSwitched, current, onBack }: { onClose: () => void; onSwitched: () => void; current?: string; onBack?: () => void }) {
+export function ImpersonateModal({ onClose, onSwitched, current, onBack, backLabel = "החשבון שלי" }: { onClose: () => void; onSwitched: () => void; current?: string; onBack?: () => void; backLabel?: string }) {
   const [t, setT] = useState<Targets | null>(null);
   const [open, setOpen] = useState<Role | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -50,7 +50,7 @@ export function ImpersonateModal({ onClose, onSwitched, current, onBack }: { onC
         {err ? <div className="adm-alert adm-alert--error">{err}</div> : null}
         {onBack ? (
           <button type="button" className="adm-views__btn adm-views__btn--me" onClick={onBack}>
-            התצוגה שלי
+            {backLabel}
           </button>
         ) : null}
         {(t ? [...t.roles].sort((a, b) => ORDER.indexOf(a.id) - ORDER.indexOf(b.id)) : []).map((r) => {
