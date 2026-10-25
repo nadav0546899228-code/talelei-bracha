@@ -9,6 +9,7 @@ type Backup = { id: string; at: string; reason: string; byName: string; count: n
 export function DevExtras() {
   const [list, setList] = useState<Backup[] | null>(null);
   const [hook, setHook] = useState<string | null>(null);
+  const [donHook, setDonHook] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const load = useCallback(() => api<{ backups: Backup[] }>("/api/admin/backups").then((r) => setList(r.backups)), []);
@@ -157,6 +158,23 @@ export function DevExtras() {
           </div>
         ) : (
           <button type="button" className="btn btn--ghost btn--sm" onClick={() => api<{ url: string }>("/api/admin/yemot-hook").then((r) => setHook(r.url))}>
+            הצגת הכתובת
+          </button>
+        )}
+      </section>
+      <section className="adm-panel">
+        <h2>
+          <Icon name="heart" width={20} height={20} style={{ verticalAlign: "-4px" }} /> תרומות אונליין - חיבור לסליקה
+        </h2>
+        <p className="muted" style={{ marginTop: -6 }}>
+          בנדרים פלוס (או בכל מערכת סליקה): בהגדרות ← כתובת לעדכון (Callback) - מדביקים את הכתובת. כל תרומה תיכנס לבד למסך "תרומות".
+        </p>
+        {donHook ? (
+          <div className="adm-code" dir="ltr" style={{ fontSize: "0.82rem", wordBreak: "break-all", textAlign: "left" }}>
+            {donHook}
+          </div>
+        ) : (
+          <button type="button" className="btn btn--ghost btn--sm" onClick={() => api<{ url: string }>("/api/admin/donation-hook").then((r) => setDonHook(r.url))}>
             הצגת הכתובת
           </button>
         )}

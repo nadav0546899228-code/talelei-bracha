@@ -102,6 +102,39 @@ function resolveRecipients(groups, ids, manual, allowManual) {
   return Array.from(map.values());
 }
 
+/** ביצוע השליחה בפועל דרך ימות המשיח */
+export async function dispatch(channel, text, templateId, settings, phones) {
+  if (channel === "voice_tts") return yemot.runCampaign({ templateId, callerId: settings.callerId, recipients: phones, mode: "tts", textFor: (r) => personalize(text, r) });
+  if (channel === "voice_template") return yemot.runCampaign({ templateId, callerId: settings.callerId, recipients: phones, mode: "template" });
+  if (channel === "tzintuk") return yemot.runTzintuk({ callerId: settings.callerId, recipients: phones });
+  // SMS: אם יש {שם} - שליחה אישית לכל נמען, אחרת שליחה אחת
+  if (text.includes("{שם}")) {
+    const results = [];
+    for (const r of phones.slice(0, 500)) results.push(await yemot.sendSms({ from: settings.smsFrom, message: personalize(text, r), recipients: [r] }));
+    return { personalized: results.length };
+  }
+  return yemot.sendSms({ from: settings.smsFrom, message: text, recipients: phones });
+}
+
+/** הרצת תפוצות מתוזמנות שהגיע זמנן (נקרא מהשרת כל דקה) */
+export async function runScheduled(store, audit) {
+  const due = (await store.list("bcScheduled", 500)).filter((x) => x.status === "scheduled" && new Date(x.at).getTime() <= Date.now());
+  for (const job of due) {
+    await store.put("bcScheduled", job.id, { ...job, status: "running" });
+    const settings = (await store.get("settings", "broadcast")) || {};
+    const { phones, ...log } = job;
+    try {
+      const result = await dispatch(job.channel, job.text, job.templateId, settings, phones);
+      await store.put("broadcasts", job.id, { ...log, status: "sent", result, campaignId: result?.campaignId || null, scheduledAt: job.at });
+      await store.put("bcScheduled", job.id, { ...job, status: "sent" });
+      await audit({ name: job.byName }, `תפוצה מתוזמנת נשלחה: ${job.channelLabel}`, `${phones.length} נמענים`);
+    } catch (e) {
+      await store.put("bcScheduled", job.id, { ...job, status: "error", error: e.message });
+      await audit({ name: job.byName }, "תפוצה מתוזמנת נכשלה", e.message);
+    }
+  }
+}
+
 const personalize = (text, r) => String(text).replace(/\{שם\}/g, r.name || "").replace(/\s{2,}/g, " ").trim();
 
 export async function handleBroadcast(req, res, url, ctx) {
@@ -209,24 +242,19 @@ export async function handleBroadcast(req, res, url, ctx) {
       return send(400, { error: "חסר מזהה תבנית בימות המשיח (הגדרות ← תבנית קמפיין)" }), true;
     }
 
+    // שליחה מתוזמנת - נשמרת ונשלחת בזמן שנקבע (ערוצי ימות בלבד)
+    if (b.scheduleAt && !b.testPhone) {
+      if (!yemot.yemotConfigured()) return send(400, { error: "ימות המשיח לא מחובר (חסר YEMOT_TOKEN)" }), true;
+      const at = new Date(String(b.scheduleAt));
+      if (Number.isNaN(at.getTime()) || at.getTime() < Date.now() + 60_000) return send(400, { error: "יש לבחור זמן עתידי" }), true;
+      if (at.getTime() > Date.now() + 60 * 86400_000) return send(400, { error: "אפשר לתזמן עד חודשיים קדימה" }), true;
+      await store.put("bcScheduled", id, { ...log, status: "scheduled", at: at.toISOString(), templateId, phones });
+      await audit(user, `תזמון תפוצה: ${CHANNELS[channel]}`, `${phones.length} נמענים · ${at.toISOString()}`);
+      return send(200, { ok: true, id, scheduled: at.toISOString() }), true;
+    }
+
     try {
-      let result;
-      if (channel === "voice_tts") {
-        result = await yemot.runCampaign({ templateId, callerId: settings.callerId, recipients: phones, mode: "tts", textFor: (r) => personalize(text, r) });
-      } else if (channel === "voice_template") {
-        result = await yemot.runCampaign({ templateId, callerId: settings.callerId, recipients: phones, mode: "template" });
-      } else if (channel === "tzintuk") {
-        result = await yemot.runTzintuk({ callerId: settings.callerId, recipients: phones });
-      } else {
-        // SMS: אם יש {שם} - שליחה אישית לכל נמען, אחרת שליחה אחת
-        if (text.includes("{שם}")) {
-          const results = [];
-          for (const r of phones.slice(0, 500)) results.push(await yemot.sendSms({ from: settings.smsFrom, message: personalize(text, r), recipients: [r] }));
-          result = { personalized: results.length };
-        } else {
-          result = await yemot.sendSms({ from: settings.smsFrom, message: text, recipients: phones });
-        }
-      }
+      const result = await dispatch(channel, text, templateId, settings, phones);
       await store.put("broadcasts", id, { ...log, count: phones.length, result, campaignId: result?.campaignId || null });
       await audit(user, `תפוצה: ${CHANNELS[channel]}${log.test ? " (בדיקה)" : ""}`, `${phones.length} נמענים`);
       return send(200, { ok: true, id, result }), true;
@@ -235,6 +263,39 @@ export async function handleBroadcast(req, res, url, ctx) {
       await audit(user, `תפוצה נכשלה: ${CHANNELS[channel]}`, e.message);
       return send(400, { error: e.message }), true;
     }
+  }
+
+  // ---- תפוצות מתוזמנות
+  if (pathname === "/api/broadcast/scheduled" && method === "GET") {
+    const rows = (await store.list("bcScheduled", 300)).filter((x) => (priv || x.by === user.id) && x.status !== "sent").map(({ phones: _p, ...x }) => x);
+    return send(200, { scheduled: rows.sort((a, b) => String(a.at).localeCompare(String(b.at))) }), true;
+  }
+  const scMatch = pathname.match(/^\/api\/broadcast\/scheduled\/([\w-]+)$/);
+  if (scMatch && method === "DELETE") {
+    const x = await store.get("bcScheduled", scMatch[1]);
+    if (!x || (!priv && x.by !== user.id) || x.status !== "scheduled") return send(404, { error: "לא נמצא" }), true;
+    await store.del("bcScheduled", x.id);
+    await audit(user, "ביטול תפוצה מתוזמנת", x.channelLabel);
+    return send(200, { ok: true }), true;
+  }
+
+  // ---- תבניות נוסח שמורות
+  if (pathname === "/api/broadcast/saved") {
+    if (method === "GET") return send(200, { templates: (await store.list("bcTemplates", 500)).sort((a, b) => String(a.name).localeCompare(String(b.name), "he")) }), true;
+    if (method === "POST") {
+      const b = await readBody(req);
+      const name = clean(b.name, 60).trim();
+      const text = clean(b.text, 1000).trim();
+      if (!name || !text) return send(400, { error: "חסר שם או נוסח" }), true;
+      const id = b.id ? String(b.id) : randomUUID();
+      await store.put("bcTemplates", id, { name, text, by: user.id });
+      return send(200, { ok: true, id }), true;
+    }
+  }
+  const svMatch = pathname.match(/^\/api\/broadcast\/saved\/([\w-]+)$/);
+  if (svMatch && method === "DELETE") {
+    await store.del("bcTemplates", svMatch[1]);
+    return send(200, { ok: true }), true;
   }
 
   if (pathname === "/api/broadcast/history" && method === "GET") {

@@ -51,7 +51,8 @@ export async function handleKollel(req, res, url, ctx) {
     return (
       send(200, {
         me: { manager, canEditAvrechim, canPayroll: user.views.includes("payroll") },
-        avrechim: canEditAvrechim ? avs : avs.map(({ notes: _n, ...a }) => a),
+        // פרטי בנק ות״ז - רק להנהלה (רכז ראשי / מנכ״ל / מתכנת)
+        avrechim: avs.map(({ bank: _b, ...a }) => (manager ? { ...a, bank: _b || null } : canEditAvrechim ? a : (({ notes: _n, ...x }) => x)(a))),
         cities: myCities,
         branches: myBranches,
         settings: await settings(),
@@ -97,6 +98,15 @@ export async function handleKollel(req, res, url, ctx) {
       ...pay,
       active: b.active !== false,
       notes: clean(b.notes, 500),
+      bank: manager && b.bank && typeof b.bank === "object"
+        ? {
+            idNumber: clean(b.bank.idNumber, 12).replace(/\D/g, ""),
+            bankCode: clean(b.bank.bankCode, 3).replace(/\D/g, ""),
+            branchCode: clean(b.bank.branchCode, 4).replace(/\D/g, ""),
+            account: clean(b.bank.account, 15).replace(/\D/g, ""),
+            holder: clean(b.bank.holder, 80).trim(),
+          }
+        : prev.bank || null,
     };
     await store.put("avrechim", id, doc);
     await audit(user, prev.name ? "עדכון אברך" : "הוספת אברך", name);
@@ -128,6 +138,99 @@ export async function handleKollel(req, res, url, ctx) {
     }
     await audit(user, "ייבוא אברכים", `${added} חדשים, ${updated} עודכנו`);
     return send(200, { ok: true, added, updated }), true;
+  }
+
+  // ---- מסמכים לאברך (הנהלה בלבד)
+  const fMatch = pathname.match(/^\/api\/kollel\/avrechim\/([\w-]+)\/files$/);
+  if (fMatch) {
+    if (!manager) return send(403, { error: "מסמכים - הנהלה בלבד" }), true;
+    const av = await store.get("avrechim", fMatch[1]);
+    if (!av) return send(404, { error: "לא נמצא" }), true;
+    if (method === "GET") {
+      const files = (await store.list("avrechFiles", 5000)).filter((f) => f.avrechId === av.id).map(({ data: _d, ...f }) => f);
+      return send(200, { files }), true;
+    }
+    if (method === "POST") {
+      const b = await readBody(req, 5 * 1024 * 1024);
+      const data = String(b.data || "");
+      const size = Math.floor((data.length * 3) / 4);
+      if (!data || size > 3.5 * 1024 * 1024) return send(400, { error: "קובץ ריק או גדול מ-3.5MB" }), true;
+      const type = clean(b.type, 80);
+      if (!/^(image\/(png|jpe?g|webp|heic)|application\/pdf)$/.test(type)) return send(400, { error: "אפשר להעלות תמונה או PDF בלבד" }), true;
+      const id = randomUUID();
+      await store.put("avrechFiles", id, { avrechId: av.id, name: clean(b.name, 120) || "מסמך", label: clean(b.label, 60), type, size, data, byName: user.name || user.email });
+      await audit(user, "העלאת מסמך לאברך", `${av.name} · ${clean(b.label || b.name, 60)}`);
+      return send(200, { ok: true, id }), true;
+    }
+  }
+  const fileMatch = pathname.match(/^\/api\/kollel\/files\/([\w-]+)$/);
+  if (fileMatch) {
+    if (!manager) return send(403, { error: "אין הרשאה" }), true;
+    const f = await store.get("avrechFiles", fileMatch[1]);
+    if (!f) return send(404, { error: "לא נמצא" }), true;
+    if (method === "GET") {
+      res.writeHead(200, { "Content-Type": f.type, "Content-Disposition": `inline; filename*=UTF-8''${encodeURIComponent(f.name)}`, "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" });
+      res.end(Buffer.from(f.data, "base64"));
+      return true;
+    }
+    if (method === "DELETE") {
+      await store.del("avrechFiles", f.id);
+      await audit(user, "מחיקת מסמך", f.name);
+      return send(200, { ok: true }), true;
+    }
+  }
+
+  // ---- סגירת חודש בשלבים: מנהל סניף "סיימתי" ← רכז עיר "מאשר" ← רכז ראשי סוגר
+  if (pathname === "/api/kollel/status") {
+    const body = method === "POST" ? await readBody(req) : null;
+    const month = clean(body ? body.month : url.searchParams.get("month"), 40);
+    const m = await monthDoc(month);
+    if (!m) return send(400, { error: "חודש לא קיים" }), true;
+    const st = (await store.get("kollelMonthStatus", month)) || { branches: {}, cities: {} };
+    if (method === "POST") {
+      const b = body || {};
+      if (m.locked) return send(400, { error: "החודש נסגר לתשלום" }), true;
+      const stamp = { by: user.id, byName: user.name || user.email || user.phone, at: new Date().toISOString() };
+      const id = String(b.id || "");
+      if (b.action === "branchDone" || b.action === "branchUndo") {
+        if (!myBranches.some((x) => x.id === id)) return send(403, { error: "הסניף אינו באחריותך" }), true;
+        if (b.action === "branchDone") st.branches[id] = stamp;
+        else delete st.branches[id];
+      } else if (b.action === "cityApprove" || b.action === "cityUndo") {
+        const city = myCities.find((c) => c.id === id);
+        const isCityCoord = user.roles.includes("kollel_city") && user.scope?.kollel?.cityId === id;
+        if (!city || !(manager || isCityCoord)) return send(403, { error: "אישור עיר - רכז העיר או הרכז הראשי" }), true;
+        if (b.action === "cityApprove") st.cities[id] = stamp;
+        else delete st.cities[id];
+      } else return send(400, { error: "פעולה לא מוכרת" }), true;
+      await store.put("kollelMonthStatus", month, st);
+      await audit(user, "סטטוס חודש", `${m.label} · ${b.action}`);
+    }
+    return (
+      send(200, {
+        branches: myBranches.map((x) => ({ id: x.id, name: x.name, cityId: x.parentId, done: st.branches[x.id] || null })),
+        cities: myCities.map((c) => ({ id: c.id, name: c.name, approved: st.cities[c.id] || null })),
+      }),
+      true
+    );
+  }
+
+  // ---- תזכורת נוכחות אוטומטית (הגדרות - הנהלה)
+  if (pathname === "/api/kollel/reminder") {
+    if (!manager) return send(403, { error: "אין הרשאה" }), true;
+    if (method === "PUT") {
+      const b = await readBody(req);
+      const doc = {
+        enabled: Boolean(b.enabled),
+        time: /^\d{2}:\d{2}$/.test(String(b.time)) ? String(b.time) : "21:00",
+        days: (Array.isArray(b.days) ? b.days : []).map(Number).filter((d) => d >= 0 && d <= 6),
+        channel: b.channel === "tzintuk" ? "tzintuk" : "sms",
+        text: clean(b.text, 300) || "תזכורת: עדיין לא סומנה נוכחות היום בסניף. לסימון נכנסים למערכת הניהול.",
+      };
+      await store.put("settings", "kollelReminder", { ...((await store.get("settings", "kollelReminder")) || {}), ...doc });
+      await audit(user, "הגדרת תזכורת נוכחות", `${doc.enabled ? "פעיל" : "כבוי"} · ${doc.time}`);
+    }
+    return send(200, { reminder: (await store.get("settings", "kollelReminder")) || { enabled: false, time: "21:00", days: [0, 1, 2, 3, 4], channel: "sms", text: "" } }), true;
   }
 
   // ---- כרטיס אברך: היסטוריה לפי חודשים

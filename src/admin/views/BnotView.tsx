@@ -51,13 +51,13 @@ export function BnotView({ initialTab }: { me: Me; initialTab?: string }) {
       {d.branches.length > 1 ? (
         <Chips<string> value={tab === "activities" && branch === "all" ? d.branches[0].id : branch} onChange={setBranch} items={[...(tab === "members" ? [{ id: "all", label: "כל הסניפים" }] : []), ...d.branches.map((b) => ({ id: b.id, label: b.name }))]} />
       ) : null}
-      {tab === "members" ? <Members d={d} branch={branch} bName={bName} reload={load} /> : <Activities d={d} branch={branch === "all" ? d.branches[0].id : branch} reload={load} />}
+      {tab === "members" ? <Members d={d} branch={branch} bName={bName} reload={load} initialQ={initialTab?.startsWith("members:q:") ? initialTab.slice(10) : ""} /> : <Activities d={d} branch={branch === "all" ? d.branches[0].id : branch} reload={load} />}
     </>
   );
 }
 
-function Members({ d, branch, bName, reload }: { d: Data; branch: string; bName: (id: string) => string; reload: () => void }) {
-  const [q, setQ] = useState("");
+function Members({ d, branch, bName, reload, initialQ = "" }: { d: Data; branch: string; bName: (id: string) => string; reload: () => void; initialQ?: string }) {
+  const [q, setQ] = useState(initialQ);
   const [showOff, setShowOff] = useState(false);
   const [sel, setSel] = useState<Member | null>(null);
   const [msg, setMsg] = useState<string | null>(null);

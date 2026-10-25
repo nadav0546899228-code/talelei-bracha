@@ -76,7 +76,7 @@ export function KollelView({ me, go, initialTab }: { me: Me; go?: (v: "org") => 
           <Icon name="calendar" width={16} height={16} /> נוכחות
         </button>
       </div>
-      {tab === "avrechim" ? <AvrechimTab ov={ov} reload={load} initialFilter={filterFromTab(initialTab)} /> : null}
+      {tab === "avrechim" ? <AvrechimTab ov={ov} reload={load} initialFilter={filterFromTab(initialTab)} initialQ={initialTab?.startsWith("avrechim:q:") ? initialTab.slice(11) : ""} /> : null}
       {tab === "entries" ? <EntriesTab ov={ov} /> : null}
       {tab === "attendance" ? <AttendanceTab ov={ov} /> : null}
     </>
@@ -87,10 +87,10 @@ export function KollelView({ me, go, initialTab }: { me: Me; go?: (v: "org") => 
 
 type AvFilter = "active" | "nophone" | "nobranch" | "inactive";
 
-function AvrechimTab({ ov, reload, initialFilter }: { ov: Overview; reload: () => void; initialFilter?: AvFilter }) {
+function AvrechimTab({ ov, reload, initialFilter, initialQ = "" }: { ov: Overview; reload: () => void; initialFilter?: AvFilter; initialQ?: string }) {
   const manager = ov.me.manager;
   const canEdit = ov.me.canEditAvrechim;
-  const [q, setQ] = useState("");
+  const [q, setQ] = useState(initialQ);
   const [filter, setFilter] = useState<AvFilter>(initialFilter ?? "active");
   const [branch, setBranch] = useState<string>("all");
   const [sel, setSel] = useState<Avrech | null>(null);
@@ -261,6 +261,7 @@ function AvrechimTab({ ov, reload, initialFilter }: { ov: Overview; reload: () =
                     <span className="field__label">הערות פנימיות</span>
                     <textarea className="textarea" value={sel.notes ?? ""} onChange={(e) => setSel({ ...sel, notes: e.target.value })} />
                   </label>
+                  {manager ? <BankFields value={sel.bank ?? null} onChange={(bank) => setSel({ ...sel, bank })} /> : null}
                 </div>
                 <div className="btn-row" style={{ marginTop: 12 }}>
                   <button type="button" className="btn btn--sm" onClick={save}>
@@ -281,6 +282,7 @@ function AvrechimTab({ ov, reload, initialFilter }: { ov: Overview; reload: () =
                 <dd>{money(sel.monthlyTravel)}</dd>
               </dl>
             )}
+            {sel.id && manager ? <AvrechFiles key={`f-${sel.id}`} av={sel} /> : null}
             {sel.id ? <AvrechHistory key={sel.id} ov={ov} av={sel} /> : null}
           </section>
         ) : (
@@ -413,6 +415,7 @@ function EntriesTab({ ov }: { ov: Overview }) {
           <Icon name="lock" width={16} height={16} style={{ verticalAlign: "-3px" }} /> החודש סגור לתשלום
         </div>
       ) : null}
+      <MonthStatus ov={ov} month={month} locked={locked} />
 
       {!locked ? (
         <section className="adm-panel">
@@ -570,6 +573,13 @@ function AttendanceTab({ ov }: { ov: Overview }) {
     load();
   }, [load]);
   useLive(["kollelAttendance"], load);
+  // שליחת סימונים שנשמרו בלי חיבור
+  useEffect(() => {
+    const flush = () => flushAttendance().then((n) => n && (setMsg(null), load()));
+    flush();
+    window.addEventListener("online", flush);
+    return () => window.removeEventListener("online", flush);
+  }, [load]);
 
   if (!ov.months.length) return <div className="adm-panel adm-empty">עדיין לא נפתח חודש. הרכז הראשי פותח חודש במסך "משכורות".</div>;
   if (!ov.branches.length) return <div className="adm-panel adm-empty">אין סניפים. נוכחות מסמנים לפי סניף.</div>;
@@ -586,9 +596,16 @@ function AttendanceTab({ ov }: { ov: Overview }) {
       const rest = (list ?? []).filter((x) => !(x.branchId === branch && x.date === date));
       return [...rest, { id: `${branch}_${date}`, branchId: branch, date, month, present: next, byName: "" }];
     });
+    const body = { branchId: branch, date, month, present: next };
     try {
-      await put("/api/kollel/attendance", { branchId: branch, date, month, present: next });
+      await put("/api/kollel/attendance", body);
     } catch (e) {
+      if (e instanceof TypeError || !navigator.onLine) {
+        // אין קליטה - שומרים במכשיר ושולחים כשהחיבור חוזר
+        queueAttendance(body);
+        setMsg("אין חיבור כרגע. הסימון נשמר במכשיר ויישלח לבד כשהקליטה תחזור.");
+        return;
+      }
       setMsg(e instanceof Error ? e.message : "שגיאה");
       load();
     }
@@ -677,6 +694,7 @@ function AttendanceTab({ ov }: { ov: Overview }) {
           {!branchSessions.length ? <p className="muted">עדיין לא סומנה נוכחות בחודש הזה.</p> : null}
         </div>
       </section>
+      {ov.me.manager ? <ReminderSettings /> : null}
     </>
   );
 }
@@ -741,6 +759,293 @@ function AvrechHistory({ ov, av }: { ov: Overview; av: Avrech }) {
         </div>
       ))}
       {!rows.length ? <p className="muted">עדיין אין חודשים.</p> : null}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ נוכחות בלי חיבור */
+
+const QKEY = "tb-att-queue";
+type QItem = { branchId: string; date: string; month: string; present: string[] };
+function queueAttendance(x: QItem) {
+  try {
+    const list = (JSON.parse(localStorage.getItem(QKEY) || "[]") as QItem[]).filter((q) => !(q.branchId === x.branchId && q.date === x.date));
+    localStorage.setItem(QKEY, JSON.stringify([...list, x]));
+  } catch {
+    /* אין אחסון במכשיר */
+  }
+}
+async function flushAttendance(): Promise<number> {
+  let list: QItem[] = [];
+  try {
+    list = JSON.parse(localStorage.getItem(QKEY) || "[]");
+  } catch {
+    return 0;
+  }
+  if (!list.length || !navigator.onLine) return 0;
+  const left: QItem[] = [];
+  let sent = 0;
+  for (const x of list) {
+    try {
+      await put("/api/kollel/attendance", x);
+      sent++;
+    } catch (e) {
+      if (e instanceof TypeError) left.push(x); // עדיין אין חיבור
+    }
+  }
+  try {
+    localStorage.setItem(QKEY, JSON.stringify(left));
+  } catch {
+    /* לא קריטי */
+  }
+  return sent;
+}
+
+/* ------------------------------------------------------------------ תזכורת נוכחות אוטומטית */
+
+type Reminder = { enabled: boolean; time: string; days: number[]; channel: "sms" | "tzintuk"; text: string; lastSent?: string };
+const DAYS = ["א׳", "ב׳", "ג׳", "ד׳", "ה׳", "ו׳", "ש׳"];
+
+function ReminderSettings() {
+  const [r, setR] = useState<Reminder | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  useEffect(() => {
+    api<{ reminder: Reminder }>("/api/kollel/reminder").then((x) => setR(x.reminder)).catch(() => setR(null));
+  }, []);
+  if (!r) return null;
+  const save = async (next: Reminder) => {
+    setR(next);
+    try {
+      await put("/api/kollel/reminder", next);
+      setMsg("נשמר");
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "שגיאה");
+    }
+  };
+  return (
+    <section className="adm-panel">
+      <div className="adm-panel__head">
+        <h2>
+          <Icon name="bell" width={20} height={20} style={{ verticalAlign: "-4px" }} /> תזכורת אוטומטית
+        </h2>
+        <button type="button" className={`adm-pushrow${r.enabled ? " is-on" : ""}`} style={{ width: "auto", margin: 0, padding: "6px 10px" }} onClick={() => save({ ...r, enabled: !r.enabled })} aria-pressed={r.enabled}>
+          <span className="adm-switch" aria-hidden="true" />
+        </button>
+      </div>
+      <p className="muted" style={{ marginTop: -6 }}>
+        מנהל סניף שלא סימן נוכחות עד השעה שנקבעה - מקבל תזכורת.
+      </p>
+      <div className="adm-fields adm-fields--2">
+        <label className="field">
+          <span className="field__label">שעה</span>
+          <input className="input" type="time" value={r.time} onChange={(e) => setR({ ...r, time: e.target.value })} onBlur={() => save(r)} />
+        </label>
+        <div className="field">
+          <span className="field__label">ערוץ</span>
+          <Chips<"sms" | "tzintuk"> value={r.channel} onChange={(channel) => save({ ...r, channel })} items={[{ id: "sms", label: "SMS" }, { id: "tzintuk", label: "צינתוק" }]} />
+        </div>
+        <div className="field span-2">
+          <span className="field__label">ימים</span>
+          <div className="adm-chips">
+            {DAYS.map((d, i) => (
+              <button key={d} type="button" className="adm-chip" aria-pressed={r.days.includes(i)} onClick={() => save({ ...r, days: r.days.includes(i) ? r.days.filter((x) => x !== i) : [...r.days, i].sort() })}>
+                {d}
+              </button>
+            ))}
+          </div>
+        </div>
+        {r.channel === "sms" ? (
+          <label className="field span-2">
+            <span className="field__label">נוסח</span>
+            <input className="input" value={r.text} onChange={(e) => setR({ ...r, text: e.target.value })} onBlur={() => save(r)} />
+          </label>
+        ) : null}
+      </div>
+      {msg ? <p className="muted" style={{ marginBottom: 0 }}>{msg}{r.lastSent ? ` · נשלחה לאחרונה ${r.lastSent}` : ""}</p> : null}
+    </section>
+  );
+}
+
+/* ------------------------------------------------------------------ סטטוס חודש בשלבים */
+
+type MStatus = { branches: { id: string; name: string; cityId: string; done: { byName: string; at: string } | null }[]; cities: { id: string; name: string; approved: { byName: string; at: string } | null }[] };
+
+function MonthStatus({ ov, month, locked }: { ov: Overview; month: string; locked: boolean }) {
+  const [st, setSt] = useState<MStatus | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const load = useCallback(() => {
+    if (!month) return;
+    api<MStatus>(`/api/kollel/status?month=${encodeURIComponent(month)}`).then(setSt).catch(() => setSt(null));
+  }, [month]);
+  useEffect(() => {
+    load();
+  }, [load]);
+  useLive(["kollelMonthStatus"], load);
+  if (!st || !st.branches.length) return null;
+  const act = async (action: string, id: string) => {
+    setErr(null);
+    try {
+      setSt(await post<MStatus>("/api/kollel/status", { month, action, id }));
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "שגיאה");
+    }
+  };
+  const isManager = ov.me.manager;
+  const isCity = ov.me.canEditAvrechim && !isManager;
+  const doneCount = st.branches.filter((b) => b.done).length;
+  return (
+    <section className="adm-panel adm-mstatus">
+      <div className="adm-panel__head">
+        <h2>
+          <Icon name="checkCircle" width={20} height={20} style={{ verticalAlign: "-4px" }} /> סגירת החודש
+        </h2>
+        <span className="adm-chip__n" style={{ fontSize: "0.85rem" }}>
+          {doneCount}/{st.branches.length} סניפים
+        </span>
+      </div>
+      {err ? <div className="adm-alert adm-alert--error">{err}</div> : null}
+      {st.cities.map((c) => {
+        const bs = st.branches.filter((b) => b.cityId === c.id);
+        const allDone = bs.every((b) => b.done);
+        return (
+          <div key={c.id} className="adm-mstatus__city">
+            <div className="adm-mstatus__head">
+              <strong>{c.name}</strong>
+              {c.approved ? (
+                <span className="adm-attpill" title={`${c.approved.byName}`}>
+                  <Icon name="check" width={13} height={13} /> העיר אושרה
+                </span>
+              ) : null}
+              {!locked && (isManager || isCity) ? (
+                c.approved ? (
+                  <button type="button" className="adm-chip" onClick={() => act("cityUndo", c.id)}>
+                    ביטול אישור
+                  </button>
+                ) : (
+                  <button type="button" className="adm-chip" aria-pressed={allDone} onClick={() => act("cityApprove", c.id)}>
+                    <Icon name="check" width={14} height={14} /> אישור העיר
+                  </button>
+                )
+              ) : null}
+            </div>
+            <div className="adm-chips" style={{ flexWrap: "wrap" }}>
+              {bs.map((b) => (
+                <button
+                  key={b.id}
+                  type="button"
+                  className={`adm-chip adm-mstatus__b${b.done ? " is-done" : ""}`}
+                  disabled={locked}
+                  title={b.done ? `${b.done.byName}` : "לחיצה: סיימתי לדווח"}
+                  onClick={() => act(b.done ? "branchUndo" : "branchDone", b.id)}
+                >
+                  <Icon name={b.done ? "checkCircle" : "clock"} width={15} height={15} /> {b.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+      {!locked && !isManager && !isCity ? <p className="muted" style={{ marginBottom: 0 }}>כשסיימת לדווח לחודש - לוחצים על שם הסניף.</p> : null}
+    </section>
+  );
+}
+
+/* ------------------------------------------------------------------ פרטי בנק ומסמכים (הנהלה) */
+
+type Bank = { idNumber: string; bankCode: string; branchCode: string; account: string; holder: string };
+
+function BankFields({ value, onChange }: { value: Bank | null; onChange: (b: Bank) => void }) {
+  const v = value ?? { idNumber: "", bankCode: "", branchCode: "", account: "", holder: "" };
+  const set = (k: keyof Bank, x: string) => onChange({ ...v, [k]: x });
+  return (
+    <fieldset className="span-2 adm-bank">
+      <legend>
+        <Icon name="lock" width={14} height={14} /> פרטי תשלום (הנהלה בלבד)
+      </legend>
+      <div className="adm-fields adm-fields--2">
+        <label className="field">
+          <span className="field__label">ת״ז</span>
+          <input className="input" inputMode="numeric" dir="ltr" value={v.idNumber} onChange={(e) => set("idNumber", e.target.value)} />
+        </label>
+        <label className="field">
+          <span className="field__label">שם בעל החשבון</span>
+          <input className="input" value={v.holder} onChange={(e) => set("holder", e.target.value)} />
+        </label>
+        <label className="field">
+          <span className="field__label">בנק</span>
+          <input className="input" inputMode="numeric" dir="ltr" placeholder="12" value={v.bankCode} onChange={(e) => set("bankCode", e.target.value)} />
+        </label>
+        <label className="field">
+          <span className="field__label">סניף</span>
+          <input className="input" inputMode="numeric" dir="ltr" placeholder="123" value={v.branchCode} onChange={(e) => set("branchCode", e.target.value)} />
+        </label>
+        <label className="field span-2">
+          <span className="field__label">מספר חשבון</span>
+          <input className="input" inputMode="numeric" dir="ltr" value={v.account} onChange={(e) => set("account", e.target.value)} />
+        </label>
+      </div>
+    </fieldset>
+  );
+}
+
+type AFile = { id: string; name: string; label: string; type: string; size: number; createdAt: string };
+
+function AvrechFiles({ av }: { av: Avrech }) {
+  const [files, setFiles] = useState<AFile[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const load = useCallback(() => api<{ files: AFile[] }>(`/api/kollel/avrechim/${av.id}/files`).then((r) => setFiles(r.files)).catch(() => setFiles([])), [av.id]);
+  useEffect(() => {
+    load();
+  }, [load]);
+  const upload = async (f: File | undefined) => {
+    if (!f) return;
+    if (f.size > 3.5 * 1024 * 1024) return setErr("הקובץ גדול מ-3.5MB");
+    setBusy(true);
+    setErr(null);
+    const data = await new Promise<string>((resolve) => {
+      const r = new FileReader();
+      r.onload = () => resolve(String(r.result).split(",")[1] || "");
+      r.readAsDataURL(f);
+    });
+    const label = window.prompt("מה המסמך? (למשל: צילום ת״ז, אישור ניהול חשבון)", "") || "";
+    try {
+      await post(`/api/kollel/avrechim/${av.id}/files`, { name: f.name, type: f.type, data, label });
+      load();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "שגיאה");
+    }
+    setBusy(false);
+  };
+  return (
+    <div className="adm-hist">
+      <h3 className="adm-subhead">
+        <Icon name="file" width={18} height={18} style={{ verticalAlign: "-3px" }} /> מסמכים
+      </h3>
+      {err ? <div className="adm-alert adm-alert--error">{err}</div> : null}
+      {(files ?? []).map((f) => (
+        <div key={f.id} className="adm-hist__ent">
+          <a href={`/api/kollel/files/${f.id}`} target="_blank" rel="noopener">
+            <Icon name="file" width={15} height={15} /> {f.label || f.name}
+          </a>
+          <button
+            type="button"
+            className="adm-icon-btn adm-icon-btn--danger"
+            aria-label="מחיקת מסמך"
+            onClick={async () => {
+              if (!window.confirm("למחוק את המסמך?")) return;
+              await del(`/api/kollel/files/${f.id}`);
+              load();
+            }}
+          >
+            <Icon name="trash" />
+          </button>
+        </div>
+      ))}
+      <label className="btn btn--ghost btn--sm" style={{ marginTop: 8, cursor: "pointer" }}>
+        <Icon name="plus" /> {busy ? "מעלה…" : "העלאת מסמך"}
+        <input type="file" accept="image/*,application/pdf" hidden disabled={busy} onChange={(e) => upload(e.target.files?.[0])} />
+      </label>
     </div>
   );
 }

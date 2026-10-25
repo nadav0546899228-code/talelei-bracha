@@ -55,7 +55,7 @@ export function PayrollView({ me }: { me: Me }) {
 
   // עדכון חי - בלי לדרוס עריכה שלא נשמרה
   const [tick, setTick] = useState(0);
-  useLive(["avrechim", "kollelMonths", "kollelEntries", "kollelSettings", "kollelAttendance"], () => {
+  useLive(["avrechim", "kollelMonths", "kollelEntries", "kollelSettings", "kollelAttendance", "kollelMonthStatus"], () => {
     loadOv();
     if (!dirtyRef.current) setTick((t) => t + 1);
   });
@@ -77,6 +77,11 @@ export function PayrollView({ me }: { me: Me }) {
   }, [key, tick]);
 
   const [sessions, setSessions] = useState<AttendanceSession[]>([]);
+  const [stage, setStage] = useState<{ cities: { id: string; name: string; approved: unknown }[] } | null>(null);
+  useEffect(() => {
+    if (!key) return;
+    api<{ cities: { id: string; name: string; approved: unknown }[] }>(`/api/kollel/status?month=${encodeURIComponent(key)}`).then(setStage).catch(() => setStage(null));
+  }, [key, tick]);
   const lines = useMemo(() => (ov && month ? computePayroll(ov.avrechim, month, entries, ov.settings, sessions) : []), [ov, month, entries, sessions]);
 
   if (!ov) return <p className="muted">טוען…</p>;
@@ -116,6 +121,19 @@ export function PayrollView({ me }: { me: Me }) {
     await put(`/api/kollel/months/${encodeURIComponent(k)}`, emptyMonth(k));
     await loadOv();
     setKey(k);
+  };
+
+  // קובץ להעברה בנקאית: שם, ת״ז, בנק, סניף, חשבון, סכום
+  const exportBank = () => {
+    if (!month) return;
+    const pay = lines.filter((l) => l.total > 0);
+    const missingBank = pay.filter((l) => !l.avrech.bank?.account);
+    const rows = [
+      ["שם המוטב", "ת״ז", "בנק", "סניף", "מספר חשבון", "סכום", "תיאור"],
+      ...pay.map((l) => [l.avrech.bank?.holder || l.avrech.name.replace(" (דמה)", ""), l.avrech.bank?.idNumber || "", l.avrech.bank?.bankCode || "", l.avrech.bank?.branchCode || "", l.avrech.bank?.account || "", l.total, `מלגה ${month.label}`]),
+    ];
+    downloadBlob(buildXlsx([{ name: "העברה בנקאית", rows, widths: [24, 12, 6, 8, 14, 12, 22], moneyCols: [5], totalRow: true }]), `העברה בנקאית ${month.label}.xlsx`);
+    if (missingBank.length) setMsg({ ok: false, text: `חסרים פרטי בנק ל-${missingBank.length} אברכים: ${missingBank.slice(0, 6).map((l) => l.avrech.name).join(", ")}${missingBank.length > 6 ? "…" : ""}` });
   };
 
   const exportMonth = () => {
@@ -191,6 +209,11 @@ export function PayrollView({ me }: { me: Me }) {
             <button type="button" className="adm-chip" aria-pressed={onlyMissing} onClick={() => setOnlyMissing(!onlyMissing)}>
               מי חסר? <span className="adm-chip__n">{missing.length}</span>
             </button>
+            {stage && stage.cities.length ? (
+              <span className={`adm-status ${stage.cities.every((c) => c.approved) ? "adm-status--done" : "adm-status--new"}`} title={stage.cities.filter((c) => !c.approved).map((c) => c.name).join(", ")}>
+                <Icon name="checkCircle" width={14} height={14} style={{ verticalAlign: "-2px" }} /> ערים אישרו {stage.cities.filter((c) => c.approved).length}/{stage.cities.length}
+              </span>
+            ) : null}
           </div>
 
           <div className="adm-stats">
@@ -352,6 +375,9 @@ export function PayrollView({ me }: { me: Me }) {
               <button type="button" className="btn btn--light btn--sm" onClick={exportMonth}>
                 <Icon name="download" /> אקסל
               </button>
+              <button type="button" className="btn btn--light btn--sm" onClick={exportBank} title="קובץ להעברה בנקאית מרוכזת">
+                <Icon name="download" /> לבנק
+              </button>
               {!locked ? (
                 <>
                   <button type="button" className="btn btn--flame btn--sm" disabled={!dirty} onClick={() => month && saveMonth(month)}>
@@ -363,6 +389,8 @@ export function PayrollView({ me }: { me: Me }) {
                     onClick={() => {
                       if (!month) return;
                       if (missing.length && !window.confirm(`${missing.length} אברכים טרם סומנו כנבדקים. לסגור בכל זאת?`)) return;
+                      const notApproved = (stage?.cities ?? []).filter((c) => !c.approved).map((c) => c.name);
+                      if (notApproved.length && !window.confirm(`ערים שעוד לא אישרו: ${notApproved.join(", ")}. לסגור בכל זאת?`)) return;
                       saveMonth({ ...month, locked: true }, "החודש נסגר לתשלום");
                     }}
                   >

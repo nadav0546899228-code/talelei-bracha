@@ -8,6 +8,7 @@ import { api, del, fmtDateTime, post, put, type Me } from "../api";
 import { groupInMode, MODE_LABELS, type Mode } from "../nav";
 import { SwipeHint, SwipeRow, waLink } from "../components";
 import { parsePasted } from "../xlsx";
+import { useLive } from "../live";
 
 type Channel = "voice_tts" | "voice_template" | "tzintuk" | "sms" | "whatsapp" | "email";
 type Setup = {
@@ -99,6 +100,12 @@ function SendTab({ setup, me, reload }: { setup: Setup; me: Me; reload: () => vo
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [queue, setQueue] = useState<{ list: Recipient[]; done: Set<string> } | null>(null);
+  const [scheduleAt, setScheduleAt] = useState("");
+  const [saved, setSaved] = useState<{ id: string; name: string; text: string }[]>([]);
+  const loadSaved = useCallback(() => api<{ templates: { id: string; name: string; text: string }[] }>("/api/broadcast/saved").then((r) => setSaved(r.templates)).catch(() => undefined), []);
+  useEffect(() => {
+    loadSaved();
+  }, [loadSaved]);
   const info = CHANNEL_INFO[channel];
 
   const loadPreview = useCallback(async () => {
@@ -130,7 +137,14 @@ function SendTab({ setup, me, reload }: { setup: Setup; me: Me; reload: () => vo
         text,
         templateId,
         testPhone: test ? testPhone : undefined,
+        scheduleAt: !test && info.yemot && scheduleAt ? new Date(scheduleAt).toISOString() : undefined,
       });
+      if ((r as { scheduled?: string }).scheduled) {
+        setMsg({ ok: true, text: `התפוצה תוזמנה ל-${new Date((r as { scheduled: string }).scheduled).toLocaleString("he-IL", { dateStyle: "short", timeStyle: "short" })}` });
+        setConfirming(false);
+        setScheduleAt("");
+        return;
+      }
       if (channel === "whatsapp") {
         setQueue({ list: (r.recipients ?? []).filter((x) => x.phone), done: new Set() });
       } else if (channel === "email") {
@@ -212,6 +226,29 @@ function SendTab({ setup, me, reload }: { setup: Setup; me: Me; reload: () => vo
           </label>
         ) : null}
         {info.needsText ? (
+          <div className="adm-chips" style={{ flexWrap: "wrap" }}>
+            {saved.map((t) => (
+              <button key={t.id} type="button" className="adm-chip" onClick={() => setText(t.text)} title={t.text}>
+                <Icon name="file" width={14} height={14} /> {t.name}
+              </button>
+            ))}
+            {text.trim() ? (
+              <button
+                type="button"
+                className="adm-chip"
+                onClick={async () => {
+                  const name = window.prompt("שם לתבנית:", "");
+                  if (!name?.trim()) return;
+                  await post("/api/broadcast/saved", { name, text });
+                  loadSaved();
+                }}
+              >
+                <Icon name="plus" width={14} height={14} /> שמירה כתבנית
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+        {info.needsText ? (
           <label className="field">
             <span className="field__label">{channel === "voice_tts" ? "הנוסח שיוקרא בשיחה" : "נוסח ההודעה"}</span>
             <textarea className="textarea" value={text} onChange={(e) => setText(e.target.value)} maxLength={channel === "sms" ? 670 : 1000} />
@@ -235,9 +272,19 @@ function SendTab({ setup, me, reload }: { setup: Setup; me: Me; reload: () => vo
             </button>
           </div>
         ) : null}
+        {info.yemot ? (
+          <label className="field" style={{ maxWidth: 320 }}>
+            <span className="field__label">
+              <Icon name="clock" width={14} height={14} style={{ verticalAlign: "-2px" }} /> שליחה מתוזמנת (לא חובה)
+            </span>
+            <input className="input" type="datetime-local" value={scheduleAt} onChange={(e) => setScheduleAt(e.target.value)} />
+          </label>
+        ) : null}
         <button type="button" className="btn btn--flame" disabled={!canSend || busy} onClick={() => setConfirming(true)}>
-          <Icon name="share" /> {channel === "whatsapp" ? "הכנת רשימת וואטסאפ" : channel === "email" ? "פתיחת מייל" : `שליחה ל-${relevant.length} נמענים`}
+          <Icon name={scheduleAt && info.yemot ? "clock" : "share"} />{" "}
+          {channel === "whatsapp" ? "הכנת רשימת וואטסאפ" : channel === "email" ? "פתיחת מייל" : scheduleAt ? `תזמון ל-${relevant.length} נמענים` : `שליחה ל-${relevant.length} נמענים`}
         </button>
+        {info.yemot ? <ScheduledList /> : null}
         {msg ? <div className={`adm-alert ${msg.ok ? "adm-alert--ok" : "adm-alert--error"}`}>{msg.text}</div> : null}
       </section>
 
@@ -259,7 +306,7 @@ function SendTab({ setup, me, reload }: { setup: Setup; me: Me; reload: () => vo
             ) : null}
             <div className="btn-row">
               <button type="button" className="btn btn--flame btn--sm" disabled={busy} onClick={() => send(false)}>
-                {busy ? "שולח…" : "כן, לשלוח"}
+                {busy ? "שולח…" : scheduleAt && info.yemot ? "כן, לתזמן" : "כן, לשלוח"}
               </button>
               <button type="button" className="btn btn--ghost btn--sm" onClick={() => setConfirming(false)}>
                 ביטול
@@ -568,5 +615,53 @@ function ContactsTab({ onChange }: { onChange: () => void }) {
         </div>
       ) : null}
     </>
+  );
+}
+
+/* ------------------------------------------------------------------ תפוצות מתוזמנות */
+
+function ScheduledList() {
+  const [rows, setRows] = useState<{ id: string; at: string; channelLabel: string; count: number; text: string; status: string; error?: string }[]>([]);
+  const load = useCallback(() => api<{ scheduled: typeof rows }>("/api/broadcast/scheduled").then((r) => setRows(r.scheduled)).catch(() => undefined), []);
+  useEffect(() => {
+    load();
+  }, [load]);
+  useLive(["bcScheduled"], load);
+  if (!rows.length) return null;
+  return (
+    <div style={{ marginTop: 14 }}>
+      <h3 className="adm-subhead">
+        <Icon name="clock" width={16} height={16} style={{ verticalAlign: "-3px" }} /> מתוזמנות
+      </h3>
+      <div className="adm-list">
+        {rows.map((x) => (
+          <div key={x.id} className={`adm-row adm-row--tone-${x.status === "error" ? "red" : "yellow"}`} style={{ cursor: "default" }}>
+            <span className="adm-row__title">
+              {new Date(x.at).toLocaleString("he-IL", { dateStyle: "short", timeStyle: "short" })} · {x.channelLabel}
+            </span>
+            {x.status === "scheduled" ? (
+              <button
+                type="button"
+                className="adm-icon-btn adm-icon-btn--danger"
+                aria-label="ביטול"
+                onClick={async () => {
+                  if (!window.confirm("לבטל את התפוצה המתוזמנת?")) return;
+                  await del(`/api/broadcast/scheduled/${x.id}`);
+                  load();
+                }}
+              >
+                <Icon name="trash" />
+              </button>
+            ) : (
+              <span />
+            )}
+            <span className="adm-row__sub">
+              {x.count} נמענים{x.text ? ` · ${x.text.slice(0, 60)}` : ""}
+              {x.status === "error" ? ` · נכשל: ${x.error}` : ""}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }

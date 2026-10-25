@@ -22,6 +22,8 @@ export type Avrech = {
   simchaExternal: boolean;
   active: boolean;
   notes?: string;
+  /** פרטי תשלום - מגיעים מהשרת רק להנהלה */
+  bank?: { idNumber: string; bankCode: string; branchCode: string; account: string; holder: string } | null;
 };
 
 export type EntryType = "travel" | "expense" | "bonus" | "grant" | "deduction";

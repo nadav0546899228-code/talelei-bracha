@@ -27,6 +27,8 @@ function tree(mode: Mode): NavHub[] {
     icon: "shield",
     items: [
       leaf("content", "תוכן האתר", "edit", "content", { hint: "טקסטים, תמונות, פרטי קשר ותרומות" }),
+      leaf("events", "אירועים ושיעורים", "calendar", "content", { tab: "events", hint: "מתעדכן מיד באתר הציבורי" }),
+      leaf("donations", "תרומות", "heart", "donations", { hint: "רשימת תורמים, סכומים וייצוא" }),
       leaf("users", "משתמשים והרשאות", "users", "users", { hint: "מי נכנס ומה כל אחד רואה" }),
       leaf("audit", "יומן פעולות", "list", "audit", { hint: "כל פעולה במערכת" }),
       leaf("developer", "מתכנת", "code", "developer", { hint: "בדיקות מערכת, גיבוי וכניסה כ..." }),

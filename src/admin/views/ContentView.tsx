@@ -244,9 +244,9 @@ function ListEditor({ k, items, onChange }: { k: keyof typeof SCHEMAS; items: Re
 }
 
 /* ---------- התצוגה ---------- */
-export function ContentView() {
+export function ContentView({ initialSection }: { initialSection?: string } = {}) {
   const [content, setContent] = useState<SiteContent | null>(null);
-  const [section, setSection] = useState<Section>("texts");
+  const [section, setSection] = useState<Section>((initialSection as Section) || "texts");
   const [dirty, setDirty] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [saving, setSaving] = useState(false);

@@ -5,13 +5,14 @@
  *   מנכ״ל ← רכז ראשי (מעל כל הרכזים) ← רכז עיר ← מנהל סניף ← אברכים
  */
 
-export const VIEWS = ["dashboard", "messages", "isha", "bnot", "inquiries", "kollel", "payroll", "reports", "org", "broadcast", "content", "users", "audit", "developer"];
+export const VIEWS = ["dashboard", "messages", "isha", "bnot", "inquiries", "kollel", "payroll", "reports", "org", "broadcast", "donations", "content", "users", "audit", "developer"];
 
 export const VIEW_LABELS = {
   dashboard: "לוח בקרה",
   messages: "הודעות",
   bnot: "סניפי בנות צילה",
   reports: "דוחות",
+  donations: "תרומות",
   isha: "אישה לאישה",
   inquiries: "פניות",
   kollel: "כולל ערב",
@@ -33,7 +34,7 @@ export const ROLES = {
   bnot_city: { label: "רכזת עיר - בנות צילה", views: ["dashboard", "messages", "isha", "bnot", "org", "broadcast"] },
   bnot_branch: { label: "מנהלת סניף - בנות צילה", views: ["dashboard", "messages", "bnot", "broadcast"] },
   isha_coordinator: { label: "רכזת אישה לאישה", views: ["dashboard", "messages", "isha", "broadcast"] },
-  office: { label: "משרד ופניות", views: ["dashboard", "messages", "inquiries", "broadcast"] },
+  office: { label: "משרד ופניות", views: ["dashboard", "messages", "inquiries", "broadcast", "donations"] },
   content_editor: { label: "עריכת תוכן", views: ["dashboard", "messages", "content"] },
 };
 

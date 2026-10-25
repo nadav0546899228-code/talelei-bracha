@@ -15,11 +15,13 @@ import { FirstRunGuide, guideKey } from "./FirstRunGuide";
 import { entriesFor, entryActive, hubsFor, loadBar, loadMode, MODE_LABELS, modesFor, saveBar, saveMode, type Mode, type NavEntry, type NavLeaf, type Screen } from "./nav";
 import { HubView } from "./NavParts";
 import { useAlerts } from "./alerts";
+import { SearchModal } from "./Search";
 import { disablePush, enablePush, pushState } from "./push";
 import { OrgView } from "./views/OrgView";
 import { MessagesView } from "./views/MessagesView";
 import { BnotView } from "./views/BnotView";
 import { ReportsView } from "./views/ReportsView";
+import { DonationsView } from "./views/DonationsView";
 import "./admin.css";
 import { AuditView } from "./views/AuditView";
 import { ContentView } from "./views/ContentView";
@@ -301,6 +303,7 @@ export default function AdminApp() {
   const entries = useMemo(() => entriesFor(hubs), [hubs]);
   const dash = useAlerts(state === "ready" ? me : null, mode, subs);
   const [bellOpen, setBellOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   useEffect(() => {
     if (me) setBar(loadBar(me, mode, entries));
@@ -572,6 +575,9 @@ export default function AdminApp() {
               <span>{by ? "תצוגה אחרת" : "תצוגות"}</span>
             </button>
           ) : null}
+          <button type="button" className="adm-icon-btn adm-search-btn" onClick={() => setSearchOpen(true)} aria-label="חיפוש" title="חיפוש">
+            <Icon name="search" />
+          </button>
           <button type="button" className="adm-icon-btn adm-bell" onClick={() => setBellOpen(!bellOpen)} aria-label={`התראות${dash.active.length ? ` (${dash.active.length})` : ""}`} title="התראות">
             <Icon name="bell" />
             {dash.active.length ? <span className="adm-badge">{dash.active.length}</span> : null}
@@ -621,7 +627,8 @@ export default function AdminApp() {
               {curView === "reports" ? <ReportsView /> : null}
               {curView === "org" ? <OrgView key={mode} me={me} domain={mode === "boys" ? "kollel" : "bnot"} /> : null}
               {curView === "broadcast" ? <BroadcastView key={`bc-${mode}-${curTab ?? ""}`} me={me} mode={mode} initialTab={curTab} /> : null}
-              {curView === "content" ? <ContentView /> : null}
+              {curView === "content" ? <ContentView key={`ct-${curTab ?? ""}`} initialSection={curTab} /> : null}
+              {curView === "donations" ? <DonationsView me={me} /> : null}
               {curView === "users" ? <UsersView me={me} /> : null}
               {curView === "audit" ? <AuditView /> : null}
               {curView === "developer" ? <DeveloperView {...ctx} /> : null}
@@ -630,6 +637,7 @@ export default function AdminApp() {
         </main>
       </div>
       <div className="adm-tabs" ref={barScrollRef}>{barNav}</div>
+      {searchOpen ? <SearchModal onClose={() => setSearchOpen(false)} onGo={go} /> : null}
       {bellOpen ? (
         <>
           <div className="adm-pop-back" onClick={() => setBellOpen(false)} />

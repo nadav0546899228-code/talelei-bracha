@@ -28,7 +28,7 @@ import { canAssignScope, cityScope, cleanScope, handleOrg, loadOrg } from "./org
 import { createStore } from "./store.mjs";
 import * as phone from "./phoneAuth.mjs";
 import { handleKollel } from "./kollel.mjs";
-import { handleBroadcast } from "./broadcast.mjs";
+import { dispatch, handleBroadcast, runScheduled } from "./broadcast.mjs";
 import { yemotConfigured } from "./yemot.mjs";
 import { handleMessages } from "./messages.mjs";
 import { handleBnot } from "./bnot.mjs";
@@ -258,6 +258,7 @@ const ROLE_LABELS = Object.fromEntries(Object.entries(ROLES).map(([k, v]) => [k,
 const BACKUP_COLLECTIONS = [
   "users", "phoneUsers", "submissions", "content", "avrechim", "kollelEntries", "kollelMonths", "kollelSettings", "kollelAttendance",
   "orgUnits", "contacts", "broadcasts", "settings", "messages", "bnotMembers", "bnotActivities", "pushSubs",
+  "kollelMonthStatus", "bcTemplates", "bcScheduled", "donations", "avrechFiles",
 ];
 async function makeBackup(reason, byName = "מערכת") {
   const data = {};
@@ -280,6 +281,42 @@ async function backupIfDue() {
     console.error("backup", e?.message);
   }
 }
+/* ---- משימות כל דקה: תפוצות מתוזמנות ותזכורת נוכחות */
+async function everyMinute() {
+  try {
+    await runScheduled(store, audit);
+  } catch (e) {
+    console.error("scheduled", e?.message);
+  }
+  try {
+    const rem = await store.get("settings", "kollelReminder");
+    if (!rem?.enabled) return;
+    const parts = Object.fromEntries(new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Jerusalem", hour: "2-digit", minute: "2-digit", weekday: "short", hour12: false }).formatToParts(new Date()).map((p) => [p.type, p.value]));
+    const day = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(parts.weekday);
+    const today = israelDate();
+    if (`${parts.hour}:${parts.minute}` !== rem.time || !(rem.days || []).includes(day) || rem.lastSent === today) return;
+    await store.put("settings", "kollelReminder", { ...rem, lastSent: today });
+    const sessions = new Set((await store.list("kollelAttendance", 50000)).filter((x) => x.date === today).map((x) => x.branchId));
+    const branches = (await store.list("orgUnits")).filter((u) => u.type === "branch" && u.domain === "kollel" && !sessions.has(u.id));
+    if (!branches.length) return;
+    const ids = new Set(branches.map((b) => b.id));
+    const people = [...(await store.list("phoneUsers")), ...(await store.list("users")).filter((u) => u.phone)]
+      .filter((u) => u.active !== false && normalizeRoles(u.roles).includes("kollel_branch") && ids.has(u.scope?.kollel?.branchId));
+    const phones = people.map((u) => ({ name: u.name || "", phone: u.phone })).filter((r) => phone.validPhone(r.phone));
+    if (!phones.length) return;
+    const settings = (await store.get("settings", "broadcast")) || {};
+    const result = await dispatch(rem.channel, rem.text, settings.templateId, settings, phones).catch((e) => ({ error: e.message }));
+    await store.put("broadcasts", randomUUID(), {
+      channel: rem.channel, channelLabel: rem.channel === "tzintuk" ? "צינתוק" : "SMS", text: rem.text, groups: ["תזכורת נוכחות אוטומטית"],
+      count: phones.length, test: false, by: "system", byName: "תזכורת אוטומטית", status: result?.error ? "error" : "sent", result,
+    });
+    await audit({ name: "מערכת" }, "תזכורת נוכחות נשלחה", `${phones.length} מנהלי סניפים`);
+  } catch (e) {
+    console.error("reminder", e?.message);
+  }
+}
+setInterval(everyMinute, 60_000).unref();
+
 setTimeout(backupIfDue, 60_000).unref();
 setInterval(backupIfDue, 60 * 60_000).unref();
 
@@ -298,7 +335,9 @@ async function api(req, res, url) {
   const { pathname } = url;
   const method = req.method || "GET";
 
-  if (method !== "GET" && !sameOrigin(req)) return json(res, 403, { error: "מקור הבקשה לא מורשה" });
+  // כתובות שמקבלות הודעות משירותים חיצוניים (מוגנות במפתח סודי) - פטורות מבדיקת מקור
+  const external = pathname === "/api/donations/callback" || pathname === "/api/yemot/attendance";
+  if (method !== "GET" && !external && !sameOrigin(req)) return json(res, 403, { error: "מקור הבקשה לא מורשה" });
 
   // ---- ציבורי
   if (pathname === "/api/public/bootstrap" && method === "GET") {
@@ -309,6 +348,43 @@ async function api(req, res, url) {
       demo: DEMO,
       content: await getContent(),
     });
+  }
+
+  // נדרים פלוס (או כל סליקה): כתובת שמקבלת הודעה על כל תרומה ושומרת אותה ברשימת התרומות
+  if (pathname === "/api/donations/callback" && (method === "POST" || method === "GET")) {
+    const hook = await store.get("settings", "donationHook");
+    if (!hook?.key || url.searchParams.get("key") !== hook.key) return json(res, 403, { error: "אין הרשאה" });
+    if (rateLimited(`don:${clientIp(req)}`, 120, 60_000)) return json(res, 429, { error: "יותר מדי" });
+    let raw = {};
+    if (method === "POST") {
+      const txt = await new Promise((resolve) => {
+        let d = "";
+        req.on("data", (c) => (d += c, d.length > 64 * 1024 && req.destroy()));
+        req.on("end", () => resolve(d));
+      });
+      try {
+        raw = JSON.parse(txt);
+      } catch {
+        raw = Object.fromEntries(new URLSearchParams(txt));
+      }
+    } else raw = Object.fromEntries(url.searchParams);
+    delete raw.key;
+    const pick = (...ks) => { for (const k of ks) if (raw[k] !== undefined && raw[k] !== "") return String(raw[k]); return ""; };
+    const txId = pick("TransactionId", "transactionId", "Confirmation", "id") || randomUUID();
+    const doc = {
+      amount: Number(pick("Amount", "amount", "Sum", "sum")) || 0,
+      name: clean(pick("ClientName", "Name", "name", "FullName"), 120),
+      phone: phone.normalizePhone(pick("Phone", "phone", "Tel")),
+      email: clean(pick("Mail", "Email", "email"), 120),
+      installments: Number(pick("Tashloumim", "Payments", "installments")) || 1,
+      comments: clean(pick("Comments", "Comment", "comments", "Dedication"), 300),
+      txId: clean(txId, 60),
+      source: "callback",
+      raw: Object.fromEntries(Object.entries(raw).slice(0, 40).map(([k, v]) => [clean(k, 40), clean(v, 300)])),
+    };
+    await store.put("donations", `d-${clean(txId, 60).replace(/[^\w-]/g, "")}`, doc);
+    notify((u) => u.views.includes("donations"), { title: "תרומה חדשה", body: `${doc.name || "תורם"} · ${doc.amount} ₪`, url: "/admin?v=donations" });
+    return json(res, 200, { ok: true });
   }
 
   // ימות המשיח: אברך מתקשר מהטלפון והנוכחות נרשמת לפי מספר המתקשר (שלוחת API בימות)
@@ -650,6 +726,81 @@ async function api(req, res, url) {
     if (!mine.length) return send(400, { error: "המכשיר עוד לא נרשם להתראות" });
     const results = await Promise.all(mine.map((x) => push.sendPush(x.sub, { title: "קרן טללי ברכה", body: "ההתראות פועלות ✓", url: "/admin" }, keys).catch((e) => e.message)));
     return send(200, { ok: true, results });
+  }
+
+  // ---- חיפוש כללי (לפי ההרשאות של המשתמש)
+  if (pathname === "/api/search" && method === "GET") {
+    const q = clean(url.searchParams.get("q"), 60).trim();
+    if (q.length < 2) return send(200, { results: [] });
+    const has = (...xs) => xs.some((x) => String(x || "").includes(q));
+    const out = [];
+    const org = await loadOrg(store);
+    if (can("kollel")) {
+      const { branchScope } = await import("./org.mjs");
+      const sc = branchScope(user, org, "kollel");
+      for (const a of await store.list("avrechim", 20000)) {
+        if (sc !== null && !sc.has(a.branchId)) continue;
+        if (has(a.name, a.phone)) out.push({ kind: "avrech", id: a.id, title: a.name, sub: [a.phone, org.branches.find((b) => b.id === a.branchId)?.name].filter(Boolean).join(" · "), view: "kollel", tab: `avrechim:q:${a.name}` });
+      }
+    }
+    if (can("bnot")) {
+      const { branchScope } = await import("./org.mjs");
+      const sc = branchScope(user, org, "bnot");
+      for (const m of await store.list("bnotMembers", 20000)) {
+        if (sc !== null && !sc.has(m.branchId)) continue;
+        if (has(m.name, m.phone)) out.push({ kind: "member", id: m.id, title: m.name, sub: m.phone, view: "bnot", tab: `members:q:${m.name}` });
+      }
+    }
+    const forms = Object.entries(FORM_VIEW).filter(([, v]) => can(v)).map(([f]) => f);
+    for (const s2 of await store.list("submissions", 5000)) {
+      if (!forms.includes(s2.form)) continue;
+      const d = s2.data || {};
+      if (has(d.name, d.fullName, d.phone, d.email)) out.push({ kind: "submission", id: s2.id, title: String(d.fullName || d.name || "פנייה"), sub: String(d.phone || d.email || ""), view: FORM_VIEW[s2.form], tab: FORM_VIEW[s2.form] === "isha" ? s2.form : undefined });
+    }
+    if (can("users") || can("org")) {
+      for (const u of await store.list("phoneUsers")) if (has(u.name, u.phone)) out.push({ kind: "staff", id: u.id, title: u.name, sub: u.phone, view: can("users") ? "users" : "org" });
+    }
+    if (can("broadcast") && (isPrivileged(user.roles) || user.roles.includes("office"))) {
+      for (const c of await store.list("contacts", 20000)) if (has(c.name, c.phone, c.email)) out.push({ kind: "contact", id: c.id, title: c.name, sub: c.phone, view: "broadcast", tab: "contacts" });
+    }
+    if (can("donations")) {
+      for (const d of await store.list("donations", 20000)) if (has(d.name, d.phone, d.email)) out.push({ kind: "donation", id: d.id, title: d.name || "תרומה", sub: `${d.amount} ₪`, view: "donations" });
+    }
+    return send(200, { results: out.slice(0, 60) });
+  }
+
+  // ---- תרומות
+  if (pathname === "/api/donations" && method === "GET") {
+    if (!can("donations")) return send(403, { error: "אין הרשאה" });
+    const rows = (await store.list("donations", 20000)).map(({ raw: _r, ...d }) => d);
+    return send(200, { donations: rows });
+  }
+  if (pathname === "/api/donations" && method === "POST") {
+    if (!can("donations")) return send(403, { error: "אין הרשאה" });
+    const b = await readBody(req);
+    const amount = Number(b.amount);
+    if (!amount) return send(400, { error: "חסר סכום" });
+    const id = b.id ? String(b.id) : `m-${randomUUID()}`;
+    await store.put("donations", id, { amount, name: clean(b.name, 120), phone: phone.normalizePhone(b.phone), email: clean(b.email, 120), comments: clean(b.comments, 300), method: clean(b.method, 40), date: clean(b.date, 10), source: "manual", byName: user.name || user.email });
+    await audit(user, "רישום תרומה", `${clean(b.name, 60)} · ${amount}`);
+    return send(200, { ok: true, id });
+  }
+  const donDel = pathname.match(/^\/api\/donations\/([\w-]+)$/);
+  if (donDel && method === "DELETE") {
+    if (!isPrivileged(user.roles)) return send(403, { error: "מחיקה - מנכ״ל או מתכנת" });
+    await store.del("donations", donDel[1]);
+    await audit(user, "מחיקת תרומה", donDel[1]);
+    return send(200, { ok: true });
+  }
+  if (pathname === "/api/admin/donation-hook" && method === "GET") {
+    if (!can("developer")) return send(403, { error: "אין הרשאה" });
+    let hook = await store.get("settings", "donationHook");
+    if (!hook?.key) {
+      hook = { key: randomUUID().replace(/-/g, "") };
+      await store.put("settings", "donationHook", hook);
+    }
+    const origin = `${isSecure(req) ? "https" : "http"}://${req.headers.host}`;
+    return send(200, { url: `${origin}/api/donations/callback?key=${hook.key}` });
   }
 
   // ---- גיבויים (מתכנת)
