@@ -31,7 +31,7 @@ const W = PAD_X * 2 + 1.8 * 0.853 * K - 20;
 const H = PAD_TOP + 4.1 * K * TILT + 40;
 const DEPTH = 14;
 
-export function IsraelMap3D({ pins, active, onPick }: { pins: Pin[]; active: string; onPick: (city: string) => void }) {
+export function IsraelMap3D({ pins, active, onPick, locked }: { pins: Pin[]; active: string; onPick: (city: string) => void; locked?: (city: string) => boolean }) {
   const land = useMemo(() => pathOf(OUTLINE), []);
   const kin = useMemo(() => pathOf(KINNERET), []);
   const dead = useMemo(() => pathOf(DEAD_SEA), []);
@@ -112,11 +112,13 @@ export function IsraelMap3D({ pins, active, onPick }: { pins: Pin[]; active: str
       <g className="adm-map3d__labels">
         {labels.map(({ p, x, y, ly, side }) => {
           const lx = side === "w" ? 6 : W - 6;
-          const ax = side === "w" ? lx + Math.min(46, p.city.length * 5.4 + 4) : lx - Math.min(46, p.city.length * 5.4 + 4);
+          const txt = `${locked?.(p.city) ? "🔒 " : ""}${p.city} · ${p.participants}`;
+          const w = Math.min(64, txt.length * 4.8 + 4);
+          const ax = side === "w" ? lx + w : lx - w;
           return (
             <g key={`l-${p.city}`} className={active === p.city ? "is-on" : ""} onClick={() => onPick(p.city)} role="button" aria-label={p.city}>
               <polyline points={`${ax},${ly - 3} ${side === "w" ? ax + 6 : ax - 6},${ly - 3} ${x},${y - 3}`} className="adm-map3d__lead" />
-              <text x={lx} y={ly} textAnchor={side === "w" ? "end" : "start"} className="adm-map3d__lbl">{p.city}</text>
+              <text x={lx} y={ly} textAnchor={side === "w" ? "end" : "start"} className="adm-map3d__lbl">{txt}</text>
             </g>
           );
         })}

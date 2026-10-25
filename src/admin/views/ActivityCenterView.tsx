@@ -279,10 +279,10 @@ export function ActivityCenterView({ go, mode }: { go: (view: View, tab?: string
     }).filter((x)=>x.count>0).sort((a,b)=>b.count-a.count);
   },[data,filtered]);
   const mapPins = useMemo(() => {
-    const top = mapLocations.slice(0, 12);
+    const top = mapLocations.slice(0, 24);
     if (city !== "all" && !top.some((x) => x.city === city)) {
       const selected = mapLocations.find((x) => x.city === city);
-      return selected ? [...top.slice(0, 11), selected] : top;
+      return selected ? [...top.slice(0, 23), selected] : top;
     }
     return top;
   }, [mapLocations, city]);
@@ -513,12 +513,12 @@ export function ActivityCenterView({ go, mode }: { go: (view: View, tab?: string
           <div className="adm-panel__head"><div><span className="adm-eyebrow">פריסה ארצית</span><h2>מפת הפעילות</h2></div><span className="adm-section-count">{mapLocations.length}</span></div>
           <div className="adm-israel-map adm-israel-map--3d" aria-label="מפת פעילות בישראל">
             <div className="adm-israel-map__caption">
-              <strong>{mapPins.length} מוקדי פעילות בולטים</strong>
-              <span>לחיצה על נעיצה מסננת את כל הלוח</span>
+              <strong>{mapPins.length} ערים · {filtered.length} פעילויות · {totalParticipants} משתתפים</strong>
+              <span>מעל העמודה: פעילויות · ליד שם העיר: משתתפים · לחיצה על עיר פותחת אותה</span>
             </div>
-            <IsraelMap3D pins={mapPins} active={city} onPick={pickCity} />
+            <IsraelMap3D pins={mapPins} active={city} onPick={pickCity} locked={(c)=>!canOpenCity(c)} />
           </div>
-          <div className="adm-map-legend"><span><i className="is-kollel"/> טללי ברכה</span><span><i className="is-bnot"/> בנות צילה</span><span>מוצגים מוקדי הפעילות הבולטים</span></div>
+          <div className="adm-map-legend"><span><i className="is-kollel"/> טללי ברכה</span><span><i className="is-bnot"/> בנות צילה</span></div>
           {denied?<div className="adm-alert adm-alert--error" role="alert">אין לך הרשאה לנתוני {denied}.</div>:null}
           {city!=="all"&&canOpenCity(city)?(
             <div className="adm-citybox">
@@ -526,10 +526,6 @@ export function ActivityCenterView({ go, mode }: { go: (view: View, tab?: string
               {cityItems.length?cityItems.slice(-12).reverse().map((x)=><button type="button" key={x.id} className="adm-citybox__row" onClick={()=>{setSelectedDate(x.date);setCursor(new Date(`${x.date}T12:00:00`));setCalendarView("day");}}><span>{x.title}{x.branch?` · ${x.branch}`:""}</span><small>{x.date}{x.time?` · ${x.time}`:""}</small></button>):<p className="muted">אין פעילות בעיר הזאת.</p>}
             </div>
           ):null}
-          <div className="adm-city-ranking">
-            <div className="adm-city-ranking__head"><strong>פעילות לפי עיר</strong><span>{mapLocations.length} ערים בטווח הנבחר</span></div>
-            {mapLocations.slice(0,10).map((l)=><button type="button" className={city===l.city?"is-active":""} key={l.city} onClick={()=>pickCity(l.city)}><span>{canOpenCity(l.city)?"":"🔒 "}{l.city}</span><strong>{l.count}</strong><small>{l.participants} משתתפים</small></button>)}
-          </div>
         </section>
       </div>
     </div>
