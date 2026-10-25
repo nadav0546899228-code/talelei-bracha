@@ -2334,3 +2334,6 @@
 .adm[data-display="desktop"] .adm-side .adm-tab[aria-current="page"],.adm[data-display="desktop"] .adm-side .adm-side__hub[aria-current="page"]{color:#fff!important;background:rgba(255,255,255,.11)!important}
 .adm[data-display="desktop"] .adm-priority-grid,.adm[data-display="desktop"] .adm-metrics{grid-template-columns:repeat(4,minmax(0,1fr))!important}
 .adm[data-display="desktop"] .adm-dashboard-columns{grid-template-columns:minmax(0,1.45fr) minmax(300px,.75fr)!important}
+
+.adm-personal__row .adm-switch.is-on{background:#1e7a3c}
+.adm-personal__row .adm-switch.is-on::after{inset-inline-start:23px}
