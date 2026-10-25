@@ -347,6 +347,10 @@ const israelDate = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jeru
 async function getContent() {
   return (await store.get("content", "site"))?.content ?? null;
 }
+async function getFeatureFlags() {
+  const saved = (await store.get("settings", "features")) || {};
+  return { donations: saved.donations === true };
+}
 
 /* ------------------------------------------------------------------ ניתוב API */
 
@@ -365,12 +369,14 @@ async function api(req, res, url) {
       env: IS_PROD ? "production" : "development",
       devLogin: DEV_LOGIN && isLocalRequest(req),
       demo: DEMO,
+      featureFlags: await getFeatureFlags(),
       content: await getContent(),
     });
   }
 
   // נדרים פלוס (או כל סליקה): כתובת שמקבלת הודעה על כל תרומה ושומרת אותה ברשימת התרומות
   if (pathname === "/api/donations/callback" && (method === "POST" || method === "GET")) {
+    if (!(await getFeatureFlags()).donations) return json(res, 404, { error: "לא נמצא" });
     const hook = await store.get("settings", "donationHook");
     if (!hook?.key || url.searchParams.get("key") !== hook.key) return json(res, 403, { error: "אין הרשאה" });
     if (rateLimited(`don:${clientIp(req)}`, 120, 60_000)) return json(res, 429, { error: "יותר מדי" });
@@ -593,6 +599,10 @@ async function api(req, res, url) {
       // בחירה מקומית פגומה לא משפיעה על ההרשאות או על הכניסה.
     }
   }
+  const featureFlags = await getFeatureFlags();
+  if (!featureFlags.donations && user.views.includes("donations")) {
+    user = { ...user, views: user.views.filter((v) => v !== "donations") };
+  }
   const renew = shouldRenew(session) ? { "Set-Cookie": createSessionCookie(real.id, isSecure(req), asId) } : {};
   const can = (view) => user.views.includes(view);
   const send = (status, body) => json(res, status, body, renew);
@@ -614,6 +624,7 @@ async function api(req, res, url) {
       assignableRoles: grantableRoles(user.roles),
       mustChangeCode: user.kind === "phone" && !user.impersonatedBy ? Boolean((await store.get("phoneUsers", user.subId))?.mustChangeCode) : false,
       canImpersonate: canImpersonate(real),
+      featureFlags,
     });
   }
 
@@ -846,6 +857,7 @@ async function api(req, res, url) {
   }
   const donDel = pathname.match(/^\/api\/donations\/([\w-]+)$/);
   if (donDel && method === "DELETE") {
+    if (!featureFlags.donations) return send(404, { error: "לא נמצא" });
     if (!isPrivileged(user.roles)) return send(403, { error: "מחיקה - מנכ״ל או מתכנת" });
     await store.del("donations", donDel[1]);
     await audit(user, "מחיקת תרומה", donDel[1]);
@@ -853,6 +865,7 @@ async function api(req, res, url) {
   }
   if (pathname === "/api/admin/donation-hook" && method === "GET") {
     if (!can("developer")) return send(403, { error: "אין הרשאה" });
+    if (!featureFlags.donations) return send(404, { error: "מודול התרומות כבוי" });
     let hook = await store.get("settings", "donationHook");
     if (!hook?.key) {
       hook = { key: randomUUID().replace(/-/g, "") };
@@ -1062,6 +1075,20 @@ async function api(req, res, url) {
   if (pathname === "/api/admin/audit" && method === "GET") {
     if (!can("audit")) return send(403, { error: "אין הרשאה" });
     return send(200, { entries: await store.list("audit", 500) });
+  }
+
+  // ---- מתכנת: הפעלה/כיבוי של מודולים אופציונליים
+  if (pathname === "/api/admin/features" && method === "GET") {
+    if (!real.roles.includes("developer")) return send(403, { error: "מתכנת בלבד" });
+    return send(200, { features: await getFeatureFlags() });
+  }
+  if (pathname === "/api/admin/features" && method === "POST") {
+    if (!real.roles.includes("developer")) return send(403, { error: "מתכנת בלבד" });
+    const b = await readBody(req);
+    const next = { ...(await getFeatureFlags()), donations: b.donations === true };
+    await store.put("settings", "features", next);
+    await audit(real, next.donations ? "הפעלת מודול תרומות" : "כיבוי מודול תרומות");
+    return send(200, { ok: true, features: next });
   }
 
   // ---- מתכנת
