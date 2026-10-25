@@ -53,7 +53,7 @@ const store = await createStore();
 /* באתר המפורסם: נתוני דמה נטענים פעם אחת אוטומטית (לבקשת נדב, עד שינקה אותם במסך מתכנת).
    אחרי "ניקוי" הם לא חוזרים. לכיבוי: SEED_DEMO_ONCE = false */
 const SEED_DEMO_ONCE = true;
-const DEMO_VERSION = 2; // עולה כשמתווספים סוגי נתוני דמה חדשים (למשל מתחזקים והפרשת חלה)
+const DEMO_VERSION = 3; // גרסת דמו ארצית: 1000+ אנשים, סניפים ופעילות ללוח הארצי
 if (!DEMO && SEED_DEMO_ONCE) {
   const st = await store.get("settings", "demoState");
   if (!st || (st.state === "seeded" && (st.v || 1) < DEMO_VERSION)) {
