@@ -20,6 +20,12 @@ export type SiteConfig = {
     hours: string | null;
   };
   social: { youtube: string | null; facebook: string | null; instagram: string | null };
+  bnotContact: {
+    mobile: string | null;
+    landline: string | null;
+    whatsapp: string | null;
+    whatsappGroup: string | null;
+  };
   impactStats: { value: string; label: string }[];
   testimonials: { text: string; attribution: string }[];
   features: {
@@ -80,8 +86,16 @@ export const site: SiteConfig = {
   /** רשתות חברתיות - TODO */
   social: {
     youtube: null,
-    facebook: null,
-    instagram: null,
+    facebook: "https://www.facebook.com/bnot.tzila/",
+    instagram: "https://www.instagram.com/bnot_tzila/",
+  },
+
+  /** פרטי קשר ייעודיים לבנות צילה */
+  bnotContact: {
+    mobile: "055-9993560",
+    landline: "03-6337355",
+    whatsapp: "972559993560",
+    whatsappGroup: null,
   },
 
   /** נתוני "השפעה במספרים" - רק נתונים שנמסרו ואושרו. כל עוד הרשימה ריקה - האזור מוסתר. */
