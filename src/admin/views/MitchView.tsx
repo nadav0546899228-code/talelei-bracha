@@ -1,7 +1,7 @@
 /** מתחזקים (כולל ערב - לפי אברך) ומתחזקות (בנות צילה - קשר מתמשך): כרטיס, שלב, יומן קשר ומעקב הבא */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Icon } from "../../components/Icon";
-import { api, del, post, type OrgUnit } from "../api";
+import { api, del, post, put, type OrgUnit } from "../api";
 import { Chips, Combo, ExportBtn, Fab, IconActions, SwipeRow, waLink } from "../components";
 import { useLive } from "../live";
 import { buildXlsx, downloadBlob } from "../xlsx";
@@ -18,6 +18,12 @@ export type Mitch = {
   status: "active" | "paused" | "left";
   nextFollowUp: string | null;
   lastContact?: string;
+  stageChangedAt?: string;
+  daysSinceContact?: number;
+  stageDays?: number;
+  missedMeetings?: number;
+  attention?: { id: string; severity: "high" | "medium"; label: string }[];
+  attentionLevel?: "none" | "medium" | "high";
   source: string;
   notes: string;
   startDate: string;
@@ -32,7 +38,23 @@ type SelfUpdate = {
   reviewedAt?: string;
   reviewedBy?: string;
 };
-type Data = { mitch: Mitch[]; branches: OrgUnit[]; cities: OrgUnit[]; avrechim: { id: string; name: string; branchId: string }[]; stages: string[]; contactTypes: string[]; today: string; pendingByMitch: Record<string, number> };
+type Workflow = { stages: string[]; attention: { contactDays: number; stageDays: number; missedMeetings: number }; whatsappTemplates: string[] };
+type AttentionSummary = { total: number; high: number; unassigned: number; followup: number; noContact: number; stageStuck: number; missedMeetings: number };
+type MonthStats = { active: number; newThisMonth: number; stageChanges: number; contacts: number };
+type Data = {
+  mitch: Mitch[];
+  branches: OrgUnit[];
+  cities: OrgUnit[];
+  avrechim: { id: string; name: string; branchId: string }[];
+  stages: string[];
+  workflow: Workflow;
+  canManageWorkflow: boolean;
+  attentionSummary: AttentionSummary;
+  monthStats: MonthStats;
+  contactTypes: string[];
+  today: string;
+  pendingByMitch: Record<string, number>;
+};
 
 const dayLabel = (iso: string) => new Intl.DateTimeFormat("he-IL", { day: "numeric", month: "numeric", year: "2-digit" }).format(new Date(`${iso}T12:00:00`));
 const STATUS: Record<Mitch["status"], string> = { active: "פעיל", paused: "בהפסקה", left: "עזב" };
@@ -57,6 +79,8 @@ export function MitchPanel({ domain, initialQ = "" }: { domain: "kollel" | "bnot
     return d.mitch.filter((m) => {
       if (q.trim() && !`${m.name} ${m.phone}`.includes(q.trim())) return false;
       if (filter === "all") return m.status !== "left";
+      if (filter === "attention") return m.status !== "left" && Boolean(m.attention?.length);
+      if (filter === "urgent") return m.status !== "left" && m.attentionLevel === "high";
       if (filter === "due") return isDue(m);
       if (filter === "pending") return Boolean(d.pendingByMitch[m.id]);
       if (filter === "left") return m.status === "left";
@@ -73,7 +97,7 @@ export function MitchPanel({ domain, initialQ = "" }: { domain: "kollel" | "bnot
   const pendingCount = Object.values(d.pendingByMitch || {}).reduce((a, b) => a + b, 0);
 
   const exportXlsx = () => {
-    const data = [["שם", "טלפון", "סניף", word.mentor, "שלב", "סטטוס", "קשר אחרון", "מעקב הבא", "מקור"], ...rows.map((m) => [m.name, m.phone, bName(m.branchId), domain === "kollel" ? avName(m.avrechId) : m.mentor, m.stage, STATUS[m.status], m.lastContact || "", m.nextFollowUp || "", m.source])];
+    const data = [["שם", "טלפון", "סניף", word.mentor, "שלב", "סטטוס", "קשר אחרון", "מעקב הבא", "דורש טיפול", "מקור"], ...rows.map((m) => [m.name, m.phone, bName(m.branchId), domain === "kollel" ? avName(m.avrechId) : m.mentor, m.stage, STATUS[m.status], m.lastContact || "", m.nextFollowUp || "", (m.attention || []).map((x) => x.label).join(" · "), m.source])];
     downloadBlob(buildXlsx([{ name: word.many, rows: data, widths: [20, 14, 14, 18, 18, 10, 12, 12, 24] }]), `${word.many}.xlsx`);
   };
 
@@ -83,17 +107,26 @@ export function MitchPanel({ domain, initialQ = "" }: { domain: "kollel" | "bnot
         <input className="input adm-search" type="search" placeholder="חיפוש" value={q} onChange={(e) => setQ(e.target.value)} aria-label={`חיפוש ${word.one}`} />
         <ExportBtn onClick={exportXlsx} />
       </div>
+      <div className="adm-mitch-kpis">
+        <div><strong>{d.monthStats.active}</strong><span>פעילים</span></div>
+        <div><strong>{d.monthStats.newThisMonth}</strong><span>חדשים החודש</span></div>
+        <div><strong>{d.monthStats.stageChanges}</strong><span>עלו שלב החודש</span></div>
+        <div><strong>{d.monthStats.contacts}</strong><span>קשרים החודש</span></div>
+      </div>
       <Chips<string>
         value={filter}
         onChange={setFilter}
         items={[
           { id: "all", label: "כולם", count: d.mitch.filter((m) => m.status !== "left").length },
+          { id: "attention", label: "דורש טיפול", count: d.attentionSummary.total },
+          { id: "urgent", label: "דחוף", count: d.attentionSummary.high },
           { id: "due", label: "לחזור אליהם", count: dueCount },
           { id: "pending", label: "ממתינים לאישור", count: pendingCount },
           ...d.stages.map((s) => ({ id: s, label: s, count: d.mitch.filter((m) => m.stage === s && m.status !== "left").length })),
           { id: "left", label: "עזבו" },
         ]}
       />
+      {d.canManageWorkflow ? <WorkflowSettings domain={domain} workflow={d.workflow} onSaved={load} /> : null}
       <div className="adm-split">
         <div className="adm-list">
           {rows.map((m) => {
@@ -103,7 +136,7 @@ export function MitchPanel({ domain, initialQ = "" }: { domain: "kollel" | "bnot
                 key={m.id}
                 phone={m.phone || undefined}
                 waText={`שלום ${m.name}, `}
-                tone={m.status === "left" ? "grey" : due ? "red" : m.status === "paused" ? "yellow" : "green"}
+                tone={m.status === "left" ? "grey" : m.attentionLevel === "high" || due ? "red" : m.attentionLevel === "medium" || m.status === "paused" ? "yellow" : "green"}
                 current={sel?.id === m.id}
                 onClick={() => setSel({ ...m })}
                 actions={<IconActions phone={m.phone || undefined} waText={`שלום ${m.name}, `} />}
@@ -114,6 +147,8 @@ export function MitchPanel({ domain, initialQ = "" }: { domain: "kollel" | "bnot
                   {m.stage}
                   {domain === "kollel" && m.avrechId ? ` · עם ${avName(m.avrechId)}` : m.mentor ? ` · ${m.mentor}` : ""}
                   {m.nextFollowUp ? ` · ${due ? "לחזור!" : "מעקב"} ${dayLabel(m.nextFollowUp)}` : ""}
+                  {m.attention?.[0] ? ` · ⚠ ${m.attention[0].label}` : ""}
+                  {m.attention && m.attention.length > 1 ? ` +${m.attention.length - 1}` : ""}
                   {d.pendingByMitch?.[m.id] ? ` · ${d.pendingByMitch[m.id]} ממתינים לאישור` : ""}
                 </span>
               </SwipeRow>
@@ -156,12 +191,53 @@ export function MitchPanel({ domain, initialQ = "" }: { domain: "kollel" | "bnot
   );
 }
 
+function WorkflowSettings({ domain, workflow, onSaved }: { domain: "kollel" | "bnot"; workflow: Workflow; onSaved: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [stages, setStages] = useState(workflow.stages.join("\n"));
+  const [attention, setAttention] = useState({ ...workflow.attention });
+  const [templates, setTemplates] = useState(workflow.whatsappTemplates.join("\n"));
+  const [msg, setMsg] = useState("");
+  const save = async () => {
+    try {
+      const nextStages = stages.split(/\n/).map((x) => x.trim()).filter(Boolean);
+      await put(`/api/mitch/settings?domain=${domain}`, { stages: nextStages, attention, whatsappTemplates: templates.split(/\n/).map((x) => x.trim()).filter(Boolean) });
+      setMsg("נשמר");
+      onSaved();
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "השמירה נכשלה");
+    }
+  };
+  return (
+    <section className="adm-workflow-settings">
+      <button type="button" className="btn btn--ghost btn--sm" onClick={() => setOpen(!open)}>
+        <Icon name="edit" /> הגדרות תהליך ומעקב
+      </button>
+      {open ? (
+        <div className="adm-panel">
+          <div className="adm-panel__head"><div><h3>שלבים וכללי תשומת לב</h3><small>המערכת תזהה אוטומטית מי דורש טיפול לפי הכללים האלה.</small></div></div>
+          <div className="adm-fields adm-fields--2">
+            <label className="field span-2"><span className="field__label">שלבי התהליך — שלב בכל שורה</span><textarea className="textarea" value={stages} onChange={(e) => setStages(e.target.value)} rows={Math.max(4, workflow.stages.length)} /></label>
+            <label className="field"><span className="field__label">ללא קשר — אחרי כמה ימים</span><input className="input" type="number" min={1} max={365} value={attention.contactDays} onChange={(e) => setAttention({ ...attention, contactDays: Number(e.target.value) })} /></label>
+            <label className="field"><span className="field__label">תקוע באותו שלב — ימים</span><input className="input" type="number" min={1} max={730} value={attention.stageDays} onChange={(e) => setAttention({ ...attention, stageDays: Number(e.target.value) })} /></label>
+            {domain === "kollel" ? <label className="field"><span className="field__label">נעדר ברצף — מספר מפגשים</span><input className="input" type="number" min={1} max={12} value={attention.missedMeetings} onChange={(e) => setAttention({ ...attention, missedMeetings: Number(e.target.value) })} /></label> : null}
+            <label className="field span-2"><span className="field__label">תבניות WhatsApp — תבנית בכל שורה. אפשר להשתמש ב־{"{שם}"}</span><textarea className="textarea" rows={Math.max(3, workflow.whatsappTemplates.length)} value={templates} onChange={(e) => setTemplates(e.target.value)} /></label>
+          </div>
+          <div className="btn-row"><button type="button" className="btn btn--sm" onClick={save}><Icon name="check" /> שמירה</button>{msg ? <span className="muted">{msg}</span> : null}</div>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 function MitchCard({ d, m: initial, domain, word, onClose, onSaved }: { d: Data; m: Mitch; domain: "kollel" | "bnot"; word: { one: string; many: string; mentor: string }; onClose: () => void; onSaved: (id?: string) => void }) {
   const [m, setM] = useState<Mitch>(initial);
   const [log, setLog] = useState({ type: d.contactTypes[0], note: "", next: "" });
   const [err, setErr] = useState<string | null>(null);
   const [updates, setUpdates] = useState<SelfUpdate[]>([]);
   const [linkBusy, setLinkBusy] = useState(false);
+  const [transferReason, setTransferReason] = useState("");
+  const [waTemplate, setWaTemplate] = useState(d.workflow.whatsappTemplates[0] || "שלום {שם}, ");
+  const originalAvrechId = initial.avrechId;
   const live = d.mitch.find((x) => x.id === m.id);
   const entries = live?.log ?? m.log ?? [];
 
@@ -211,7 +287,7 @@ function MitchCard({ d, m: initial, domain, word, onClose, onSaved }: { d: Data;
   const save = async () => {
     setErr(null);
     try {
-      const r = await post<{ id: string }>("/api/mitch", { ...m, domain });
+      const r = await post<{ id: string }>("/api/mitch", { ...m, domain, transferReason });
       onSaved(r.id);
       if (!m.id) setM({ ...m, id: r.id });
     } catch (e) {
@@ -239,8 +315,30 @@ function MitchCard({ d, m: initial, domain, word, onClose, onSaved }: { d: Data;
       </div>
       {err ? <div className="adm-alert adm-alert--error">{err}</div> : null}
 
+      {m.id && live?.attention?.length ? (
+        <div className={`adm-mitch-attention ${live.attentionLevel === "high" ? "is-high" : ""}`}>
+          <strong><Icon name="alert" /> דורש תשומת לב</strong>
+          <div>{live.attention.map((a) => <span key={a.id}>{a.label}</span>)}</div>
+        </div>
+      ) : null}
+
       {m.id ? (
         <>
+          {m.phone ? (
+            <div className="adm-mitch-wa-tools">
+              <div>
+                <strong>WhatsApp מהיר</strong>
+                <small>בחירת תבנית פותחת WhatsApp בלבד — השליחה ידנית.</small>
+              </div>
+              <select className="select" value={waTemplate} onChange={(e) => setWaTemplate(e.target.value)}>
+                {d.workflow.whatsappTemplates.map((t, i) => <option value={t} key={i}>{t.replace("{שם}", m.name)}</option>)}
+              </select>
+              <button type="button" className="btn btn--ghost btn--sm" onClick={() => window.open(waLink(m.phone, waTemplate.replaceAll("{שם}", m.name)), "_blank", "noopener,noreferrer")}>
+                <Icon name="whatsapp" /> פתיחת הודעה
+              </button>
+            </div>
+          ) : null}
+
           <div className="adm-mitch-share-tools">
             <div>
               <strong>קישור אישי לעדכונים</strong>
@@ -318,9 +416,21 @@ function MitchCard({ d, m: initial, domain, word, onClose, onSaved }: { d: Data;
             <input className="input" value={m.mentor} onChange={(e) => setM({ ...m, mentor: e.target.value })} />
           </label>
         )}
+        {domain === "kollel" && m.id && originalAvrechId !== m.avrechId ? (
+          <label className="field span-2">
+            <span className="field__label">סיבת שינוי השיוך (נשמרת לבקרת מתכנת בלבד)</span>
+            <input className="input" value={transferReason} onChange={(e) => setTransferReason(e.target.value)} placeholder="לא חובה" />
+          </label>
+        ) : null}
         <div className="field span-2">
           <span className="field__label">שלב</span>
-          <Chips<string> value={m.stage} onChange={(stage) => setM({ ...m, stage })} items={d.stages.map((s) => ({ id: s, label: s }))} />
+          <div className="adm-stage-progress" aria-label="התקדמות בתהליך">
+            {d.stages.map((s, i) => {
+              const current = d.stages.indexOf(m.stage);
+              return <button key={s} type="button" className={i < current ? "is-done" : i === current ? "is-current" : ""} onClick={() => setM({ ...m, stage: s })}><i>{i + 1}</i><span>{s}</span></button>;
+            })}
+          </div>
+          {live?.stageDays !== undefined ? <small className="muted">בשלב הנוכחי {live.stageDays} ימים</small> : null}
         </div>
         <div className="field">
           <span className="field__label">סטטוס</span>

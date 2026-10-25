@@ -630,13 +630,7 @@ export default function AdminApp() {
   };
   const ctx = { me, subs, refreshSubs, go, openImpersonate, mode };
   const by = me.user.impersonatedBy;
-  // שם התצוגה שפתוחה עכשיו (התפקיד שלי, או של מי שנכנסתי בשמו)
   const ownRole = account.roles.includes("developer") ? "developer" : account.roles[0];
-  const viewName = by
-    ? me.user.kind === "virtual"
-      ? me.user.name.replace(" (תצוגה לדוגמה)", "")
-      : me.roleLabels[me.user.roles[0]] || me.user.name || ""
-    : me.roleLabels[ownRole] || "תצוגות";
   const ownViewLabel = me.roleLabels[ownRole] || "החשבון שלי";
   const menuQuery = appMenuQuery.trim().toLocaleLowerCase("he");
   const menuGroups = hubs

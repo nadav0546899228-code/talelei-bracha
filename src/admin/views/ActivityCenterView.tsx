@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Icon, type IconName } from "../../components/Icon";
-import { api, type View } from "../api";
+import { api, del, post, type View } from "../api";
 import { useLive } from "../live";
 
 type ActivityItem = {
@@ -28,6 +28,35 @@ type Data = {
   locations: LocationSummary[];
   totals: { activities: number; boys: number; girls: number; participants: number; cities: number };
 };
+type WallEntry = {
+  id: string;
+  domain: "kollel" | "bnot";
+  branchId: string;
+  date: string;
+  title: string;
+  note: string;
+  photos: string[];
+  shareApproved: boolean;
+  createdAt: string;
+  byName: string;
+  canDelete: boolean;
+};
+type WallData = {
+  entries: WallEntry[];
+  branches: { id: string; name: string; domain: "kollel" | "bnot"; parentId?: string }[];
+  cities: { id: string; name: string }[];
+  canPostDomains: ("kollel" | "bnot")[];
+};
+
+const readWallPhoto = (file: File) =>
+  new Promise<string>((resolve, reject) => {
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) return reject(new Error("אפשר לצרף JPG, PNG או WebP בלבד"));
+    if (file.size > 1_000_000) return reject(new Error("כל תמונה יכולה להיות עד 1MB"));
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("לא ניתן לקרוא את התמונה"));
+    reader.readAsDataURL(file);
+  });
 
 const dayIso = (d: Date) => {
   const p=(n:number)=>String(n).padStart(2,"0");
@@ -103,14 +132,32 @@ export function ActivityCenterView({ go }: { go: (view: View, tab?: string) => v
   const [city,setCity]=useState("all");
   const [calendarSystem,setCalendarSystem]=useState<CalendarSystem>(()=>(localStorage.getItem("tb-calendar-system")==="gregorian"?"gregorian":"hebrew"));
   const [calendarView,setCalendarView]=useState<CalendarView>("month");
+  const [wall,setWall]=useState<WallData|null>(null);
+  const [wallOpen,setWallOpen]=useState(false);
+  const [wallErr,setWallErr]=useState("");
+  const [wallForm,setWallForm]=useState({ domain:"kollel" as "kollel"|"bnot", branchId:"", date:todayIso(), title:"", note:"", photos:[] as string[], shareApproved:false });
 
+  const loadWall=useCallback(() =>
+    api<WallData>("/api/activity-wall").then(setWall).catch((e)=>setWallErr(e instanceof Error ? e.message : "שגיאה בטעינת התיעוד")), []);
   const load=useCallback(()=>{
     const from=addDays(todayIso(),-400);
     const to=addDays(todayIso(),730);
     return api<Data>(`/api/activity-center?from=${from}&to=${to}`).then(setData).catch((e)=>setErr(e.message));
   },[]);
-  useEffect(()=>{load();},[load]);
+  useEffect(()=>{load();loadWall();},[load,loadWall]);
   useLive(["bnotActivities","challahEvents","kollelAttendance","content","orgUnits"],load);
+  useLive(["activityWall"],loadWall);
+  useEffect(()=>{
+    if(!wall?.canPostDomains.length) return;
+    if(!wall.canPostDomains.includes(wallForm.domain)) {
+      const domain=wall.canPostDomains[0];
+      const branchId=wall.branches.find((b)=>b.domain===domain)?.id||"";
+      setWallForm((x)=>({...x,domain,branchId}));
+    } else if(!wallForm.branchId || !wall.branches.some((b)=>b.id===wallForm.branchId&&b.domain===wallForm.domain)) {
+      const branchId=wall.branches.find((b)=>b.domain===wallForm.domain)?.id||"";
+      setWallForm((x)=>({...x,branchId}));
+    }
+  },[wall,wallForm.domain,wallForm.branchId]);
 
   const filtered=useMemo(()=>{
     if(!data) return [];
@@ -169,6 +216,34 @@ export function ActivityCenterView({ go }: { go: (view: View, tab?: string) => v
   const jumpToday=()=>{const d=new Date();setCursor(d);setSelectedDate(todayIso());};
   const setSystem=(v:CalendarSystem)=>{setCalendarSystem(v);localStorage.setItem("tb-calendar-system",v);};
 
+  const wallBranchLabel=(id:string)=>{
+    const b=wall?.branches.find((x)=>x.id===id);
+    const city=wall?.cities.find((x)=>x.id===b?.parentId);
+    return [b?.name,city?.name].filter(Boolean).join(" · ");
+  };
+  const pickWallPhotos=async(files:FileList|null)=>{
+    if(!files) return;
+    try{
+      const selected=[...files].slice(0,3);
+      const photos=await Promise.all(selected.map(readWallPhoto));
+      setWallForm((x)=>({...x,photos}));
+      setWallErr("");
+    }catch(e){setWallErr(e instanceof Error?e.message:"לא ניתן לצרף תמונות");}
+  };
+  const saveWall=async()=>{
+    setWallErr("");
+    try{
+      await post("/api/activity-wall",wallForm);
+      setWallForm((x)=>({...x,title:"",note:"",photos:[],shareApproved:false,date:todayIso()}));
+      setWallOpen(false);
+      await loadWall();
+    }catch(e){setWallErr(e instanceof Error?e.message:"השמירה נכשלה");}
+  };
+  const removeWall=async(id:string)=>{
+    if(!window.confirm("למחוק את התיעוד הזה?")) return;
+    try{await del(`/api/activity-wall/${id}`);await loadWall();}catch(e){setWallErr(e instanceof Error?e.message:"המחיקה נכשלה");}
+  };
+
   if(err) return <div className="adm-alert adm-alert--error">{err}</div>;
   if(!data) return <p className="muted">טוען את מרכז הפעילות…</p>;
 
@@ -189,6 +264,42 @@ export function ActivityCenterView({ go }: { go: (view: View, tab?: string) => v
         <div><Icon name="pin"/><strong>{activeCities}</strong><span>ערים פעילות</span></div>
         <div><Icon name="users"/><strong>{totalParticipants}</strong><span>נוכחות/נרשמים</span></div>
         <div><Icon name="sparkle"/><strong>{upcoming}</strong><span>פעילויות קדימה</span></div>
+      </section>
+
+      <section className="adm-field-wall">
+        <div className="adm-field-wall__head">
+          <div><span className="adm-eyebrow">מהשטח</span><h2>קיר תיעוד חי</h2><p>תמונות ועדכונים מהפעילות, לפי סניף. חומר שמסומן לשיתוף עדיין נשאר פנימי עד שמחליטים לפרסם אותו.</p></div>
+          {wall?.canPostDomains.length ? <button type="button" className="btn btn--sm" onClick={()=>setWallOpen(!wallOpen)}><Icon name={wallOpen?"close":"plus"}/> {wallOpen?"סגירה":"הוספת תיעוד"}</button>:null}
+        </div>
+        {wallErr?<div className="adm-alert adm-alert--error">{wallErr}</div>:null}
+        {wallOpen&&wall?(
+          <div className="adm-panel adm-field-wall__form">
+            <div className="adm-fields adm-fields--2">
+              {wall.canPostDomains.length>1?<label className="field"><span className="field__label">תחום</span><select className="select" value={wallForm.domain} onChange={(e)=>{const domain=e.target.value as "kollel"|"bnot";setWallForm({...wallForm,domain,branchId:wall.branches.find((b)=>b.domain===domain)?.id||""});}}><option value="kollel">טללי ברכה</option><option value="bnot">בנות צילה</option></select></label>:null}
+              <label className="field"><span className="field__label">סניף</span><select className="select" value={wallForm.branchId} onChange={(e)=>setWallForm({...wallForm,branchId:e.target.value})}><option value="">בחירת סניף</option>{wall.branches.filter((b)=>b.domain===wallForm.domain).map((b)=><option key={b.id} value={b.id}>{wallBranchLabel(b.id)}</option>)}</select></label>
+              <label className="field"><span className="field__label">תאריך</span><input className="input" type="date" value={wallForm.date} onChange={(e)=>setWallForm({...wallForm,date:e.target.value})}/></label>
+              <label className="field"><span className="field__label">כותרת</span><input className="input" value={wallForm.title} onChange={(e)=>setWallForm({...wallForm,title:e.target.value})} placeholder="לדוגמה: ערב לימוד בסניף"/></label>
+              <label className="field span-2"><span className="field__label">מה היה?</span><textarea className="textarea" rows={3} value={wallForm.note} onChange={(e)=>setWallForm({...wallForm,note:e.target.value})}/></label>
+              <label className="field span-2"><span className="field__label">תמונות — עד 3, עד 1MB כל אחת</span><input className="input" type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(e)=>pickWallPhotos(e.target.files)}/></label>
+              <label className="field span-2 adm-checkline"><input type="checkbox" checked={wallForm.shareApproved} onChange={(e)=>setWallForm({...wallForm,shareApproved:e.target.checked})}/><span>מאושר לשיתוף רחב (לא מתפרסם אוטומטית)</span></label>
+            </div>
+            {wallForm.photos.length?<div className="adm-field-wall__previews">{wallForm.photos.map((p,i)=><img src={p} alt={`תצוגה מקדימה ${i+1}`} key={i}/>)}</div>:null}
+            <div className="btn-row"><button type="button" className="btn btn--sm" disabled={!wallForm.branchId||(!wallForm.title.trim()&&!wallForm.note.trim()&&!wallForm.photos.length)} onClick={saveWall}><Icon name="check"/> שמירת תיעוד</button></div>
+          </div>
+        ):null}
+        <div className="adm-field-wall__grid">
+          {(wall?.entries||[]).slice(0,9).map((x)=>(
+            <article className="adm-field-wall__card" key={x.id}>
+              {x.photos?.[0]?<div className="adm-field-wall__cover"><img src={x.photos[0]} alt={x.title}/>{x.photos.length>1?<span>+{x.photos.length-1}</span>:null}</div>:<div className="adm-field-wall__cover is-empty"><Icon name="image"/></div>}
+              <div className="adm-field-wall__body">
+                <div className="adm-field-wall__meta"><span>{x.domain==="bnot"?"בנות צילה":"טללי ברכה"}</span><span>{wallBranchLabel(x.branchId)}</span><span>{new Intl.DateTimeFormat("he-IL",{day:"numeric",month:"short"}).format(new Date(`${x.date}T12:00:00`))}</span></div>
+                <h3>{x.title}</h3>{x.note?<p>{x.note}</p>:null}
+                <div className="adm-field-wall__foot"><span className={x.shareApproved?"is-approved":""}>{x.shareApproved?"✓ מאושר לשיתוף":"פנימי בלבד"}</span><small>{x.byName}</small>{x.canDelete?<button type="button" className="adm-icon-btn" onClick={()=>removeWall(x.id)} aria-label="מחיקה"><Icon name="trash"/></button>:null}</div>
+              </div>
+            </article>
+          ))}
+          {wall&&!wall.entries.length?<div className="adm-panel adm-empty">עדיין אין תיעוד מהשטח.</div>:null}
+        </div>
       </section>
 
       <div className="adm-activity-filters">
