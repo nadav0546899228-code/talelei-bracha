@@ -257,7 +257,7 @@ const BACKUP_COLLECTIONS = [
   "users", "phoneUsers", "submissions", "content", "avrechim", "kollelEntries", "kollelMonths", "kollelSettings", "kollelAttendance",
   "orgUnits", "contacts", "broadcasts", "settings", "messages", "bnotMembers", "bnotActivities", "pushSubs",
   "kollelMonthStatus", "bcTemplates", "bcScheduled", "donations", "avrechFiles", "mitchazkim", "challahEvents", "mitchAccess", "mitchUpdates",
-  "smartTasks", "callerAssignments", "mitchTransfers",
+  "smartTasks", "callerAssignments", "mitchTransfers", "activityWall",
 ];
 async function makeBackup(reason, byName = "מערכת") {
   const data = {};
