@@ -130,11 +130,11 @@ export function PhoneUsersPanel({ me, onChange, title = "כניסה בטלפון
 
       <div className="adm-list">
         {(users ?? []).map((u) => (
-          <div key={u.id} className={`adm-row adm-row--tone-${!u.active ? "grey" : u.lock.locked ? "red" : u.mustChangeCode ? "yellow" : "green"}`} style={{ cursor: "default" }}>
+          <div key={u.id} className={`adm-row adm-access-row adm-row--tone-${!u.active ? "grey" : u.lock.locked ? "red" : u.mustChangeCode ? "yellow" : "green"}`} style={{ cursor: "default" }}>
             <span className="adm-row__title">
               {u.name} <span className="muted" dir="ltr" style={{ fontWeight: 500 }}>{u.phone}</span>
             </span>
-            <span className="adm-item__actions">
+            <span className="adm-item__actions adm-access-actions">
               {u.lock.locked ? (
                 <button type="button" className="btn btn--sm btn--rose" onClick={() => action(u, "unlock")}>
                   שחרור נעילה
