@@ -116,25 +116,23 @@ export function entriesFor(hubs: NavHub[]): NavEntry[] {
   return out;
 }
 
-/** ברירת מחדל: עד 5 כפתורים ראשיים (פניות נכנסות דרך הפעמון ומסך הניהול) */
-export const defaultBar = (entries: NavEntry[]) => {
-  const mains = entries.filter((e) => !e.id.startsWith("leaf:")).map((e) => e.id);
-  return mains.length > 5 ? mains.filter((id) => id !== "inquiries").slice(0, 5) : mains;
-};
+/** הסרגל התחתון מכיל תמיד את כל הכפתורים הראשיים. הסדר ניתן לשינוי בגרירה. */
+export const defaultBar = (entries: NavEntry[]) => entries.filter((e) => !e.id.startsWith("leaf:")).map((e) => e.id);
 
 /** שמירת השורה התחתונה לכל משתמש ולכל מצב בנפרד (במכשיר) */
 const key = (me: Me, mode: Mode) => `tb-bar:${me.user.impersonatedBy ? "as:" : ""}${me.user.id}:${mode}`;
 export function loadBar(me: Me, mode: Mode, entries: NavEntry[]): string[] {
+  const mains = defaultBar(entries);
   try {
     const raw = localStorage.getItem(key(me, mode));
     if (raw) {
-      const ids = (JSON.parse(raw) as string[]).filter((id) => entries.some((e) => e.id === id));
-      if (ids.length) return ids;
+      const saved = (JSON.parse(raw) as string[]).filter((id) => mains.includes(id));
+      if (saved.length) return [...saved, ...mains.filter((id) => !saved.includes(id))];
     }
   } catch {
     /* אין אחסון - ברירת מחדל */
   }
-  return defaultBar(entries);
+  return mains;
 }
 export function saveBar(me: Me, mode: Mode, ids: string[] | null) {
   try {
