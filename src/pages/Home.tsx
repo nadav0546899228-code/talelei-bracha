@@ -3,7 +3,7 @@ import { ContactForm } from "../components/forms/Forms";
 import { Icon } from "../components/Icon";
 import { Logo } from "../components/Logo";
 import { ContactDetails } from "../components/ContactDetails";
-import { DonateLink, Flag, Placeholder, Reveal, SectionHead } from "../components/ui";
+import { DonateLink, Reveal, SectionHead } from "../components/ui";
 import { donation } from "../config/integrations";
 import { site } from "../config/site";
 import { activities, events, lessons } from "../data/content";
@@ -15,41 +15,26 @@ export default function Home() {
     .sort((a, b) => a.start.localeCompare(b.start))
     .slice(0, 3);
   const latest = lessons.slice(0, 3);
-  const flags = site.features.showContentFlags;
 
   return (
     <>
       {/* ---------- פתיח ---------- */}
-      <section className="hero" aria-labelledby="hero-title">
+      <section className="hero hero--premium" aria-labelledby="hero-title">
         <div className="container hero__grid">
-          <div>
-            <div className="hero__logos">
-              <span className="logo-card">
-                <Logo org="taleiBracha" height={128} priority className="logo--tb-hero" />
-              </span>
-              <span className="hero__logos-plus" aria-hidden="true">
-                +
-              </span>
-              <span className="logo-card">
-                <Logo org="bnotTzila" height={100} priority className="logo--bz-hero" />
-              </span>
-            </div>
+          <div className="hero__copy">
+            <div className="hero__kicker">קרן טללי ברכה · בנות צילה</div>
             <h1 id="hero-title">
-              תורה, חסד וחיזוק
+              בית של <span className="accent-tb">תורה</span>,
               <br />
-              <span className="accent-tb">קרן טללי ברכה</span> ו<span className="accent-bz">בנות צילה</span>
+              <span className="accent-bz">חסד וחיזוק</span>
             </h1>
-            {site.vision ? (
-              <p className="hero__lead">{site.vision}</p>
-            ) : (
-              <p className="hero__lead">
-                רשת כוללים בארץ ישראל, ופעילות נשים של בנות צילה - שיעורים, חסד, ליווי וחיזוק. <Flag />
-              </p>
-            )}
-            <div className="btn-row">
-              <a href="#activities" className="btn btn--ink">
-                הכירו את הפעילות
-              </a>
+            <p className="hero__lead">
+              {site.vision || "פעילות תורנית וקהילתית שמחברת בין לימוד, נתינה וליווי אישי — לגברים ולנשים, במסגרות המותאמות לכל קהילה."}
+            </p>
+            <div className="btn-row hero__actions">
+              <Link to="/keren-talelei-bracha" className="btn btn--ink">
+                קרן טללי ברכה <Icon name="arrowLeft" />
+              </Link>
               <Link to="/bnot-tzila" className="btn btn--ghost-rose">
                 בנות צילה
               </Link>
@@ -60,28 +45,47 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="hero__media-wrap">
-            <div className="hero__media">
-              <div className="hero__media-inner">
-                <div>
-                  <Icon name="image" width={42} height={42} style={{ margin: "0 auto 12px", color: "var(--teal-logo)" }} />
-                  <strong style={{ color: "var(--ink)", display: "block" }}>תמונה או וידאו אותנטיים מהפעילות</strong>
-                  <span className="muted" style={{ fontSize: "0.95rem" }}>
-                    יוזנו לאחר קבלת חומר מאושר לפרסום
-                  </span>
-                </div>
-              </div>
+          <div className="hero-stage" aria-label="קרן טללי ברכה ובנות צילה">
+            <div className="hero-stage__glow hero-stage__glow--teal" />
+            <div className="hero-stage__glow hero-stage__glow--rose" />
+            <div className="hero-stage__ring hero-stage__ring--one" />
+            <div className="hero-stage__ring hero-stage__ring--two" />
+            <div className="hero-stage__logos">
+              <span className="hero-stage__logo hero-stage__logo--tb">
+                <Logo org="taleiBracha" height={142} priority className="logo--tb-hero" />
+              </span>
+              <span className="hero-stage__divider" />
+              <span className="hero-stage__logo hero-stage__logo--bz">
+                <Logo org="bnotTzila" height={108} priority className="logo--bz-hero" />
+              </span>
             </div>
-            <Link to="/isha-le-isha" className="hero__badge" style={{ textDecoration: "none" }}>
-              <span className="hero__badge-dot">
-                <Icon name="chat" />
-              </span>
-              <span>
-                אישה לאישה
-                <small>שיחה אישית, דיסקרטית ולא שיפוטית</small>
-              </span>
+            <span className="hero-stage__pill hero-stage__pill--one"><Icon name="book" /> תורה</span>
+            <span className="hero-stage__pill hero-stage__pill--two"><Icon name="heart" /> חסד</span>
+            <span className="hero-stage__pill hero-stage__pill--three"><Icon name="hands" /> חיזוק</span>
+            <Link to="/isha-le-isha" className="hero-stage__isha">
+              <span><Icon name="chat" /></span>
+              <div><strong>אישה לאישה</strong><small>ליווי אישי ודיסקרטי</small></div>
+              <Icon name="arrowLeft" />
             </Link>
           </div>
+        </div>
+
+        <div className="container home-gateways" aria-label="קישורים מרכזיים">
+          <Link to="/keren-talelei-bracha" className="home-gateway">
+            <span className="home-gateway__icon"><Icon name="book" /></span>
+            <div><strong>קרן טללי ברכה</strong><small>רשת כוללים בא״י</small></div>
+            <Icon name="arrowLeft" />
+          </Link>
+          <Link to="/bnot-tzila" className="home-gateway home-gateway--rose">
+            <span className="home-gateway__icon"><Icon name="heart" /></span>
+            <div><strong>בנות צילה</strong><small>פעילות נשים, שיעורים וחיזוק</small></div>
+            <Icon name="arrowLeft" />
+          </Link>
+          <Link to="/isha-le-isha" className="home-gateway home-gateway--warm">
+            <span className="home-gateway__icon"><Icon name="chat" /></span>
+            <div><strong>אישה לאישה</strong><small>שיחה אישית, רגישה ודיסקרטית</small></div>
+            <Icon name="arrowLeft" />
+          </Link>
         </div>
       </section>
 
@@ -90,7 +94,7 @@ export default function Home() {
         <div className="container">
           <SectionHead eyebrow="מי אנחנו" title="שני מוסדות, משפחה אחת" id="who-title" center>
             <p>
-              קרן טללי ברכה היא המסגרת הראשית, ובנות צילה פועלת בתוכה עם פעילות ייעודית לנשים. <Flag />
+              קרן טללי ברכה היא המסגרת הראשית, ובנות צילה פועלת בתוכה עם פעילות ייעודית לנשים.
             </p>
           </SectionHead>
           <div className="grid grid--2">
@@ -101,11 +105,7 @@ export default function Home() {
                 </div>
                 <h3>{site.orgs.taleiBracha.name}</h3>
                 <p className="muted">{site.orgs.taleiBracha.tagline}</p>
-                {site.about.taleiBracha ? (
-                  <p>{site.about.taleiBracha}</p>
-                ) : (
-                  <Placeholder title="תיאור קצר ומאושר של הקרן" todo="site.about.taleiBracha" />
-                )}
+                <p>{site.about.taleiBracha || "מסגרת תורנית המחברת לימוד קבוע, קהילה ופעילות של חסד וחיזוק."}</p>
                 <p style={{ marginTop: 16 }}>
                   <Link to="/keren-talelei-bracha" className="text-link">
                     לעמוד הקרן <Icon name="arrowLeft" />
@@ -120,11 +120,7 @@ export default function Home() {
                 </div>
                 <h3>{site.orgs.bnotTzila.name}</h3>
                 <p className="muted">פעילות נשים, שיעורים וחיזוק</p>
-                {site.about.bnotTzila ? (
-                  <p>{site.about.bnotTzila}</p>
-                ) : (
-                  <Placeholder title="תיאור קצר ומאושר של בנות צילה" todo="site.about.bnotTzila" />
-                )}
+                <p>{site.about.bnotTzila || "מסגרת לנשים סביב שיעורים, פעילות קהילתית, חיזוק וקשר אישי."}</p>
                 <p style={{ marginTop: 16 }}>
                   <Link to="/bnot-tzila" className="text-link" style={{ color: "var(--rose-strong)" }}>
                     לעמוד בנות צילה <Icon name="arrowLeft" />
@@ -165,7 +161,7 @@ export default function Home() {
                 <div className="eyebrow eyebrow--rose">בנות צילה</div>
                 <h2 id="bz-title">מקום חם לנשים - ללמוד, להתחזק ולהתחבר</h2>
                 <p className="muted">
-                  שיעורים, ערבי נשים, כנסים ותכני חיזוק, ומיזם הליווי האישי "אישה לאישה". <Flag />
+                  שיעורים, ערבי נשים, כנסים ותכני חיזוק, ומיזם הליווי האישי "אישה לאישה".
                 </p>
                 <div className="btn-row">
                   <Link to="/bnot-tzila" className="btn btn--rose">
@@ -205,27 +201,6 @@ export default function Home() {
               </Link>
             </div>
           </div>
-        </div>
-      </section>
-
-      {/* ---------- מהשטח ---------- */}
-      <section className="section section--white" aria-labelledby="field-title">
-        <div className="container">
-          <SectionHead eyebrow="מהשטח" title="פעילות ועדכונים" id="field-title">
-            <p>תמונות אמיתיות ועדכונים מהפעילות - רק חומר שאושר לפרסום.</p>
-          </SectionHead>
-          <div className="grid grid--3">
-            {[1, 2, 3].map((n) => (
-              <Placeholder key={n} media title="תמונה ועדכון מהפעילות" todo="field-updates">
-                יוזנו לאחר אישור פרסום
-              </Placeholder>
-            ))}
-          </div>
-          <p style={{ marginTop: 20 }}>
-            <Link to="/gallery" className="text-link">
-              לגלריה המלאה <Icon name="arrowLeft" />
-            </Link>
-          </p>
         </div>
       </section>
 
@@ -282,14 +257,6 @@ export default function Home() {
             </div>
           </div>
         </section>
-      ) : flags ? (
-        <section className="section section--tight section--white" aria-label="השפעה במספרים">
-          <div className="container">
-            <Placeholder title='אזור "השפעה במספרים" מוסתר' todo="site.impactStats">
-              יוצג רק לאחר שהמוסדות ימסרו ויאשרו נתונים. אין להציג מספרים משוערים.
-            </Placeholder>
-          </div>
-        </section>
       ) : null}
 
       {/* ---------- עדויות - רק באישור ---------- */}
@@ -321,7 +288,7 @@ export default function Home() {
               <div>
                 <h2 id="donate-title">שותפים לתורה ולחסד</h2>
                 <p>
-                  התרומה מסייעת להחזקת הכוללים, לפעילות החסד ולפעילות בנות צילה. התרומה מתבצעת אצל ספק סליקה מאובטח - פרטי אשראי אינם נשמרים באתר. <Flag />
+                  התרומה מסייעת להחזקת הכוללים, לפעילות החסד ולפעילות בנות צילה. התרומה מתבצעת אצל ספק סליקה מאובטח - פרטי אשראי אינם נשמרים באתר.
                 </p>
               </div>
               <div className="btn-row">
