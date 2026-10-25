@@ -19,7 +19,7 @@ type PU = {
   lock: { locked: boolean; permanent?: boolean; minutes?: number };
 };
 
-const PHONE_ROLES: Role[] = ["chief_coordinator", "kollel_city", "kollel_branch", "bnot_city", "bnot_branch", "isha_coordinator", "office", "content_editor", "ceo"];
+const PHONE_ROLES: Role[] = ["chief_coordinator", "kollel_region", "bnot_region", "kollel_city", "kollel_branch", "bnot_city", "bnot_branch", "bnot_caller", "isha_coordinator", "office", "content_editor", "ceo"];
 
 type Edit = { id?: string; name: string; phone: string; roles: Role[]; scope: Scope; active: boolean };
 
