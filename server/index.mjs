@@ -48,6 +48,15 @@ if (DEMO) {
   process.env.DATA_FILE = process.env.DATA_FILE || join(process.cwd(), "data", "demo.json");
 }
 const store = await createStore();
+/* באתר המפורסם: נתוני דמה נטענים פעם אחת אוטומטית (לבקשת נדב, עד שינקה אותם במסך מתכנת).
+   אחרי "ניקוי" הם לא חוזרים. לכיבוי: SEED_DEMO_ONCE = false */
+const SEED_DEMO_ONCE = true;
+if (!DEMO && SEED_DEMO_ONCE && !(await store.get("settings", "demoState"))) {
+  const { seedDemo } = await import("./demoSeed.mjs");
+  await seedDemo(store);
+  await store.put("settings", "demoState", { state: "seeded", at: new Date().toISOString() });
+  console.log("נתוני דמה נטענו (פעם אחת)");
+}
 if (DEMO && !(await store.list("avrechim", 1)).length) {
   const { seedDemo } = await import("./demoSeed.mjs");
   await seedDemo(store);
@@ -684,10 +693,12 @@ async function api(req, res, url) {
     const { seedDemo, clearDemo } = await import("./demoSeed.mjs");
     if (pathname.endsWith("seed")) {
       await seedDemo(store);
+      await store.put("settings", "demoState", { state: "seeded", at: new Date().toISOString() });
       await audit(user, "הוספת נתוני דמה");
       return send(200, { ok: true });
     }
     const n = await clearDemo(store, BACKUP_COLLECTIONS);
+    await store.put("settings", "demoState", { state: "cleared", at: new Date().toISOString() });
     await audit(user, "ניקוי נתוני דמה", `${n} רשומות`);
     return send(200, { ok: true, removed: n });
   }
