@@ -1069,7 +1069,16 @@ async function api(req, res, url) {
   // ---- יומן
   if (pathname === "/api/admin/audit" && method === "GET") {
     if (!can("audit")) return send(403, { error: "אין הרשאה" });
-    return send(200, { entries: await store.list("audit", 500) });
+    return send(200, { entries: await store.list("audit", 5000), canDelete: real.roles.includes("developer") && !user.impersonatedBy });
+  }
+  // מחיקת רשומות מהיומן - מתכנת בלבד (נרשמת ביומן עצמו)
+  if (pathname === "/api/admin/audit" && method === "DELETE") {
+    if (!real.roles.includes("developer") || user.impersonatedBy) return send(403, { error: "מתכנת בלבד" });
+    const b = await readBody(req, 512 * 1024);
+    const ids = b.all ? (await store.list("audit", 100000)).map((x) => x.id) : (Array.isArray(b.ids) ? b.ids.map(String).slice(0, 10000) : []);
+    for (const id of ids) await store.del("audit", id);
+    await audit(real, "מחיקת רשומות מהיומן", `${ids.length} רשומות`);
+    return send(200, { ok: true, deleted: ids.length });
   }
 
   // ---- מתכנת: הפעלה/כיבוי של מודולים אופציונליים

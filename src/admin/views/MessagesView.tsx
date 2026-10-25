@@ -2,13 +2,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Icon } from "../../components/Icon";
 import { api, fmtDateTime, post, type Me } from "../api";
+import type { Mode } from "../nav";
 import { Chips, Fab } from "../components";
 import { useLive } from "../live";
 
 type Msg = { id: string; from: string; fromName: string; to: string[]; toNames: string[]; text: string; replyTo: string | null; read: boolean; mine: boolean; createdAt: string };
 type Rcpt = { id: string; name: string; role: string };
 
-export function MessagesView({ me }: { me: Me }) {
+export function MessagesView({ me, mode }: { me: Me; mode: Mode }) {
+  const domain = mode === "girls" ? "bnot" : "kollel";
   const [list, setList] = useState<Msg[] | null>(null);
   const [filter, setFilter] = useState<"in" | "unread" | "sent">("in");
   const [picked, setPicked] = useState<Set<string>>(new Set());
@@ -17,7 +19,7 @@ export function MessagesView({ me }: { me: Me }) {
   const [err, setErr] = useState<string | null>(null);
   const readOnly = Boolean(me.user.impersonatedBy);
 
-  const load = useCallback(() => api<{ messages: Msg[] }>("/api/messages").then((r) => setList(r.messages)).catch((e) => setErr(e.message)), []);
+  const load = useCallback(() => api<{ messages: Msg[] }>(`/api/messages?domain=${domain}`).then((r) => setList(r.messages)).catch((e) => setErr(e.message)), [domain]);
   useEffect(() => {
     load();
   }, [load]);
@@ -134,24 +136,24 @@ export function MessagesView({ me }: { me: Me }) {
       </div>
 
       {!readOnly && !compose ? <Fab label="הודעה חדשה" onClick={() => setCompose({ to: [], text: "" })} /> : null}
-      {compose ? <Compose value={compose} onClose={() => setCompose(null)} onSent={() => (setCompose(null), load())} /> : null}
+      {compose ? <Compose domain={domain} value={compose} onClose={() => setCompose(null)} onSent={() => (setCompose(null), load())} /> : null}
     </>
   );
 }
 
-function Compose({ value, onClose, onSent }: { value: { to: string[]; text: string; replyTo?: string }; onClose: () => void; onSent: () => void }) {
+function Compose({ domain, value, onClose, onSent }: { domain: string; value: { to: string[]; text: string; replyTo?: string }; onClose: () => void; onSent: () => void }) {
   const [rcpts, setRcpts] = useState<Rcpt[]>([]);
   const [to, setTo] = useState<string[]>(value.to);
   const [text, setText] = useState(value.text);
   const [q, setQ] = useState("");
   const [err, setErr] = useState<string | null>(null);
   useEffect(() => {
-    api<{ recipients: Rcpt[] }>("/api/messages/recipients").then((r) => setRcpts(r.recipients));
-  }, []);
+    api<{ recipients: Rcpt[] }>(`/api/messages/recipients?domain=${domain}`).then((r) => setRcpts(r.recipients));
+  }, [domain]);
   const shown = rcpts.filter((r) => !q.trim() || `${r.name} ${r.role}`.includes(q.trim()));
   const send = async () => {
     try {
-      await post("/api/messages", { to, text, replyTo: value.replyTo });
+      await post("/api/messages", { to, text, replyTo: value.replyTo, domain });
       onSent();
     } catch (e) {
       setErr(e instanceof Error ? e.message : "שגיאה");

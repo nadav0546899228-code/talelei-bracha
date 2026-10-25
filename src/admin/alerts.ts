@@ -28,10 +28,10 @@ export function useAlerts(me: Me | null, mode: Mode, subs: Submission[] | null) 
   }, [me, canKollel, canOrg]);
   const loadMsgs = useCallback(() => {
     if (!me?.user.views.includes("messages")) return;
-    api<{ messages: { read: boolean; mine: boolean }[] }>("/api/messages")
+    api<{ messages: { read: boolean; mine: boolean }[] }>(`/api/messages?domain=${mode === "girls" ? "bnot" : "kollel"}`)
       .then((r) => setUnread(r.messages.filter((m) => !m.mine && !m.read).length))
       .catch(() => undefined);
-  }, [me]);
+  }, [me, mode]);
   useEffect(() => {
     loadMsgs();
   }, [loadMsgs]);

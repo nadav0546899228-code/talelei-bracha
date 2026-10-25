@@ -23,7 +23,23 @@ export async function staffList(store, resolveUser, bootstrapEmails) {
   return out;
 }
 
-async function allowedRecipients(user, staff, store) {
+/** לאיזה ארגון שייך איש צוות: טללי ברכה (kollel), בנות צילה (bnot), או הנהלה (שניהם) */
+function domainsOf(u) {
+  const r = normalizeRoles(u.roles);
+  const k = r.some((x) => x.startsWith("kollel_"));
+  const b = r.some((x) => x.startsWith("bnot_") || x === "isha_coordinator");
+  if (!k && !b) return new Set(["kollel", "bnot"]); // הנהלה: מנכ״ל, רכז ארצי, משרד...
+  return new Set([...(k ? ["kollel"] : []), ...(b ? ["bnot"] : [])]);
+}
+const domainParam = (v) => (v === "bnot" ? "bnot" : v === "kollel" ? "kollel" : null);
+
+async function allowedRecipients(user, staff, store, domain = null) {
+  const all = await allowedRecipientsAll(user, staff, store);
+  // טללי ברכה ובנות צילה - כמו שני אתרים נפרדים: בכל מצב רואים רק את האנשים של אותו ארגון (+ההנהלה)
+  return domain ? all.filter((u) => domainsOf(u).has(domain)) : all;
+}
+
+async function allowedRecipientsAll(user, staff, store) {
   const top = (u) => isPrivileged(u.roles) || u.roles.includes("chief_coordinator");
   if (top(user)) return staff.filter((u) => u.id !== user.id);
   const org = await loadOrg(store);
@@ -56,14 +72,15 @@ export async function handleMessages(req, res, url, ctx) {
   const mineVisible = (m) => (m.to.includes(user.id) || m.from === user.id) && !(m.deletedBy || []).includes(user.id);
 
   if (pathname === "/api/messages" && method === "GET") {
-    const rows = (await store.list("messages", 5000)).filter(mineVisible).map((m) => ({ ...m, read: m.from === user.id || (m.readBy || []).includes(user.id), mine: m.from === user.id }));
+    const dom = domainParam(url.searchParams.get("domain"));
+    const rows = (await store.list("messages", 5000)).filter((m) => mineVisible(m) && (!dom || !m.domain || m.domain === dom)).map((m) => ({ ...m, read: m.from === user.id || (m.readBy || []).includes(user.id), mine: m.from === user.id }));
     rows.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
     return send(200, { messages: rows, me: user.id }), true;
   }
 
   if (pathname === "/api/messages/recipients" && method === "GET") {
     const staff = await staffList(store, resolveUser, bootstrapEmails);
-    const list = await allowedRecipients(user, staff, store);
+    const list = await allowedRecipients(user, staff, store, domainParam(url.searchParams.get("domain")));
     return send(200, { recipients: list.map((u) => ({ id: u.id, name: u.name || u.email || u.phone, role: normalizeRoles(u.roles).map((r) => roleLabels[r]).join(" · ") })) }), true;
   }
 
@@ -73,11 +90,14 @@ export async function handleMessages(req, res, url, ctx) {
     const text = clean(b.text, 4000).trim();
     if (!text) return send(400, { error: "ההודעה ריקה" }), true;
     const staff = await staffList(store, resolveUser, bootstrapEmails);
-    const allowed = new Map((await allowedRecipients(user, staff, store)).map((u) => [u.id, u]));
+    const domain = domainParam(b.domain);
+    const allowed = new Map((await allowedRecipients(user, staff, store, domain)).map((u) => [u.id, u]));
     let to = (Array.isArray(b.to) ? b.to : []).map(String).filter((id) => allowed.has(id));
     let replyTo = null;
+    let replyDomain = null;
     if (b.replyTo) {
       const orig = await store.get("messages", String(b.replyTo));
+      replyDomain = orig?.domain || null;
       // השבה תמיד מותרת לשולח המקורי
       if (orig && (orig.to.includes(user.id) || orig.from === user.id)) {
         replyTo = orig.id;
@@ -95,6 +115,7 @@ export async function handleMessages(req, res, url, ctx) {
       toNames: names,
       text,
       replyTo,
+      domain: replyDomain || domain,
       readBy: [],
       deletedBy: [],
     });

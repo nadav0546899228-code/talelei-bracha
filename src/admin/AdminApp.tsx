@@ -4,8 +4,8 @@
  * שני מצבים - טללי ברכה (בנים) ובנות צילה (בנות) - בלי ערבוב. החלפה בלוגו שבשורה העליונה.
  * ניווט: כפתורי-על שנכנסים פנימה, ושורה תחתונה שזזה לצדדים וניתנת לעריכה.
  */
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import { Icon } from "../components/Icon";
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { Icon, type IconName } from "../components/Icon";
 import { Logo } from "../components/Logo";
 import { runtime } from "../config/contentModel";
 import { Link } from "../router/Router";
@@ -21,7 +21,7 @@ import { disablePush, enablePush, pushState } from "./push";
 import { OrgView } from "./views/OrgView";
 import { MessagesView } from "./views/MessagesView";
 import { BnotView } from "./views/BnotView";
-import { ReportsView } from "./views/ReportsView";
+import { ReportsHub } from "./views/ExportCenter";
 import { DonationsView } from "./views/DonationsView";
 import "./admin.css";
 import { AuditView } from "./views/AuditView";
@@ -213,6 +213,7 @@ function screenFromUrl(): Screen {
 }
 
 type DisplayMode = "auto" | "desktop" | "mobile";
+type FontSize = "sm" | "md" | "lg";
 
 /** איזה אייקון אפליקציה מתאים להרשאות (כמו בשרת) */
 function appBrandOf(me: Me | null): "combined" | "kollel" | "bnot" {
@@ -310,6 +311,30 @@ export default function AdminApp() {
       return "bottom";
     }
   });
+  const [fontSize, setFontSize] = useState<FontSize>(() => {
+    try {
+      const v = localStorage.getItem("tb-font");
+      return v === "sm" || v === "lg" ? v : "md";
+    } catch {
+      return "md";
+    }
+  });
+  const saveFont = (f: FontSize) => {
+    setFontSize(f);
+    try {
+      localStorage.setItem("tb-font", f);
+    } catch {
+      /* לא נשמר */
+    }
+  };
+  useEffect(() => {
+    const el = document.documentElement;
+    const prev = el.style.fontSize;
+    el.style.fontSize = fontSize === "sm" ? "14px" : fontSize === "lg" ? "18px" : "";
+    return () => {
+      el.style.fontSize = prev;
+    };
+  }, [fontSize]);
   const [dockPreview, setDockPreview] = useState<"bottom" | "right" | "left" | null>(null);
   const saveDock = (d: "bottom" | "right" | "left") => {
     setDock(d);
@@ -930,9 +955,9 @@ export default function AdminApp() {
               {curView === "inquiries" ? <SubmissionsView key="inq" {...ctx} forms={["contact", "volunteer", "updates", "assistance"]} title="פניות" /> : null}
               {curView === "kollel" ? <KollelView key={`k-${curTab ?? ""}`} me={me} go={go} initialTab={curTab} /> : null}
               {curView === "payroll" ? <PayrollView me={me} /> : null}
-              {curView === "messages" ? <MessagesView me={me} /> : null}
+              {curView === "messages" ? <MessagesView key={`msg-${mode}`} me={me} mode={mode} /> : null}
               {curView === "bnot" ? <BnotView key={`bn-${curTab ?? ""}`} me={me} initialTab={curTab} /> : null}
-              {curView === "reports" ? <ReportsView /> : null}
+              {curView === "reports" ? <ReportsHub key={`rp-${curTab ?? ""}`} me={me} initialTab={curTab} /> : null}
               {curView === "org" ? <OrgView key={mode} me={me} domain={mode === "boys" ? "kollel" : "bnot"} /> : null}
               {curView === "broadcast" ? <BroadcastView key={`bc-${mode}-${curTab ?? ""}`} me={me} mode={mode} initialTab={curTab} /> : null}
               {curView === "content" ? <ContentView key={`ct-${curTab ?? ""}`} initialSection={curTab} /> : null}
@@ -978,6 +1003,10 @@ export default function AdminApp() {
             setCodeOpen(true);
           }}
           displayMode={shownDisplay}
+          dock={dock}
+          onDock={saveDock}
+          fontSize={fontSize}
+          onFontSize={saveFont}
           onDisplayMode={setPreferredDisplay}
           onGuide={() => {
             setProfileOpen(false);
@@ -1027,6 +1056,10 @@ function Profile({
   onViews,
   displayMode,
   onDisplayMode,
+  dock,
+  onDock,
+  fontSize,
+  onFontSize,
 }: {
   me: Me;
   alerts: Alert[];
@@ -1039,13 +1072,20 @@ function Profile({
   onViews?: () => void;
   displayMode: DisplayMode;
   onDisplayMode: (mode: DisplayMode) => void;
+  dock: "bottom" | "right" | "left";
+  onDock: (d: "bottom" | "right" | "left") => void;
+  fontSize: FontSize;
+  onFontSize: (f: FontSize) => void;
 }) {
   const inst = useInstall();
   const [instMsg, setInstMsg] = useState<string | null>(null);
   const account = me.account ?? me.user;
+  const [open, setOpen] = useState<"name" | "phone" | null>(null);
   const [name, setName] = useState(account.name || "");
   const [phone, setPhone] = useState(account.phone || "");
   const [err, setErr] = useState<string | null>(null);
+  const [ok, setOk] = useState<string | null>(null);
+  const [alertsOpen, setAlertsOpen] = useState(false);
   const [push, setPush] = useState<"on" | "off" | "blocked" | "unsupported" | "busy">("busy");
 
   useEffect(() => {
@@ -1069,9 +1109,12 @@ function Profile({
     }
   };
 
-  const save = async () => {
+  const save = async (what: "name" | "phone") => {
+    setErr(null);
     try {
       await post("/api/auth/profile", { name, phone });
+      setOk(what === "name" ? "השם עודכן ✓" : "הטלפון עודכן ✓");
+      setOpen(null);
       onSaved();
     } catch (e) {
       setErr(e instanceof Error ? e.message : "שגיאה");
@@ -1080,6 +1123,30 @@ function Profile({
 
   const roleText = account.roles.map((r) => me.roleLabels[r]).join(" · ");
   const initial = (account.name || account.email || "?").trim().charAt(0).toUpperCase();
+  const alertTotal = alerts.reduce((n, a) => n + a.count, 0);
+
+  const detailRow = (key: "name" | "phone", icon: IconName, label: string, value: string, input: ReactNode) => (
+    <div className="adm-pf-row">
+      <div className="adm-pf-row__head">
+        <span className="adm-personal__rowicon"><Icon name={icon} /></span>
+        <span className="adm-pf-row__txt">
+          <small>{label}</small>
+          <strong dir={key === "phone" ? "ltr" : undefined}>{value || "לא הוזן"}</strong>
+        </span>
+        <button type="button" className="adm-pf-edit" onClick={() => { setErr(null); setOk(null); setName(account.name || ""); setPhone(account.phone || ""); setOpen(open === key ? null : key); }}>
+          {open === key ? <><Icon name="close" /> ביטול</> : <><Icon name="edit" /> עריכה</>}
+        </button>
+      </div>
+      {open === key ? (
+        <div className="adm-pf-row__form">
+          {input}
+          <button type="button" className="btn btn--sm" onClick={() => save(key)}>
+            <Icon name="check" /> שמירה
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
 
   return (
     <div className="adm-personal-back" role="dialog" aria-modal="true" aria-label="האזור האישי">
@@ -1087,7 +1154,7 @@ function Profile({
         <header className="adm-personal__top">
           <div>
             <span className="adm-eyebrow">החשבון שלי</span>
-            <h1>האזור האישי</h1>
+            <h1>הפרופיל שלי</h1>
           </div>
           <button type="button" className="adm-icon-btn" aria-label="חזרה למערכת" onClick={onClose}>
             <Icon name="close" />
@@ -1099,44 +1166,97 @@ function Profile({
           <div>
             <strong>{account.name || account.email}</strong>
             <span>{roleText}</span>
-            {account.email ? <small dir="ltr">{account.email}</small> : null}
+            {account.phone ? <small dir="ltr">{account.phone}</small> : account.email ? <small dir="ltr">{account.email}</small> : null}
           </div>
         </section>
 
-        <section className="adm-personal__card adm-personal__alerts">
+        {/* התראות - שורה אחת; הרשימה נפתחת רק בלחיצה */}
+        <section className="adm-personal__card adm-personal__hub">
+          <button type="button" className="adm-personal__row" onClick={() => setAlertsOpen(!alertsOpen)} aria-expanded={alertsOpen}>
+            <span className="adm-personal__rowicon"><Icon name="bell" /></span>
+            <span><strong>הודעות והתראות</strong><small>{alertTotal ? `${alertTotal} ממתינות לטיפול` : "אין כרגע"}</small></span>
+            {alertTotal ? <b className="adm-pf-count">{alertTotal}</b> : null}
+            <Icon name="chevronDown" className={`adm-personal__arrow${alertsOpen ? " is-open" : ""}`} />
+          </button>
+          {alertsOpen ? (
+            <div className="adm-personal__alert-list" style={{ padding: "0 10px 10px" }}>
+              {alerts.length ? alerts.map((a) => (
+                <button type="button" className={`adm-personal__alert adm-personal__alert--${a.tone}`} key={a.id} onClick={() => onAlert(a.view, a.tab)}>
+                  <span className="adm-personal__rowicon"><Icon name={a.icon} /></span>
+                  <span><strong>{a.label}</strong></span>
+                  <b>{a.count}</b>
+                  <Icon name="arrowLeft" className="adm-personal__arrow" />
+                </button>
+              )) : <div className="adm-allgood"><Icon name="checkCircle" /> הכל מטופל</div>}
+            </div>
+          ) : null}
+        </section>
+
+        {/* הפרטים שלי - כל שדה נפתח לעריכה רק בלחיצה */}
+        <section className="adm-personal__card">
           <div className="adm-personal__heading">
-            <span className="adm-personal__heading-badge"><Icon name="bell" />{alerts.length ? <b>{alerts.reduce((n, a) => n + a.count, 0)}</b> : null}</span>
-            <div><h2>הודעות והתראות</h2><p>כל מה שמחכה לך במערכת, במקום אחד.</p></div>
+            <span><Icon name="users" /></span>
+            <div><h2>הפרטים שלי</h2><p>מופיעים בתוך המערכת ובתפוצות.</p></div>
           </div>
-          <div className="adm-personal__alert-list">
-            {alerts.length ? alerts.map((a) => (
-              <button type="button" className={`adm-personal__alert adm-personal__alert--${a.tone}`} key={a.id} onClick={() => onAlert(a.view, a.tab)}>
-                <span className="adm-personal__rowicon"><Icon name={a.icon} /></span>
-                <span><strong>{a.label}</strong><small>{a.id === "msgs" ? "פתיחת ההודעות" : "לחיצה למעבר לטיפול"}</small></span>
-                <b>{a.count}</b>
-                <Icon name="arrowLeft" className="adm-personal__arrow" />
-              </button>
-            )) : (
-              <div className="adm-allgood"><Icon name="checkCircle" /> אין הודעות או התראות שממתינות לך</div>
-            )}
-          </div>
+          {detailRow("name", "users", "שם", account.name || "", <input className="input" value={name} onChange={(e) => setName(e.target.value)} autoFocus />)}
+          {detailRow("phone", "phone", "טלפון", account.phone || "", <input className="input" type="tel" dir="ltr" style={{ textAlign: "right" }} value={phone} onChange={(e) => setPhone(e.target.value)} autoFocus />)}
+          {account.email ? (
+            <div className="adm-pf-row">
+              <div className="adm-pf-row__head">
+                <span className="adm-personal__rowicon"><Icon name="mail" /></span>
+                <span className="adm-pf-row__txt"><small>מייל (כניסה עם Google)</small><strong dir="ltr">{account.email}</strong></span>
+              </div>
+            </div>
+          ) : null}
+          {account.kind === "phone" ? (
+            <div className="adm-pf-row">
+              <div className="adm-pf-row__head">
+                <span className="adm-personal__rowicon"><Icon name="lock" /></span>
+                <span className="adm-pf-row__txt"><small>קוד כניסה</small><strong>••••••</strong></span>
+                <button type="button" className="adm-pf-edit" onClick={onCode}><Icon name="edit" /> שינוי קוד</button>
+              </div>
+            </div>
+          ) : null}
+          {err ? <div className="adm-alert adm-alert--error">{err}</div> : null}
+          {ok ? <div className="adm-alert adm-alert--ok">{ok}</div> : null}
         </section>
 
+        {/* העדפות אישיות */}
         <section className="adm-personal__card">
           <div className="adm-personal__heading">
             <span><Icon name="monitor" /></span>
-            <div><h2>תצוגת המערכת</h2><p>בחר איך המערכת תוצג במכשיר הזה.</p></div>
+            <div><h2>העדפות אישיות</h2><p>נשמרות במכשיר הזה.</p></div>
           </div>
-          <div className="adm-display-picker" role="radiogroup" aria-label="תצוגת המערכת">
-            <button type="button" role="radio" aria-checked={displayMode === "auto"} className={displayMode === "auto" ? "is-active" : ""} onClick={() => onDisplayMode("auto")}>
-              <Icon name="refresh" /><span>אוטומטי</span>
-            </button>
-            <button type="button" role="radio" aria-checked={displayMode === "desktop"} className={displayMode === "desktop" ? "is-active" : ""} onClick={() => onDisplayMode("desktop")}>
-              <Icon name="monitor" /><span>מחשב</span>
-            </button>
-            <button type="button" role="radio" aria-checked={displayMode === "mobile"} className={displayMode === "mobile" ? "is-active" : ""} onClick={() => onDisplayMode("mobile")}>
-              <Icon name="smartphone" /><span>פלאפון</span>
-            </button>
+          <div className="adm-pf-pref">
+            <span>מצב תצוגה</span>
+            <div className="adm-display-picker" role="radiogroup" aria-label="מצב תצוגה">
+              {([["auto", "refresh", "אוטומטי"], ["mobile", "smartphone", "פלאפון"], ["desktop", "monitor", "מחשב"]] as const).map(([v, ic, l]) => (
+                <button key={v} type="button" role="radio" aria-checked={displayMode === v} className={displayMode === v ? "is-active" : ""} onClick={() => onDisplayMode(v)}>
+                  <Icon name={ic} /><span>{l}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="adm-pf-pref">
+            <span>גודל כתב</span>
+            <div className="adm-display-picker" role="radiogroup" aria-label="גודל כתב">
+              {([["sm", "קטן", 13], ["md", "רגיל", 16], ["lg", "גדול", 19]] as const).map(([v, l, px]) => (
+                <button key={v} type="button" role="radio" aria-checked={fontSize === v} className={fontSize === v ? "is-active" : ""} onClick={() => onFontSize(v)}>
+                  <b style={{ fontSize: px }}>A</b><span>{l}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="adm-pf-pref">
+            <span>מיקום סרגל הניווט</span>
+            <div className="adm-display-picker" role="radiogroup" aria-label="מיקום סרגל הניווט">
+              {([["right", "ימין"], ["bottom", "למטה"], ["left", "שמאל"]] as const).map(([v, l]) => (
+                <button key={v} type="button" role="radio" aria-checked={dock === v} className={dock === v ? "is-active" : ""} onClick={() => onDock(v)}>
+                  <Icon name="grid" /><span>{l}</span>
+                </button>
+              ))}
+            </div>
+            <small className="muted">אפשר גם לגרור את שש הנקודות לצד המסך.</small>
           </div>
         </section>
 
@@ -1163,20 +1283,11 @@ function Profile({
             <span>
               <strong>התראות למכשיר</strong>
               <small>
-                {push === "on"
-                  ? "פעילות במכשיר הזה"
-                  : push === "blocked"
-                    ? "חסומות בהגדרות הדפדפן"
-                    : push === "unsupported"
-                      ? "לא זמינות במכשיר הזה"
-                      : push === "busy"
-                        ? "בודק..."
-                        : "כבויות — לחיצה להפעלה"}
+                {push === "on" ? "פעילות במכשיר הזה" : push === "blocked" ? "חסומות בהגדרות הדפדפן" : push === "unsupported" ? "לא זמינות במכשיר הזה" : push === "busy" ? "בודק..." : "כבויות — לחיצה להפעלה"}
               </small>
             </span>
             <span className={`adm-switch${push === "on" ? " is-on" : ""}`} aria-hidden="true" />
           </button>
-
           {onViews ? (
             <button type="button" className="adm-personal__row" onClick={onViews}>
               <span className="adm-personal__rowicon"><Icon name="grid" /></span>
@@ -1184,49 +1295,16 @@ function Profile({
               <Icon name="arrowLeft" className="adm-personal__arrow" />
             </button>
           ) : null}
-
           <button type="button" className="adm-personal__row" onClick={onGuide}>
             <span className="adm-personal__rowicon"><Icon name="info" /></span>
             <span><strong>הדרכה למערכת</strong><small>פתיחת ההדרכה הקצרה מחדש</small></span>
             <Icon name="arrowLeft" className="adm-personal__arrow" />
           </button>
-
-          {account.kind === "phone" ? (
-            <button type="button" className="adm-personal__row" onClick={onCode}>
-              <span className="adm-personal__rowicon"><Icon name="lock" /></span>
-              <span><strong>החלפת קוד אישי</strong><small>עדכון קוד הכניסה למערכת</small></span>
-              <Icon name="arrowLeft" className="adm-personal__arrow" />
-            </button>
-          ) : null}
-
           <button type="button" className="adm-personal__row adm-personal__row--logout" onClick={onLogout}>
             <span className="adm-personal__rowicon"><Icon name="logout" /></span>
             <span><strong>התנתקות</strong><small>יציאה מהחשבון במכשיר הזה</small></span>
             <Icon name="arrowLeft" className="adm-personal__arrow" />
           </button>
-        </section>
-
-        <section className="adm-personal__card">
-          <div className="adm-personal__heading">
-            <span><Icon name="users" /></span>
-            <div><h2>פרטי חשבון</h2><p>הפרטים שמופיעים בתוך מערכת הניהול.</p></div>
-          </div>
-          <div className="adm-fields">
-            <label className="field">
-              <span className="field__label">שם</span>
-              <input className="input" value={name} onChange={(e) => setName(e.target.value)} />
-            </label>
-            <label className="field">
-              <span className="field__label">טלפון</span>
-              <input className="input" type="tel" dir="ltr" style={{ textAlign: "right" }} value={phone} onChange={(e) => setPhone(e.target.value)} />
-            </label>
-          </div>
-          {err ? <div className="adm-alert adm-alert--error">{err}</div> : null}
-          <div className="btn-row" style={{ marginTop: 14 }}>
-            <button type="button" className="btn btn--sm" onClick={save}>
-              <Icon name="check" /> שמירת פרטים
-            </button>
-          </div>
         </section>
       </div>
     </div>
