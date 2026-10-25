@@ -114,6 +114,10 @@ async function readBody(req, limit = 64 * 1024) {
 
 const isSecure = (req) => req.headers["x-forwarded-proto"] === "https" || IS_PROD;
 const clientIp = (req) => String(req.headers["x-forwarded-for"] || req.socket.remoteAddress || "").split(",")[0].trim();
+const isLocalRequest = (req) => {
+  const host = String(req.headers.host || "").split(":")[0].toLowerCase();
+  return host === "localhost" || host === "127.0.0.1" || host === "::1";
+};
 
 /** הגנת CSRF בסיסית: בקשות משנות-מצב חייבות להגיע מאותו מקור */
 function sameOrigin(req) {
@@ -281,7 +285,7 @@ async function api(req, res, url) {
     return json(res, 200, {
       googleClientId: GOOGLE_CLIENT_ID || null,
       env: IS_PROD ? "production" : "development",
-      devLogin: DEV_LOGIN,
+      devLogin: DEV_LOGIN && isLocalRequest(req),
       content: await getContent(),
     });
   }
@@ -419,7 +423,7 @@ async function api(req, res, url) {
   }
 
   if (pathname === "/api/auth/dev-login" && method === "POST") {
-    if (!DEV_LOGIN) return json(res, 404, { error: "לא זמין" });
+    if (!DEV_LOGIN || !isLocalRequest(req)) return json(res, 404, { error: "לא זמין" });
     const { email } = await readBody(req);
     const user = await resolveUser(String(email || ""));
     if (!user) return json(res, 403, { error: "אין הרשאה" });
