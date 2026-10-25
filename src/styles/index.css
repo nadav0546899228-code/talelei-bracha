@@ -2503,3 +2503,72 @@ html.a11y-no-motion *::after {
 .mitch-share__error>svg{color:#a3473f}.mitch-share__success>svg{color:#2b8956}
 .mitch-share__error span,.mitch-share__success span{color:#7a888a;font-size:.86rem;line-height:1.5}
 .mitch-share__success .btn{margin-top:8px}
+
+
+/* ===== Two-site public gateway ===== */
+.public-gateway{
+  min-height:calc(100svh - 76px);display:grid;align-items:center;padding:clamp(34px,6vw,74px) 0;
+  background:
+    radial-gradient(760px 420px at 92% 12%,rgba(30,139,143,.13),transparent 66%),
+    radial-gradient(720px 420px at 8% 88%,rgba(181,49,101,.10),transparent 68%),
+    #f8fbfa;
+}
+.public-gateway__inner{display:grid;gap:30px}
+.public-gateway__head{text-align:center;max-width:720px;margin-inline:auto}
+.public-gateway__head>span{font-weight:850;color:#5a7d7f;font-size:.88rem}
+.public-gateway__head h1{font-size:clamp(2.2rem,5vw,4.25rem);letter-spacing:-.04em;line-height:1.04;margin:6px 0 10px;color:#173d40}
+.public-gateway__head p{margin:0;color:#738587;font-size:1.02rem}
+.public-gateway__choices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.public-choice{
+  position:relative;min-width:0;min-height:430px;padding:34px;border-radius:34px;overflow:hidden;
+  display:grid;grid-template-rows:190px 1fr;text-decoration:none;color:#183d40;
+  background:rgba(255,255,255,.94);border:1px solid rgba(20,87,91,.10);
+  box-shadow:0 22px 55px rgba(18,60,64,.09);transition:transform .22s ease,box-shadow .22s ease,border-color .22s ease;
+}
+.public-choice:hover{transform:translateY(-5px);box-shadow:0 30px 70px rgba(18,60,64,.14);border-color:rgba(22,116,120,.24)}
+.public-choice__glow{position:absolute;width:280px;height:280px;border-radius:50%;top:-120px;left:-80px;background:rgba(39,150,153,.12);pointer-events:none}
+.public-choice--bnot .public-choice__glow{background:rgba(181,49,101,.12)}
+.public-choice__logo{display:grid;place-items:center;min-width:0}
+.public-choice__logo .logo{width:min(270px,90%)!important;height:150px!important;aspect-ratio:auto!important}
+.public-choice__logo .logo picture,.public-choice__logo .logo img{width:100%;height:100%;object-fit:contain}
+.public-choice__copy{align-self:end;position:relative;z-index:1}
+.public-choice__copy h2{font-size:clamp(1.75rem,3vw,2.55rem);margin:4px 0 8px;letter-spacing:-.025em}
+.public-choice__copy p{color:#6d8183;line-height:1.65;margin:0 0 20px}
+.public-choice__enter{display:inline-flex;align-items:center;gap:7px;font-weight:850;color:#167579}
+.public-choice--bnot .public-choice__enter{color:#a43863}
+.public-choice__enter svg{width:18px;height:18px}
+.public-gateway__staff{text-align:center}
+.public-gateway__staff a{display:inline-flex;align-items:center;gap:6px;color:#7b898b;font-size:.82rem;text-decoration:none}
+.public-gateway__staff svg{width:15px;height:15px}
+
+/* Brand-specific header */
+.brand-mark--kollel,.brand-mark--bnot{min-width:132px;justify-content:flex-start}
+.brand-mark--kollel .logo,.brand-mark--bnot .logo{width:118px!important;height:50px!important}
+.brand-mark--kollel .logo picture,.brand-mark--kollel .logo img,
+.brand-mark--bnot .logo picture,.brand-mark--bnot .logo img{width:100%;height:100%;object-fit:contain}
+.site-mode-switch{
+  min-height:38px;padding:4px 9px;display:flex;align-items:center;gap:7px;border:1px solid rgba(20,83,87,.10);
+  border-radius:12px;background:#fff;text-decoration:none;color:#536d6f;font-size:.72rem;font-weight:800;white-space:nowrap;
+}
+.site-mode-switch .logo{width:42px!important;height:28px!important;aspect-ratio:auto!important}
+.site-mode-switch .logo picture,.site-mode-switch .logo img{width:100%;height:100%;object-fit:contain}
+
+@media(max-width:899px){
+  .public-gateway__choices{grid-template-columns:1fr}
+  .public-choice{min-height:350px;grid-template-rows:150px 1fr}
+}
+@media(max-width:620px){
+  .public-gateway{min-height:calc(100svh - 66px);padding:24px 0 34px}
+  .public-gateway__inner{gap:22px}
+  .public-gateway__head p{font-size:.92rem}
+  .public-gateway__choices{gap:11px}
+  .public-choice{min-height:300px;padding:22px;border-radius:25px;grid-template-rows:125px 1fr}
+  .public-choice__logo .logo{height:115px!important}
+  .public-choice__copy h2{font-size:1.65rem}
+  .public-choice__copy p{font-size:.88rem;margin-bottom:14px}
+  .site-mode-switch span{display:none}
+  .site-mode-switch{width:42px;padding:3px;justify-content:center}
+  .site-mode-switch .logo{width:34px!important}
+  .brand-mark--kollel,.brand-mark--bnot{min-width:92px}
+  .brand-mark--kollel .logo,.brand-mark--bnot .logo{width:92px!important;height:42px!important}
+}
