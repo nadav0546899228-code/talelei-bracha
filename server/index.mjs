@@ -934,9 +934,15 @@ async function api(req, res, url) {
         if (body.assignedMentorId) {
           const mentor = await store.get("submissions", String(body.assignedMentorId));
           if (!mentor || mentor.form !== "ishaMentor" || mentor.status !== "approved") return send(400, { error: "ניתן לשבץ רק מלווה מאושרת" });
+          next.assignedMentorId = String(body.assignedMentorId);
+          next.assignedAt = new Date().toISOString();
+          if (next.status === "new") next.status = "in_progress";
+        } else {
+          next.assignedMentorId = null;
+          next.assignedAt = null;
         }
-        next.assignedMentorId = body.assignedMentorId || null;
         changes.assignedMentorId = next.assignedMentorId;
+        changes.status = next.status;
       }
       await store.put("submissions", sub.id, next);
       await audit(user, "עדכון פנייה", `${sub.form}:${sub.id.slice(0, 8)}`, changes);
