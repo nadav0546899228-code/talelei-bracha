@@ -81,7 +81,7 @@ export function BroadcastView({ me, mode, initialTab }: { me: Me; mode: Mode; in
       ) : null}
       {tab === "send" ? <SendTab setup={setup} me={me} reload={load} /> : null}
       {tab === "history" ? <HistoryTab /> : null}
-      {tab === "contacts" ? <ContactsTab onChange={load} /> : null}
+      {tab === "contacts" && setup.canContacts ? <ContactsTab onChange={load} /> : null}
     </>
   );
 }

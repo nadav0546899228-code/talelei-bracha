@@ -11,7 +11,7 @@ export const MODE_LABELS: Record<Mode, string> = { boys: "טללי ברכה", gi
 /** מסך = תצוגה + לשונית פנימית אופציונלית, או מסך כפתור-על */
 export type Screen = { view: View; tab?: string } | { hub: string };
 
-export type NavLeaf = { id: string; label: string; icon: IconName; view: View; tab?: string; hint?: string; badgeForms?: FormKey[]; badgeMessages?: boolean };
+export type NavLeaf = { id: string; label: string; icon: IconName; view: View; tab?: string; hint?: string; badgeForms?: FormKey[]; badgeMessages?: boolean; onlyRoles?: string[] };
 export type NavHub = { id: string; label: string; icon: IconName; items: NavLeaf[] };
 export type NavEntry = { id: string; label: string; icon: IconName; hub?: NavHub; leaf?: NavLeaf };
 
@@ -44,7 +44,7 @@ function tree(mode: Mode): NavHub[] {
       leaf("inquiries", "פניות מהאתר", "inbox", "inquiries", { badgeForms: INQ, hint: "צור קשר, התנדבות, עדכונים וסיוע" }),
       leaf("bc-send", "שליחת תפוצה", "phone", "broadcast", { tab: "send", hint: "קולית, צינתוק, SMS, וואטסאפ, מייל" }),
       leaf("bc-history", "היסטוריית תפוצה", "clock", "broadcast", { tab: "history" }),
-      leaf("bc-contacts", "אנשי קשר", "users", "broadcast", { tab: "contacts" }),
+      leaf("bc-contacts", "אנשי קשר", "users", "broadcast", { tab: "contacts", onlyRoles: ["ceo", "developer", "office"] }),
     ] },
   };
   if (mode === "boys") {
@@ -106,7 +106,7 @@ export function modesFor(me: Me): Mode[] {
 export function hubsFor(me: Me, mode: Mode): NavHub[] {
   const v = me.user.views;
   return tree(mode)
-    .map((h) => ({ ...h, items: h.items.filter((i) => v.includes(i.view)) }))
+    .map((h) => ({ ...h, items: h.items.filter((i) => v.includes(i.view) && (!i.onlyRoles || i.onlyRoles.some((r) => me.user.roles.includes(r as never)))) }))
     .filter((h) => h.items.length);
 }
 
