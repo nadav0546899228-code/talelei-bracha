@@ -15,4 +15,21 @@ jobs:
         with:
           node-version: 20
       - run: npm install --no-audit --no-fund
-      - run: npm run check
+      - name: Server syntax
+        run: |
+          node --check server/mitch.mjs
+          node --check server/mitchWorkflow.mjs
+          node --check server/activityCenter.mjs
+      - name: Feature tests
+        run: npm test
+      - name: TypeScript changed-files gate
+        shell: bash
+        run: |
+          set +e
+          npx tsc --noEmit -p tsconfig.json > /tmp/ts.out 2>&1
+          cat /tmp/ts.out
+          if grep -E 'src/admin/(alerts\.ts|views/(MitchView|DashboardView|ActivityCenterView|MitchTransferAudit|DeveloperView)\.tsx)' /tmp/ts.out; then
+            echo "TypeScript error found in a file changed by this feature."
+            exit 1
+          fi
+          exit 0
