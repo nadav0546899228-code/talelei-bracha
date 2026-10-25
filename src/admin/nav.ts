@@ -36,6 +36,7 @@ function tree(mode: Mode): NavHub[] {
   };
   const common = {
     home: { id: "home", label: "בית", icon: "grid" as IconName, items: [leaf("dashboard", "לוח בקרה", "grid", "dashboard")] },
+    activity: { id: "activity-center", label: "פעילות", icon: "calendar" as IconName, items: [leaf("activity", "לוח פעילות ארצי", "calendar", "activity", { hint: "לוח שנה, שעות ומפת הפעילות בארץ" })] },
     /** תקשורת: הודעות פנימיות + תפוצה + פניות מהאתר - כפתור אחד */
     comm: { id: "comm", label: "תקשורת", icon: "chat" as IconName, items: [
       leaf("messages", "הודעות פנימיות", "chat", "messages", { hint: "בין המנכ״ל, הרכזים ומנהלי הסניפים", badgeMessages: true }),
@@ -48,6 +49,7 @@ function tree(mode: Mode): NavHub[] {
   if (mode === "boys") {
     return [
       common.home,
+      common.activity,
       {
         id: "kollel",
         label: "כולל ערב",
@@ -68,6 +70,7 @@ function tree(mode: Mode): NavHub[] {
   }
   return [
     common.home,
+    common.activity,
     {
       id: "bnot",
       label: "בנות צילה",
