@@ -678,6 +678,20 @@ async function api(req, res, url) {
     }
   }
 
+  // ---- נתוני דמה גם באתר המפורסם (מתכנת בלבד): הוספה וניקוי. רק רשומות demo- נוגעות
+  if ((pathname === "/api/admin/demo/seed" || pathname === "/api/admin/demo/clear") && method === "POST") {
+    if (!can("developer")) return send(403, { error: "אין הרשאה" });
+    const { seedDemo, clearDemo } = await import("./demoSeed.mjs");
+    if (pathname.endsWith("seed")) {
+      await seedDemo(store);
+      await audit(user, "הוספת נתוני דמה");
+      return send(200, { ok: true });
+    }
+    const n = await clearDemo(store, BACKUP_COLLECTIONS);
+    await audit(user, "ניקוי נתוני דמה", `${n} רשומות`);
+    return send(200, { ok: true, removed: n });
+  }
+
   // ---- איפוס נתוני הדמה (אתר פיתוח בלבד)
   if (pathname === "/api/admin/demo/reset" && method === "POST") {
     if (!DEMO || !can("developer")) return send(403, { error: "זמין רק באתר הפיתוח" });

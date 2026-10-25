@@ -72,6 +72,52 @@ export function DevExtras() {
         </div>
       </section>
 
+      {!runtime.demo ? (
+        <section className="adm-panel">
+          <div className="adm-panel__head">
+            <h2>
+              <Icon name="sparkle" width={20} height={20} style={{ verticalAlign: "-4px" }} /> נתוני דמה
+            </h2>
+            <span className="adm-item__actions">
+              <button
+                type="button"
+                className="btn btn--sm"
+                disabled={busy}
+                onClick={async () => {
+                  if (!window.confirm("להוסיף נתוני דמה לאתר? הנתונים האמיתיים לא נמחקים, ואפשר לנקות את הדמה בכל רגע.")) return;
+                  setBusy(true);
+                  await post("/api/admin/demo/seed", {}).catch((e) => setMsg({ ok: false, text: e.message }));
+                  window.location.reload();
+                }}
+              >
+                <Icon name="plus" /> הוספה
+              </button>
+              <button
+                type="button"
+                className="btn btn--ghost btn--sm"
+                disabled={busy}
+                onClick={async () => {
+                  if (!window.confirm("למחוק את כל נתוני הדמה? נתונים אמיתיים לא יימחקו.")) return;
+                  setBusy(true);
+                  try {
+                    const r = await post<{ removed: number }>("/api/admin/demo/clear", {});
+                    setMsg({ ok: true, text: `נמחקו ${r.removed} רשומות דמה` });
+                  } catch (e) {
+                    setMsg({ ok: false, text: e instanceof Error ? e.message : "שגיאה" });
+                  }
+                  setBusy(false);
+                }}
+              >
+                <Icon name="trash" /> ניקוי
+              </button>
+            </span>
+          </div>
+          <p className="muted" style={{ margin: 0 }}>
+            כל רשומות הדמה מסומנות "(דמה)". רכזים לדוגמה: טלפון 0500000100 עד 0500000104, קוד 1234.
+          </p>
+        </section>
+      ) : null}
+
       {runtime.demo ? (
         <section className="adm-panel">
           <div className="adm-panel__head">

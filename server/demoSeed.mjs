@@ -52,11 +52,10 @@ export async function seedDemo(store) {
     });
   }
 
-  await store.put("kollelSettings", "main", {
-    fullBase: 1500,
-    simchaRates: { bat: 10, ben: 30, barmitzva: 50 },
-    absenceRate: 25
-  });
+  // הגדרות - רק אם עדיין אין (לא דורסים הגדרות אמיתיות)
+  if (!(await store.get("kollelSettings", "main"))) {
+    await store.put("kollelSettings", "main", { fullBase: 1500, simchaRates: { bat: 10, ben: 30, barmitzva: 50 }, absenceRate: 0 });
+  }
 
   const rows = (rate) => Object.fromEntries(avIds.map((id,i)=>[id,{
     base: i%9===0 ? 1200 : null,
@@ -187,4 +186,18 @@ export async function seedDemo(store) {
     readBy: [],
     deletedBy: [],
   });
+}
+
+/** מחיקת נתוני הדמה בלבד (כל מזהה שמתחיל ב-demo-). נתונים אמיתיים לא נמחקים */
+export async function clearDemo(store, collections) {
+  let n = 0;
+  for (const c of collections) {
+    for (const d of await store.list(c, 100000)) {
+      if (String(d.id).startsWith("demo-") || d.demo === true) {
+        await store.del(c, d.id);
+        n++;
+      }
+    }
+  }
+  return n;
 }
