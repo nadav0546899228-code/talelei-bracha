@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Icon, type IconName } from "../components/Icon";
 import { api, type View } from "./api";
+import { Person360, type PersonKind } from "./Person360";
 
 type Result = { kind: string; id: string; title: string; sub?: string; view: View; tab?: string };
 const KIND: Record<string, { label: string; icon: IconName }> = {
@@ -12,11 +13,14 @@ const KIND: Record<string, { label: string; icon: IconName }> = {
   staff: { label: "צוות", icon: "users" },
   contact: { label: "איש קשר", icon: "phone" },
   donation: { label: "תרומה", icon: "gift" },
+  smart: { label: "תוצאה חכמה", icon: "sparkle" },
+  activity: { label: "פעילות", icon: "calendar" },
 };
 
 export function SearchModal({ onClose, onGo }: { onClose: () => void; onGo: (v: View, tab?: string) => void }) {
   const [q, setQ] = useState("");
   const [res, setRes] = useState<Result[] | null>(null);
+  const [person, setPerson] = useState<{ kind: PersonKind; id: string } | null>(null);
   const seq = useRef(0);
   useEffect(() => {
     const t = q.trim();
@@ -37,7 +41,7 @@ export function SearchModal({ onClose, onGo }: { onClose: () => void; onGo: (v: 
       <div className="adm-modal adm-searchbox" onClick={(e) => e.stopPropagation()}>
         <div className="adm-searchbox__bar">
           <Icon name="search" />
-          <input className="input" autoFocus type="search" placeholder="חיפוש שם, טלפון או מייל" value={q} onChange={(e) => setQ(e.target.value)} aria-label="חיפוש" />
+          <input className="input" autoFocus type="search" placeholder="שם, טלפון, עיר או שאלה כמו: מי לא קיבל שיחה השבוע?" value={q} onChange={(e) => setQ(e.target.value)} aria-label="חיפוש" />
           <button type="button" className="adm-icon-btn" aria-label="סגירה" onClick={onClose}>
             <Icon name="close" />
           </button>
@@ -49,6 +53,10 @@ export function SearchModal({ onClose, onGo }: { onClose: () => void; onGo: (v: 
               type="button"
               className="adm-pop__item"
               onClick={() => {
+                if (["avrech", "mitch", "member", "submission"].includes(r.kind)) {
+                  setPerson({ kind: r.kind as PersonKind, id: r.id });
+                  return;
+                }
                 onClose();
                 onGo(r.view, r.tab);
               }}
@@ -64,6 +72,7 @@ export function SearchModal({ onClose, onGo }: { onClose: () => void; onGo: (v: 
           {res && !res.length ? <p className="muted" style={{ textAlign: "center" }}>לא נמצא</p> : null}
         </div>
       </div>
+      {person ? <Person360 kind={person.kind} id={person.id} onClose={() => setPerson(null)} onGo={(v, t) => { setPerson(null); onClose(); onGo(v, t); }} /> : null}
     </div>
   );
 }
