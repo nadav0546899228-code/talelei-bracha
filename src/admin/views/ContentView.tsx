@@ -16,13 +16,16 @@ const SCHEMAS: Record<"lessons" | "events" | "projects" | "impactStats" | "testi
   lessons: {
     label: "שיעורים ותוכן",
     title: (x) => String(x.title || "שיעור חדש"),
-    blank: () => ({ id: crypto.randomUUID(), title: "", type: "video", topic: "", speaker: null, brand: "tb", date: null, youtubeId: "", url: "", summary: "" }),
+    blank: () => ({ id: crypto.randomUUID(), title: "", type: "video", topic: "", speaker: null, brand: "tb", date: null, location: null, address: null, youtubeId: "", url: "", summary: "" }),
     fields: [
       { key: "title", label: "כותרת" },
       { key: "type", label: "סוג", type: "select", options: [{ v: "video", l: "וידאו" }, { v: "audio", l: "אודיו" }, { v: "article", l: "מאמר" }] },
       { key: "topic", label: "נושא" },
       { key: "speaker", label: "מרצה/ה" },
       { key: "brand", label: "שייך ל", type: "select", options: BRAND },
+      { key: "date", label: "מועד שיעור (אופציונלי - יופיע בלוח הפעילות)", type: "datetime" },
+      { key: "location", label: "מקום השיעור" },
+      { key: "address", label: "כתובת השיעור" },
       { key: "youtubeId", label: "מזהה סרטון ביוטיוב", ltr: true, hint: "החלק שאחרי v= בקישור" },
       { key: "url", label: "קישור לאודיו/מאמר", type: "url" },
       { key: "summary", label: "תקציר", type: "textarea" },
