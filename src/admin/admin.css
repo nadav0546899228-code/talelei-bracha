@@ -2229,3 +2229,108 @@
 
 .adm-scope-chip{display:inline-flex;align-items:center;gap:5px;min-height:29px;padding:3px 10px;border-radius:999px;background:#edf5f4;color:#406467;font-size:.82rem;font-weight:700}
 .adm[data-mode="girls"] .adm-scope-chip{background:#fbe9f0;color:#8d3158}
+
+
+/* ---------- אזור אישי ---------- */
+.adm-personal-back{
+  position:fixed;inset:0;z-index:150;overflow:auto;background:#f4f7f7;
+}
+.adm-personal{
+  width:min(720px,100%);min-height:100%;margin:0 auto;padding:28px 20px 56px;
+}
+.adm-personal__top{
+  display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:18px;
+}
+.adm-personal__top h1{margin:8px 0 0;font-size:clamp(1.8rem,4vw,2.45rem);color:#17383b}
+.adm-personal__top .adm-eyebrow{background:#e8f4f3;border:0;color:#277a7c}
+.adm-personal__profile{
+  display:flex;align-items:center;gap:16px;padding:20px;margin-bottom:16px;border-radius:22px;
+  color:#fff;background:radial-gradient(circle at 88% 15%,rgba(255,255,255,.18),transparent 14rem),linear-gradient(135deg,#174c50,#0c3438);
+  box-shadow:0 16px 42px rgba(12,52,56,.16);
+}
+.adm[data-mode="girls"] .adm-personal__profile{
+  background:radial-gradient(circle at 88% 15%,rgba(255,255,255,.16),transparent 14rem),linear-gradient(135deg,#7d244d,#4c1f38);
+}
+.adm-personal__profile img,.adm-personal__avatar{
+  width:64px;height:64px;border-radius:50%;object-fit:cover;display:grid;place-items:center;flex:none;
+  background:rgba(255,255,255,.15);border:2px solid rgba(255,255,255,.28);font-size:1.4rem;font-weight:800;color:#fff;
+}
+.adm-personal__profile>div{min-width:0}.adm-personal__profile strong,.adm-personal__profile span,.adm-personal__profile small{display:block}
+.adm-personal__profile strong{font-size:1.2rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.adm-personal__profile span{margin-top:4px;color:rgba(255,255,255,.72);font-size:.86rem;font-weight:700}
+.adm-personal__profile small{margin-top:5px;color:rgba(255,255,255,.58);font-size:.76rem}
+.adm-personal__card{
+  overflow:hidden;margin-bottom:16px;padding:20px;border-radius:22px;background:#fff;border:1px solid rgba(18,58,62,.09);box-shadow:0 8px 28px rgba(19,52,55,.055);
+}
+.adm-personal__heading{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+.adm-personal__heading>span{width:42px;height:42px;display:grid;place-items:center;border-radius:13px;background:#eaf5f4;color:#267b7d;flex:none}
+.adm[data-mode="girls"] .adm-personal__heading>span{background:#fbe9f0;color:#a43764}
+.adm-personal__heading svg{width:20px;height:20px}.adm-personal__heading h2{margin:0;font-size:1rem}
+.adm-personal__heading p{margin:2px 0 0;color:#7a888a;font-size:.8rem}
+.adm-display-picker{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:5px;border-radius:16px;background:#f1f5f5}
+.adm-display-picker button{
+  min-height:70px;border:0;border-radius:13px;background:transparent;color:#6d7b7d;font:inherit;font-weight:800;cursor:pointer;
+  display:grid;place-items:center;align-content:center;gap:5px;transition:.16s ease;
+}
+.adm-display-picker button svg{width:21px;height:21px}
+.adm-display-picker button.is-active{background:#fff;color:#1d676a;box-shadow:0 4px 14px rgba(18,58,62,.09)}
+.adm[data-mode="girls"] .adm-display-picker button.is-active{color:#9a365f}
+.adm-personal__hub{padding:0}
+.adm-personal__row{
+  width:100%;min-height:68px;padding:12px 16px;border:0;border-bottom:1px solid rgba(18,58,62,.08);background:#fff;
+  display:flex;align-items:center;gap:12px;text-align:start;font:inherit;color:inherit;cursor:pointer;
+}
+.adm-personal__row:last-child{border-bottom:0}.adm-personal__row:hover{background:#f9fbfb}.adm-personal__row:disabled{cursor:default;opacity:.7}
+.adm-personal__rowicon{width:40px;height:40px;display:grid;place-items:center;border-radius:13px;background:#eef6f5;color:#267b7d;flex:none}
+.adm-personal__rowicon svg{width:19px;height:19px}
+.adm-personal__row>span:nth-child(2){flex:1;min-width:0}
+.adm-personal__row strong,.adm-personal__row small{display:block}.adm-personal__row strong{font-size:.92rem;color:#203d40}
+.adm-personal__row small{margin-top:2px;color:#849092;font-size:.76rem}.adm-personal__arrow{width:16px;height:16px;color:#aeb9ba;flex:none}
+.adm-personal__row--logout .adm-personal__rowicon{background:#fff0ed;color:#b83b2d}.adm-personal__row--logout strong{color:#9e3026}
+.adm-personal__row .adm-switch{flex:none}
+@media(max-width:600px){
+  .adm-personal{padding:18px 12px 38px}.adm-personal__top{align-items:center}.adm-personal__card{border-radius:18px;padding:16px}
+  .adm-personal__hub{padding:0}.adm-personal__profile{border-radius:20px;padding:17px}
+  .adm-display-picker button{min-height:64px;font-size:.8rem}
+}
+
+/* ---------- תצוגה ידנית: פלאפון ---------- */
+.adm[data-display="mobile"]{
+  width:min(430px,100vw);min-height:100vh;margin:0 auto;box-shadow:0 0 48px rgba(10,41,45,.14);
+}
+.adm[data-display="mobile"] .adm-layout{grid-template-columns:1fr!important}
+.adm[data-display="mobile"] .adm-side{display:none!important}
+.adm[data-display="mobile"] .adm-tabs{
+  display:flex!important;width:min(430px,100vw);inset-inline:auto!important;left:50%;right:auto;transform:translateX(-50%);
+}
+.adm[data-display="mobile"] .adm-main{padding:14px 12px 102px!important;max-width:100%!important}
+.adm[data-display="mobile"] .adm-top{height:62px!important;padding-inline:10px!important;gap:8px!important}
+.adm[data-display="mobile"] .adm-user__meta{display:none!important}
+.adm[data-display="mobile"] .adm-dashboard{gap:12px!important}
+.adm[data-display="mobile"] .adm-dashboard-hero{min-height:172px!important;border-radius:22px!important;padding:22px 18px!important;display:grid!important;align-items:end!important}
+.adm[data-display="mobile"] .adm-dashboard-hero h1{font-size:1.8rem!important}
+.adm[data-display="mobile"] .adm-dashboard-hero__summary{width:100%!important}
+.adm[data-display="mobile"] .adm-dashboard-hero__summary>div{min-width:0!important;flex:1!important;padding:10px 12px!important;border-radius:14px!important}
+.adm[data-display="mobile"] .adm-dashboard-section{padding:15px!important;border-radius:18px!important}
+.adm[data-display="mobile"] .adm-priority-grid,.adm[data-display="mobile"] .adm-metrics{grid-template-columns:1fr!important}
+.adm[data-display="mobile"] .adm-split{grid-template-columns:1fr!important}
+.adm[data-display="mobile"] .adm-detail{position:static!important}
+.adm[data-display="mobile"] .adm-help{display:none!important}
+
+/* ---------- תצוגה ידנית: מחשב ---------- */
+.adm[data-display="desktop"]{min-width:1120px}
+.adm[data-display="desktop"] .adm-layout{grid-template-columns:268px minmax(0,1fr)!important}
+.adm[data-display="desktop"] .adm-tabs{display:none!important}
+.adm[data-display="desktop"] .adm-side{
+  display:block!important;position:sticky!important;top:72px!important;height:calc(100vh - 72px)!important;
+  padding:20px 14px!important;background:radial-gradient(circle at 80% 5%,rgba(255,255,255,.07),transparent 15rem),linear-gradient(180deg,var(--adm-navy),var(--adm-navy-deep))!important;
+  border-inline-end:0!important;box-shadow:8px 0 30px rgba(10,41,45,.08)!important;overflow-y:auto;
+}
+.adm[data-display="desktop"] .adm-main{padding:34px 38px 70px!important;max-width:1360px!important}
+.adm[data-display="desktop"] .adm-top{height:72px!important;padding-inline:20px!important}
+.adm[data-display="desktop"] .adm-user__meta{display:block!important}
+.adm[data-display="desktop"] .adm-side .adm-tab,.adm[data-display="desktop"] .adm-side .adm-side__hub{color:rgba(255,255,255,.78)!important}
+.adm[data-display="desktop"] .adm-side .adm-tab svg,.adm[data-display="desktop"] .adm-side .adm-side__hub svg{color:rgba(255,255,255,.60)!important}
+.adm[data-display="desktop"] .adm-side .adm-tab[aria-current="page"],.adm[data-display="desktop"] .adm-side .adm-side__hub[aria-current="page"]{color:#fff!important;background:rgba(255,255,255,.11)!important}
+.adm[data-display="desktop"] .adm-priority-grid,.adm[data-display="desktop"] .adm-metrics{grid-template-columns:repeat(4,minmax(0,1fr))!important}
+.adm[data-display="desktop"] .adm-dashboard-columns{grid-template-columns:minmax(0,1.45fr) minmax(300px,.75fr)!important}
