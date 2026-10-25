@@ -36,6 +36,7 @@ import { KollelView } from "./views/KollelView";
 import { PayrollView } from "./views/PayrollView";
 import { BroadcastView } from "./views/BroadcastView";
 import { useLive, useLiveConnection } from "./live";
+import { useInstall } from "./install";
 
 
 /* ------------------------------------------------------------------ כניסה */
@@ -264,6 +265,34 @@ export default function AdminApp() {
   const [codeOpen, setCodeOpen] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
   const [displayMode, setDisplayMode] = useState<DisplayMode>("auto");
+  // בפלאפון לא מציגים תצוגת מחשב גם אם נבחרה בעבר (אחרת המסך נחתך)
+  const [narrow, setNarrow] = useState(() => window.matchMedia("(max-width: 899px)").matches);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 899px)");
+    const on = () => setNarrow(mq.matches);
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
+  const appInst = useInstall();
+  const [instHide, setInstHide] = useState(() => {
+    try {
+      return localStorage.getItem("tb-inst-hide") === "1";
+    } catch {
+      return false;
+    }
+  });
+  const [instHelp, setInstHelp] = useState<string | null>(null);
+  const shownDisplay: DisplayMode = narrow && displayMode === "desktop" ? "auto" : displayMode;
+  // אפליקציית הניהול נפתחת ישר למערכת (ולא לאתר הציבורי)
+  useEffect(() => {
+    const link = document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
+    if (!link) return;
+    const prev = link.href;
+    link.href = "/admin.webmanifest";
+    return () => {
+      link.href = prev;
+    };
+  }, []);
   const [barSorting, setBarSorting] = useState(false);
   const [draggingBarId, setDraggingBarId] = useState<string | null>(null);
   const barPressTimer = useRef<number | null>(null);
@@ -648,7 +677,7 @@ export default function AdminApp() {
   const unreadMessages = dash.active.find((a) => a.id === "msgs")?.count ?? 0;
 
   return (
-    <div className="adm" data-mode={mode} data-display={displayMode}>
+    <div className="adm" data-mode={mode} data-display={shownDisplay}>
       <header className="adm-top">
         <button type="button" className="adm-icon-btn adm-top-menu-btn" onClick={() => setAppMenuOpen(true)} aria-label="פתיחת תפריט המערכת" title="תפריט המערכת">
           <Icon name="menu" />
@@ -821,6 +850,39 @@ export default function AdminApp() {
           </div>
         </aside>
         <main className="adm-main" id="main" tabIndex={-1}>
+          {narrow && !appInst.installed && !instHide ? (
+            <div className="adm-install">
+              <Icon name="smartphone" />
+              <span>{instHelp || "להתקין כאפליקציה?"}</span>
+              {!instHelp ? (
+                <button
+                  type="button"
+                  className="adm-install__go"
+                  onClick={async () => {
+                    const r = await appInst.install();
+                    if (r === "manual") setInstHelp(appInst.manualText);
+                  }}
+                >
+                  התקנה
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className="adm-install__x"
+                aria-label="סגירה"
+                onClick={() => {
+                  setInstHide(true);
+                  try {
+                    localStorage.setItem("tb-inst-hide", "1");
+                  } catch {
+                    /* לא נשמר */
+                  }
+                }}
+              >
+                <Icon name="close" width={16} height={16} />
+              </button>
+            </div>
+          ) : null}
           {"hub" in current ? (
             <HubView hub={hubs.find((h) => h.id === current.hub)!} badge={leafBadge} onOpen={openLeaf} />
           ) : (
@@ -880,7 +942,8 @@ export default function AdminApp() {
             setProfileOpen(false);
             setCodeOpen(true);
           }}
-          displayMode={displayMode}
+          displayMode={shownDisplay}
+          narrow={narrow}
           onDisplayMode={setPreferredDisplay}
           onGuide={() => {
             setProfileOpen(false);
@@ -930,6 +993,7 @@ function Profile({
   onViews,
   displayMode,
   onDisplayMode,
+  narrow,
 }: {
   me: Me;
   alerts: Alert[];
@@ -942,7 +1006,10 @@ function Profile({
   onViews?: () => void;
   displayMode: DisplayMode;
   onDisplayMode: (mode: DisplayMode) => void;
+  narrow: boolean;
 }) {
+  const inst = useInstall();
+  const [instMsg, setInstMsg] = useState<string | null>(null);
   const account = me.account ?? me.user;
   const [name, setName] = useState(account.name || "");
   const [phone, setPhone] = useState(account.phone || "");
@@ -1032,9 +1099,11 @@ function Profile({
             <button type="button" role="radio" aria-checked={displayMode === "auto"} className={displayMode === "auto" ? "is-active" : ""} onClick={() => onDisplayMode("auto")}>
               <Icon name="refresh" /><span>אוטומטי</span>
             </button>
-            <button type="button" role="radio" aria-checked={displayMode === "desktop"} className={displayMode === "desktop" ? "is-active" : ""} onClick={() => onDisplayMode("desktop")}>
-              <Icon name="monitor" /><span>מחשב</span>
-            </button>
+            {!narrow ? (
+              <button type="button" role="radio" aria-checked={displayMode === "desktop"} className={displayMode === "desktop" ? "is-active" : ""} onClick={() => onDisplayMode("desktop")}>
+                <Icon name="monitor" /><span>מחשב</span>
+              </button>
+            ) : null}
             <button type="button" role="radio" aria-checked={displayMode === "mobile"} className={displayMode === "mobile" ? "is-active" : ""} onClick={() => onDisplayMode("mobile")}>
               <Icon name="smartphone" /><span>פלאפון</span>
             </button>
@@ -1042,6 +1111,23 @@ function Profile({
         </section>
 
         <section className="adm-personal__card adm-personal__hub">
+          {!inst.installed ? (
+            <button
+              type="button"
+              className="adm-personal__row"
+              onClick={async () => {
+                const r = await inst.install();
+                if (r === "manual") setInstMsg(inst.manualText);
+              }}
+            >
+              <span className="adm-personal__rowicon"><Icon name="smartphone" /></span>
+              <span>
+                <strong>התקנת האפליקציה</strong>
+                <small>{instMsg || "אייקון במסך הבית, נפתח ישר למערכת"}</small>
+              </span>
+              <Icon name="download" className="adm-personal__arrow" />
+            </button>
+          ) : null}
           <button type="button" className="adm-personal__row" onClick={togglePush} disabled={push === "busy" || push === "unsupported" || push === "blocked"}>
             <span className="adm-personal__rowicon"><Icon name="bell" /></span>
             <span>

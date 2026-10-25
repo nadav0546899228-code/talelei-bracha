@@ -1,0 +1,19 @@
+{
+  "id": "/admin",
+  "name": "מערכת ניהול · טללי ברכה ובנות צילה",
+  "short_name": "ניהול טללי ברכה",
+  "description": "מערכת הניהול של קרן טללי ברכה ובנות צילה",
+  "lang": "he",
+  "dir": "rtl",
+  "start_url": "/admin",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FBF8F3",
+  "theme_color": "#0E5A60",
+  "icons": [
+    { "src": "/brand/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/brand/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/brand/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

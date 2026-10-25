@@ -4223,3 +4223,12 @@
 @media (max-width: 720px) {
   .adm-mitch-wa-tools { grid-template-columns: 1fr; align-items: stretch; }
 }
+
+/* באנר התקנת אפליקציה (טלפון) */
+.adm-install { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; padding: 10px 12px; border-radius: 16px; background: linear-gradient(90deg, #0e5a60, #0e7c80); color: #fff; font-weight: 600; font-size: 0.95rem; }
+.adm[data-mode="girls"] .adm-install { background: linear-gradient(90deg, #7a1f4a, #be1354); }
+.adm-install > span { flex: 1; line-height: 1.35; }
+.adm-install svg { flex: none; width: 22px; height: 22px; }
+.adm-install__go { border: 0; background: #fff; color: #0e5a60; font: inherit; font-weight: 800; border-radius: 999px; padding: 7px 14px; cursor: pointer; }
+.adm[data-mode="girls"] .adm-install__go { color: #be1354; }
+.adm-install__x { border: 0; background: rgb(255 255 255 / 0.18); color: #fff; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; cursor: pointer; flex: none; }

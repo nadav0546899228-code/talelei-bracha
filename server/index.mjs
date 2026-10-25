@@ -1159,11 +1159,11 @@ async function serveStatic(req, res, url) {
     file = join(ROOT, "index.html"); // ניתוב SPA
   }
   // באתר הפיתוח: שם נפרד לאפליקציה המותקנת
-  if (!IS_PROD && url.pathname === "/manifest.webmanifest") {
+  if (!IS_PROD && (url.pathname === "/manifest.webmanifest" || url.pathname === "/admin.webmanifest")) {
     try {
-      const m = JSON.parse(await readFile(join(ROOT, "manifest.webmanifest"), "utf8"));
+      const m = JSON.parse(await readFile(join(ROOT, url.pathname.slice(1)), "utf8"));
       m.name = `${m.name} - אתר פיתוח`;
-      m.short_name = "טללי ברכה - פיתוח";
+      m.short_name = `${m.short_name} - פיתוח`;
       m.theme_color = "#FFD23F";
       res.writeHead(200, { "Content-Type": TYPES[".webmanifest"], "Cache-Control": "no-cache", ...SECURITY });
       return res.end(JSON.stringify(m));
