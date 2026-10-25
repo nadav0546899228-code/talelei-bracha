@@ -2450,3 +2450,49 @@
   .adm-side .adm-side__hub{min-height:42px}
   .adm-side .adm-tab--sub{min-height:34px;font-size:.86rem;opacity:.92}
 }
+
+
+/* ===== Bottom navigation: all main hubs + horizontal swipe + hold to reorder ===== */
+@media (max-width: 959px) {
+  .adm-tabs {
+    overflow-x: auto !important;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    touch-action: pan-x;
+  }
+  .adm-tabs::-webkit-scrollbar { display: none; }
+  .adm-tabs nav.adm-bar {
+    display: flex !important;
+    width: max-content !important;
+    min-width: 100% !important;
+    gap: 2px;
+    padding-inline: 3px;
+  }
+  .adm-bar .adm-tab {
+    flex: 0 0 78px !important;
+    width: 78px !important;
+    min-width: 78px !important;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    transition: transform .16s ease, background .16s ease, box-shadow .16s ease, opacity .16s ease;
+  }
+  .adm-bar.is-sorting {
+    touch-action: none;
+  }
+  .adm-bar.is-sorting .adm-tab {
+    opacity: .62;
+  }
+  .adm-bar.is-sorting .adm-tab.is-dragging {
+    opacity: 1;
+    transform: translateY(-7px) scale(1.06);
+    background: #fff;
+    box-shadow: 0 10px 24px rgba(18,58,62,.18);
+    z-index: 3;
+  }
+  .adm[data-mode="girls"] .adm-bar.is-sorting .adm-tab.is-dragging {
+    background: #fff7fa;
+  }
+}
