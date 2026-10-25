@@ -16,6 +16,7 @@ import { entriesFor, entryActive, hubsFor, loadBar, loadMode, MODE_LABELS, modes
 import { HubView } from "./NavParts";
 import { useAlerts, type Alert } from "./alerts";
 import { SearchModal } from "./Search";
+import { OrgScopeBar } from "./OrgScopeBar";
 import { disablePush, enablePush, pushState } from "./push";
 import { OrgView } from "./views/OrgView";
 import { MessagesView } from "./views/MessagesView";
@@ -655,6 +656,8 @@ export default function AdminApp() {
           </button>
         </div>
       </header>
+
+      <OrgScopeBar me={me} mode={mode} />
 
       <button type="button" className="adm-system-launcher adm-system-launcher--mobile" onClick={() => setAppMenuOpen(true)}>
         <span className="adm-system-launcher__icon"><Icon name="menu" /></span>
