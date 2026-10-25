@@ -47,17 +47,17 @@ export function KollelView({ me, go, initialTab }: { me: Me; go?: (v: "org") => 
   if (!ov) return <p className="muted">טוען…</p>;
   const manager = ov.me.manager;
   const scopeLine = manager
-    ? "כל האברכים לפי ערים וסניפים, ודיווחי נסיעות והוצאות."
+    ? `כל הסניפים · ${ov.avrechim.filter((a) => a.active).length} אברכים פעילים`
     : ov.me.canEditAvrechim
-      ? `העיר שלך: ${ov.cities.map((c) => c.name).join(", ") || "לא שויכה עיר"}. האברכים בכל סניפי העיר ודיווח נסיעות והוצאות.`
-      : `הסניף שלך: ${ov.branches.map((b) => branchLabel(ov, b.id)).join(", ") || "לא שויך סניף"}. הדיווח שלך הוא גם האישור.`;
+      ? ov.cities.map((c) => c.name).join(", ") || "ללא שיוך עיר"
+      : ov.branches.map((b) => branchLabel(ov, b.id)).join(", ") || "ללא שיוך סניף";
 
   return (
     <>
       <div className="adm-head">
         <div>
           <h1>כולל ערב</h1>
-          <p>{scopeLine}</p>
+          <span className="adm-scope-chip"><Icon name="pin" width={14} height={14} /> {scopeLine}</span>
         </div>
         {me.user.views.includes("org") && go ? (
           <button type="button" className="btn btn--ghost btn--sm" onClick={() => go("org")}>
