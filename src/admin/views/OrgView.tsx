@@ -5,7 +5,7 @@ import { api, del, DOMAIN_LABELS, post, type Domain, type Me, type OrgUnit } fro
 import type { Avrech } from "../kollelCalc";
 import { useOrg, type OrgPerson } from "../org";
 import { PhoneUsersPanel } from "./PhoneUsersPanel";
-import { ContactActions, Fab, IconActions } from "../components";
+import { Fab, IconActions } from "../components";
 import { useLive } from "../live";
 
 type EditUnit={id?:string;type:"region"|"city"|"branch";name:string;parentId:string|null};
