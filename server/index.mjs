@@ -41,7 +41,18 @@ const GOOGLE_CLIENT_ID = (process.env.GOOGLE_CLIENT_ID || (() => { try { return 
 const DEV_LOGIN = process.env.ALLOW_DEV_LOGIN === "1" && !IS_PROD; // לבדיקות מקומיות בלבד
 const STARTED = Date.now();
 
+/* ---- אתר הפיתוח עובד על נתוני דמה מבודדים; האתר המפורסם - על המסד האמיתי בלבד */
+const DEMO = !IS_PROD && process.env.DEV_REAL_DATA !== "1";
+if (DEMO) {
+  process.env.DATABASE_URL = "";
+  process.env.DATA_FILE = process.env.DATA_FILE || join(process.cwd(), "data", "demo.json");
+}
 const store = await createStore();
+if (DEMO && !(await store.list("avrechim", 1)).length) {
+  const { seedDemo } = await import("./demoSeed.mjs");
+  await seedDemo(store);
+  console.log("נתוני דמה נטענו לאתר הפיתוח");
+}
 
 /* ---- עדכונים בזמן אמת (Server-Sent Events): כל שינוי נתונים מודיע לכל המחוברים איזה אוסף השתנה */
 const liveClients = new Set();
@@ -286,6 +297,7 @@ async function api(req, res, url) {
       googleClientId: GOOGLE_CLIENT_ID || null,
       env: IS_PROD ? "production" : "development",
       devLogin: DEV_LOGIN && isLocalRequest(req),
+      demo: DEMO,
       content: await getContent(),
     });
   }
@@ -664,6 +676,15 @@ async function api(req, res, url) {
       await audit(user, "שחזור מגיבוי", bk.reason + " · " + bk.at);
       return send(200, { ok: true });
     }
+  }
+
+  // ---- איפוס נתוני הדמה (אתר פיתוח בלבד)
+  if (pathname === "/api/admin/demo/reset" && method === "POST") {
+    if (!DEMO || !can("developer")) return send(403, { error: "זמין רק באתר הפיתוח" });
+    for (const c of [...BACKUP_COLLECTIONS, "backups", "audit"]) for (const d of await store.list(c, 100000)) await store.del(c, d.id);
+    const { seedDemo } = await import("./demoSeed.mjs");
+    await seedDemo(store);
+    return send(200, { ok: true });
   }
 
   // ---- כתובת לשלוחת ימות המשיח (מתכנת)

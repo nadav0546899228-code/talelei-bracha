@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Icon } from "../../components/Icon";
 import { api, fmtDateTime, post } from "../api";
+import { runtime } from "../../config/contentModel";
 
 type Backup = { id: string; at: string; reason: string; byName: string; count: number };
 
@@ -70,6 +71,32 @@ export function DevExtras() {
           {list && !list.length ? <p className="muted">עדיין אין גיבויים. הראשון ייווצר תוך דקה מהפעלת השרת.</p> : null}
         </div>
       </section>
+
+      {runtime.demo ? (
+        <section className="adm-panel">
+          <div className="adm-panel__head">
+            <h2>
+              <Icon name="sparkle" width={20} height={20} style={{ verticalAlign: "-4px" }} /> נתוני דמה
+            </h2>
+            <button
+              type="button"
+              className="btn btn--ghost btn--sm"
+              disabled={busy}
+              onClick={async () => {
+                if (!window.confirm("לאפס את כל נתוני הדמה למצב ההתחלתי?")) return;
+                setBusy(true);
+                await post("/api/admin/demo/reset", {}).catch((e) => setMsg({ ok: false, text: e.message }));
+                window.location.reload();
+              }}
+            >
+              <Icon name="refresh" /> איפוס
+            </button>
+          </div>
+          <p className="muted" style={{ margin: 0 }}>
+            אתר הפיתוח עובד על נתוני דמה בלבד. האתר המפורסם לא מושפע. רכזים לדוגמה נכנסים בטלפון 0500000100 עד 0500000104, קוד 1234.
+          </p>
+        </section>
+      ) : null}
 
       <section className="adm-panel">
         <h2>

@@ -4,6 +4,7 @@ import { Header } from "./components/Header";
 import { FloatingButtons } from "./components/Floating";
 import { UpdateBanner } from "./components/UpdateBanner";
 import { isDevSite } from "./config/site";
+import { runtime } from "./config/contentModel";
 import { useRouter } from "./router/Router";
 import { matchRoute } from "./router/routes";
 
@@ -51,7 +52,7 @@ export default function App() {
   if (isAdmin)
     return (
       <>
-        {isDevSite ? <div className="dev-banner">אתר פיתוח</div> : null}
+        {isDevSite ? <div className="dev-banner">אתר פיתוח{runtime.demo ? " · נתוני דמה" : ""}</div> : null}
         <UpdateBanner />
         <Suspense fallback={loading}>
           <AdminApp />
@@ -64,7 +65,7 @@ export default function App() {
       <a className="skip-link" href="#main">
         דילוג לתוכן הראשי
       </a>
-      {isDevSite ? <div className="dev-banner">אתר פיתוח</div> : null}
+      {isDevSite ? <div className="dev-banner">אתר פיתוח{runtime.demo ? " · נתוני דמה" : ""}</div> : null}
       <Header />
       <main id="main" tabIndex={-1}>
         <Suspense fallback={loading}>

@@ -40,6 +40,7 @@ export type Runtime = {
   googleClientId: string | null;
   env: "development" | "production" | "static";
   devLogin: boolean;
+  demo?: boolean;
   serverAvailable: boolean;
 };
 
@@ -104,6 +105,7 @@ export async function loadContent(timeoutMs = 2500) {
     runtime.googleClientId = data.googleClientId ?? null;
     runtime.env = data.env ?? "production";
     runtime.devLogin = Boolean(data.devLogin);
+    runtime.demo = Boolean(data.demo);
     runtime.serverAvailable = true;
     applyContent(data.content);
   } catch {
