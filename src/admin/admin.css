@@ -2508,3 +2508,21 @@
   .adm-views-trigger{min-width:38px;width:38px!important;padding:0!important}
   .adm-views-trigger span{display:none!important}
 }
+
+/* ===== עד 4 כפתורים במסך; השאר בגלילה לצדדים. לחיצה ארוכה = סידור ===== */
+@media (max-width: 959px) {
+  .adm-bar .adm-tab {
+    flex: 0 0 calc((100vw - 26px) / 4) !important;
+    width: calc((100vw - 26px) / 4) !important;
+    min-width: calc((100vw - 26px) / 4) !important;
+    font-size: 0.74rem !important;
+  }
+  .adm-tabs.has-more {
+    -webkit-mask-image: linear-gradient(to left, #000 88%, transparent);
+    mask-image: linear-gradient(to left, #000 88%, transparent);
+  }
+  .adm-tabs.has-more.at-end {
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+}

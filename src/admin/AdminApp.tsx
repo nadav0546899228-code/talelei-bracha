@@ -243,6 +243,22 @@ export default function AdminApp() {
   const barPress = useRef<{ id: string; x: number; y: number; pointerId: number; el: HTMLElement } | null>(null);
   const suppressBarClick = useRef(false);
   const barScrollRef = useRef<HTMLDivElement>(null);
+  // סימון שיש עוד כפתורים בגלילה (דהייה בקצה)
+  useEffect(() => {
+    const el = barScrollRef.current;
+    if (!el) return;
+    const upd = () => {
+      el.classList.toggle("has-more", el.scrollWidth > el.clientWidth + 4);
+      el.classList.toggle("at-end", Math.abs(el.scrollLeft) + el.clientWidth >= el.scrollWidth - 4);
+    };
+    upd();
+    el.addEventListener("scroll", upd, { passive: true });
+    window.addEventListener("resize", upd);
+    return () => {
+      el.removeEventListener("scroll", upd);
+      window.removeEventListener("resize", upd);
+    };
+  });
 
   const loadMe = useCallback(async () => {
     try {
