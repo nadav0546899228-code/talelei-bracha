@@ -630,7 +630,13 @@ export default function AdminApp() {
   };
   const ctx = { me, subs, refreshSubs, go, openImpersonate, mode };
   const by = me.user.impersonatedBy;
+  // שם התצוגה שפתוחה עכשיו (התפקיד שלי, או של מי שנכנסתי בשמו)
   const ownRole = account.roles.includes("developer") ? "developer" : account.roles[0];
+  const viewName = by
+    ? me.user.kind === "virtual"
+      ? me.user.name.replace(" (תצוגה לדוגמה)", "")
+      : me.roleLabels[me.user.roles[0]] || me.user.name || ""
+    : me.roleLabels[ownRole] || "תצוגות";
   const ownViewLabel = me.roleLabels[ownRole] || "החשבון שלי";
   const menuQuery = appMenuQuery.trim().toLocaleLowerCase("he");
   const menuGroups = hubs
@@ -662,6 +668,19 @@ export default function AdminApp() {
         </div>
         <div className="adm-top__spacer" />
         <div className="adm-user">
+          {me.canImpersonate ? (
+            <button
+              type="button"
+              className={`adm-viewbtn${by ? " is-as" : ""}`}
+              onClick={() => setAsOpen(true)}
+              aria-label={`מצב תצוגה: ${viewName}. מעבר תצוגה`}
+              title="מעבר תצוגה"
+            >
+              <Icon name="eye" />
+              <span>{viewName}</span>
+              <Icon name="chevronDown" />
+            </button>
+          ) : null}
           <button type="button" className="adm-account-btn adm-account-btn--notified" onClick={() => setProfileOpen(true)} aria-label={`האזור האישי${unreadMessages ? `, ${unreadMessages} הודעות שלא נקראו` : ""}`} title="האזור האישי">
             <span className="adm-account-btn__avatar-wrap">
               {account.picture ? <img src={account.picture} alt="" referrerPolicy="no-referrer" /> : <span className="adm-avatar">{initial}</span>}
@@ -831,22 +850,20 @@ export default function AdminApp() {
       </div>
       <div className="adm-tabs" ref={barScrollRef}>
         {barNav}
-        {barEntries.length > 4 ? (
-          <button
-            type="button"
-            className="adm-bar-grip"
-            aria-label="גרירת סרגל הניווט לצדדים"
-            title="גרירה לצדדים"
-            onPointerDown={gripPointerDown}
-            onPointerMove={gripPointerMove}
-            onPointerUp={gripPointerEnd}
-            onPointerCancel={gripPointerEnd}
-          >
-            <span className="adm-bar-grip__dots" aria-hidden="true">
-              <i /><i /><i /><i /><i /><i />
-            </span>
-          </button>
-        ) : null}
+        <button
+          type="button"
+          className="adm-bar-grip"
+          aria-label="גרירת סרגל הניווט לצדדים"
+          title="גרירה לצדדים"
+          onPointerDown={gripPointerDown}
+          onPointerMove={gripPointerMove}
+          onPointerUp={gripPointerEnd}
+          onPointerCancel={gripPointerEnd}
+        >
+          <span className="adm-bar-grip__dots" aria-hidden="true">
+            <i /><i /><i /><i /><i /><i />
+          </span>
+        </button>
       </div>
       {searchOpen ? <SearchModal initialQuery={searchSeed} onClose={() => { setSearchOpen(false); setSearchSeed(""); }} onGo={go} /> : null}
       {profileOpen ? (
