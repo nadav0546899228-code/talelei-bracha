@@ -10,11 +10,13 @@ export function DevExtras() {
   const [list, setList] = useState<Backup[] | null>(null);
   const [hook, setHook] = useState<string | null>(null);
   const [donHook, setDonHook] = useState<string | null>(null);
+  const [features, setFeatures] = useState<{ donations: boolean } | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const load = useCallback(() => api<{ backups: Backup[] }>("/api/admin/backups").then((r) => setList(r.backups)), []);
   useEffect(() => {
     load();
+    api<{ features: { donations: boolean } }>("/api/admin/features").then((r) => setFeatures(r.features)).catch(() => setFeatures({ donations: false }));
   }, [load]);
 
   const now = async () => {
@@ -39,6 +41,37 @@ export function DevExtras() {
 
   return (
     <>
+      <section className="adm-panel">
+        <div className="adm-panel__head">
+          <div>
+            <h2><Icon name="grid" width={20} height={20} style={{ verticalAlign: "-4px" }} /> מודולים אופציונליים</h2>
+            <p className="muted" style={{ margin: "3px 0 0" }}>רק מתכנת יכול להפעיל או להסתיר מודולים בכל האתר והמערכת.</p>
+          </div>
+          <button
+            type="button"
+            className={`btn btn--sm ${features?.donations ? "" : "btn--ghost"}`}
+            disabled={busy || features == null}
+            onClick={async () => {
+              const next = !features?.donations;
+              setBusy(true);
+              try {
+                const r = await post<{ features: { donations: boolean } }>("/api/admin/features", { donations: next });
+                setFeatures(r.features);
+                window.location.reload();
+              } catch (e) {
+                setMsg({ ok: false, text: e instanceof Error ? e.message : "שגיאה" });
+                setBusy(false);
+              }
+            }}
+          >
+            <Icon name={features?.donations ? "eye" : "eyeOff"} /> מודול תרומות: {features?.donations ? "פעיל" : "מוסתר"}
+          </button>
+        </div>
+        <p className="muted" style={{ margin: 0 }}>
+          כשהמודול מוסתר אין תרומות בניווט, בחיפוש, באתר התדמית, בעורך התוכן או ב-API הציבורי.
+        </p>
+      </section>
+
       <section className="adm-panel">
         <div className="adm-panel__head">
           <h2>
@@ -182,6 +215,7 @@ export function DevExtras() {
           </button>
         )}
       </section>
+      {features?.donations ? (
       <section className="adm-panel">
         <h2>
           <Icon name="heart" width={20} height={20} style={{ verticalAlign: "-4px" }} /> תרומות אונליין - חיבור לסליקה
@@ -199,6 +233,7 @@ export function DevExtras() {
           </button>
         )}
       </section>
+      ) : null}
     </>
   );
 }
