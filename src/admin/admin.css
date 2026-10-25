@@ -2496,3 +2496,15 @@
     background: #fff7fa;
   }
 }
+
+
+/* Keep the privileged view switch visible and obvious */
+.adm-views-trigger{display:inline-flex;align-items:center;gap:6px;flex:none}
+@media(max-width:719px){
+  .adm-views-trigger{max-width:none!important;width:auto!important;min-width:72px;padding-inline:9px!important}
+  .adm-views-trigger span{display:inline!important;font-size:.72rem}
+}
+@media(max-width:370px){
+  .adm-views-trigger{min-width:38px;width:38px!important;padding:0!important}
+  .adm-views-trigger span{display:none!important}
+}
