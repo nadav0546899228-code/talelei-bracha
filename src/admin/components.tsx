@@ -31,6 +31,7 @@ export function SwipeRow({
   onClick,
   children,
   label,
+  actions,
 }: {
   phone?: string;
   waText?: string;
@@ -39,6 +40,8 @@ export function SwipeRow({
   onClick?: () => void;
   children: ReactNode;
   label?: string;
+  /** כפתורי אייקון בקצה השורה (חיוג, וואטסאפ...) */
+  actions?: ReactNode;
 }) {
   const [dx, setDx] = useState(0);
   const start = useRef<{ x: number; y: number; id: number; horizontal: boolean | null } | null>(null);
@@ -69,7 +72,7 @@ export function SwipeRow({
       ) : null}
       <button
         type="button"
-        className={`adm-row adm-row--tone-${tone}`}
+        className={`adm-row adm-row--tone-${tone}${actions ? " adm-row--acts" : ""}`}
         aria-current={current ? "true" : undefined}
         aria-label={label}
         style={{ transform: dx ? `translateX(${dx}px)` : undefined, transition: dx ? "none" : undefined }}
@@ -113,6 +116,7 @@ export function SwipeRow({
       >
         {children}
       </button>
+      {actions && !dx ? <div className="adm-row__acts">{actions}</div> : null}
     </div>
   );
 }
@@ -167,3 +171,59 @@ export function ToneLegend({ items }: { items: { tone: Tone; label: string }[] }
 }
 
 export const money = (n: number) => `${n < 0 ? "\u200E-" : ""}${Math.abs(n).toLocaleString("he-IL")} ₪`;
+
+/** כפתורי קשר - אייקונים בלבד (לשורות) */
+export function IconActions({ phone, email, waText }: { phone?: string; email?: string; waText?: string }) {
+  if (!phone && !email) return null;
+  return (
+    <>
+      {phone ? (
+        <>
+          <a className="adm-ia adm-ia--wa" href={waLink(phone, waText)} target="_blank" rel="noopener noreferrer" aria-label="וואטסאפ" title="וואטסאפ">
+            <Icon name="whatsapp" />
+          </a>
+          <a className="adm-ia adm-ia--call" href={`tel:${phone}`} aria-label="חיוג" title="חיוג">
+            <Icon name="phone" />
+          </a>
+        </>
+      ) : null}
+      {email ? (
+        <a className="adm-ia adm-ia--mail" href={`mailto:${email}`} aria-label="מייל" title="מייל">
+          <Icon name="mail" />
+        </a>
+      ) : null}
+    </>
+  );
+}
+
+/** כפתור פלוס צף */
+export function Fab({ label, onClick, icon = "plus" }: { label: string; onClick: () => void; icon?: "plus" | "edit" }) {
+  return (
+    <button type="button" className="adm-fab" onClick={onClick} aria-label={label} title={label}>
+      <Icon name={icon} />
+    </button>
+  );
+}
+
+/** צ'יפים לחיצים לסינון */
+export function Chips<T extends string>({ value, onChange, items }: { value: T; onChange: (v: T) => void; items: { id: T; label: string; count?: number }[] }) {
+  return (
+    <div className="adm-chips" role="group">
+      {items.map((i) => (
+        <button key={i.id} type="button" className="adm-chip" aria-pressed={value === i.id} onClick={() => onChange(i.id)}>
+          {i.label}
+          {i.count !== undefined ? <span className="adm-chip__n">{i.count}</span> : null}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** כפתור ייצוא לאקסל - אייקון */
+export function ExportBtn({ onClick }: { onClick: () => void }) {
+  return (
+    <button type="button" className="adm-icon-btn" onClick={onClick} aria-label="ייצוא לאקסל" title="ייצוא לאקסל">
+      <Icon name="download" />
+    </button>
+  );
+}

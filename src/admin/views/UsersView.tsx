@@ -4,6 +4,7 @@ import { api, del, fmtDateTime, post, ROLE_SCOPE, type Me, type Role, type Scope
 import { ScopePicker, scopeText, useOrg } from "../org";
 import { PhoneUsersPanel } from "./PhoneUsersPanel";
 import { enterAs } from "../Impersonate";
+import { Fab } from "../components";
 
 type U = { email: string; name: string; phone?: string; picture: string; roles: Role[]; scope?: Scope; active: boolean; bootstrap: boolean; lastLoginAt: string | null };
 
@@ -61,10 +62,7 @@ export function UsersView({ me }: { me: Me }) {
           <h1>משתמשים והרשאות</h1>
           <p>מי נכנס למערכת ומה כל אחד רואה. כניסה בחשבון Google, או בטלפון וקוד (בתחתית העמוד).</p>
         </div>
-        <button type="button" className="btn btn--sm" onClick={() => setEditing({ email: "", name: "", phone: "", roles: [], scope: {}, active: true, isNew: true })}>
-          <Icon name="plus" />
-          הוספת משתמש
-        </button>
+
       </div>
 
       {editing ? (
@@ -184,6 +182,7 @@ export function UsersView({ me }: { me: Me }) {
         </table>
       </div>
       {users === null ? <p className="muted">טוען…</p> : null}
+      {!editing ? <Fab label="הוספת משתמש Google" onClick={() => setEditing({ email: "", name: "", phone: "", roles: [], scope: {}, active: true, isNew: true })} /> : null}
       <div style={{ marginTop: 20 }}>
         <PhoneUsersPanel me={me} />
       </div>

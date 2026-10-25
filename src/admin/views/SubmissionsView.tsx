@@ -16,7 +16,7 @@ import {
   type Submission,
 } from "../api";
 import type { AdminCtx } from "../AdminApp";
-import { ContactActions, SwipeHint, SwipeRow, ToneLegend, toneFor } from "../components";
+import { ContactActions, IconActions, SwipeRow, ToneLegend, toneFor } from "../components";
 import { buildXlsx, downloadBlob } from "../xlsx";
 
 function toSheet(rows: Submission[], name: string) {
@@ -150,7 +150,7 @@ export function SubmissionsView({ me, subs, refreshSubs, forms, title, initialFo
           { tone: "grey", label: "ארכיון / לא מתאימה" },
         ]}
       />
-      <SwipeHint />
+      
       <div className="adm-split">
         <div className="adm-list">
           {subs === null ? (
@@ -162,6 +162,13 @@ export function SubmissionsView({ me, subs, refreshSubs, forms, title, initialFo
                 phone={typeof s.data.phone === "string" ? s.data.phone : undefined}
                 tone={toneFor(s.status)}
                 current={s.id === selectedId}
+                actions={
+                  <IconActions
+                    phone={typeof s.data.phone === "string" && s.data.phone ? s.data.phone : undefined}
+                    email={typeof s.data.email === "string" && s.data.email && !s.data.phone ? s.data.email : undefined}
+                    waText={`שלום ${displayName(s)}, `}
+                  />
+                }
                 onClick={() => {
                   setSelectedId(s.id);
                   setMsg(null);

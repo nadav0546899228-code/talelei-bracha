@@ -14,6 +14,7 @@ import { api, ApiError, post, type Me, type Submission, type View } from "./api"
 import { ImpersonateModal } from "./Impersonate";
 import { entriesFor, entryActive, hubsFor, loadBar, loadMode, MODE_LABELS, modesFor, saveBar, saveMode, type Mode, type NavEntry, type NavLeaf, type Screen } from "./nav";
 import { BarEditor, HubView } from "./NavParts";
+import { useAlerts } from "./alerts";
 import { OrgView } from "./views/OrgView";
 import "./admin.css";
 import { AuditView } from "./views/AuditView";
@@ -262,6 +263,9 @@ export default function AdminApp() {
   const modes = useMemo(() => (me ? modesFor(me) : []), [me]);
   const hubs = useMemo(() => (me ? hubsFor(me, mode) : []), [me, mode]);
   const entries = useMemo(() => entriesFor(hubs), [hubs]);
+  const dash = useAlerts(state === "ready" ? me : null, mode, subs);
+  const [bellOpen, setBellOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   useEffect(() => {
     if (me) setBar(loadBar(me, mode, entries));
   }, [me, mode, entries]);
@@ -432,7 +436,9 @@ export default function AdminApp() {
         </div>
         <div className="adm-top__spacer" />
         <div className="adm-user">
-          {me.user.picture ? <img src={me.user.picture} alt="" referrerPolicy="no-referrer" /> : <span className="adm-avatar">{initial}</span>}
+          <button type="button" className="adm-avatar-btn" onClick={() => (by ? openImpersonate() : setProfileOpen(true))} aria-label="הפרופיל שלי" title="הפרופיל שלי">
+            {me.user.picture ? <img src={me.user.picture} alt="" referrerPolicy="no-referrer" /> : <span className="adm-avatar">{initial}</span>}
+          </button>
           <div className="adm-user__meta">
             <strong>{me.user.name || me.user.email}</strong>
             <span>{roleText}</span>
@@ -442,11 +448,10 @@ export default function AdminApp() {
               <Icon name="eye" /> <span>תצוגות</span>
             </button>
           ) : null}
-          {me.user.kind === "phone" && !by ? (
-            <button type="button" className="adm-icon-btn" onClick={() => setCodeOpen(true)} aria-label="החלפת הקוד שלי" title="הקוד שלי">
-              <Icon name="lock" />
-            </button>
-          ) : null}
+          <button type="button" className="adm-icon-btn adm-bell" onClick={() => setBellOpen(!bellOpen)} aria-label={`התראות${dash.active.length ? ` (${dash.active.length})` : ""}`} title="התראות">
+            <Icon name="bell" />
+            {dash.active.length ? <span className="adm-badge">{dash.active.length}</span> : null}
+          </button>
           <button type="button" className="adm-icon-btn" onClick={logout} aria-label="יציאה מהמערכת" title="יציאה">
             <Icon name="logout" />
           </button>
@@ -475,7 +480,7 @@ export default function AdminApp() {
             <HubView hub={hubs.find((h) => h.id === current.hub)!} badge={leafBadge} onOpen={openLeaf} />
           ) : (
             <>
-              {curView === "dashboard" ? <DashboardView {...ctx} views={me.user.views} /> : null}
+              {curView === "dashboard" ? <DashboardView {...ctx} views={me.user.views} dash={dash} /> : null}
               {curView === "isha" ? (
                 <SubmissionsView key={`isha-${curTab ?? ""}`} {...ctx} forms={["ishaRequest", "ishaMentor"]} initialForm={curTab as never} title="אישה לאישה" />
               ) : null}
@@ -510,6 +515,50 @@ export default function AdminApp() {
           }}
         />
       ) : null}
+      {bellOpen ? (
+        <>
+          <div className="adm-pop-back" onClick={() => setBellOpen(false)} />
+          <div className="adm-pop" role="dialog" aria-label="התראות">
+            {dash.active.length ? (
+              dash.active.map((a) => (
+                <button
+                  key={a.id}
+                  type="button"
+                  className={`adm-pop__item adm-pop__item--${a.tone}`}
+                  onClick={() => {
+                    setBellOpen(false);
+                    go(a.view, a.tab);
+                  }}
+                >
+                  <Icon name={a.icon} />
+                  <span>{a.label}</span>
+                  <span className="adm-badge" style={{ flex: "none" }}>
+                    {a.count}
+                  </span>
+                </button>
+              ))
+            ) : (
+              <div className="adm-allgood" style={{ margin: 0 }}>
+                <Icon name="checkCircle" /> אין התראות
+              </div>
+            )}
+          </div>
+        </>
+      ) : null}
+      {profileOpen ? (
+        <Profile
+          me={me}
+          onClose={() => setProfileOpen(false)}
+          onCode={() => {
+            setProfileOpen(false);
+            setCodeOpen(true);
+          }}
+          onSaved={() => {
+            setProfileOpen(false);
+            loadMe();
+          }}
+        />
+      ) : null}
       {asOpen ? (
         <ImpersonateModal
           current={by ? me.user.id : undefined}
@@ -526,6 +575,57 @@ export default function AdminApp() {
         />
       ) : null}
       {codeOpen ? <ChangeCode forced={me.mustChangeCode} onClose={() => { setCodeOpen(false); setMe({ ...me, mustChangeCode: false }); }} /> : null}
+    </div>
+  );
+}
+
+function Profile({ me, onClose, onCode, onSaved }: { me: Me; onClose: () => void; onCode: () => void; onSaved: () => void }) {
+  const [name, setName] = useState(me.user.name || "");
+  const [phone, setPhone] = useState(me.user.phone || "");
+  const [err, setErr] = useState<string | null>(null);
+  const save = async () => {
+    try {
+      await post("/api/auth/profile", { name, phone });
+      onSaved();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "שגיאה");
+    }
+  };
+  return (
+    <div className="adm-modal-back" role="dialog" aria-modal="true" aria-label="הפרופיל שלי" onClick={onClose}>
+      <div className="adm-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="adm-panel__head">
+          <h2>הפרופיל שלי</h2>
+          <button type="button" className="adm-icon-btn" aria-label="סגירה" onClick={onClose}>
+            <Icon name="close" />
+          </button>
+        </div>
+        <p className="muted" style={{ marginTop: -6 }}>
+          {me.user.roles.map((r) => me.roleLabels[r]).join(" · ")}
+          {me.user.email ? <span dir="ltr"> · {me.user.email}</span> : null}
+        </p>
+        <div className="adm-fields">
+          <label className="field">
+            <span className="field__label">שם</span>
+            <input className="input" value={name} onChange={(e) => setName(e.target.value)} />
+          </label>
+          <label className="field">
+            <span className="field__label">טלפון</span>
+            <input className="input" type="tel" dir="ltr" style={{ textAlign: "right" }} value={phone} onChange={(e) => setPhone(e.target.value)} />
+          </label>
+        </div>
+        {err ? <div className="adm-alert adm-alert--error">{err}</div> : null}
+        <div className="btn-row" style={{ marginTop: 14 }}>
+          <button type="button" className="btn btn--sm" onClick={save}>
+            <Icon name="check" /> שמירה
+          </button>
+          {me.user.kind === "phone" ? (
+            <button type="button" className="btn btn--ghost btn--sm" onClick={onCode}>
+              <Icon name="lock" /> החלפת קוד
+            </button>
+          ) : null}
+        </div>
+      </div>
     </div>
   );
 }

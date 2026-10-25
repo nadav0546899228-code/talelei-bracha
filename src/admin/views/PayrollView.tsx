@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Icon } from "../../components/Icon";
 import { api, put, type Me } from "../api";
-import { money, ToneLegend } from "../components";
+import { Chips, money, ToneLegend } from "../components";
 import {
   computePayroll,
   hebrewMonthLabel,
@@ -150,15 +150,15 @@ export function PayrollView({ me }: { me: Me }) {
             בסיס מלא {money(s.fullBase)} · שמחות: בת {s.simchaRates.bat} ₪, בן {s.simchaRates.ben} ₪, בר מצווה {s.simchaRates.barmitzva} ₪ לאברך
           </p>
         </div>
-        <div className="btn-row">
-          <button type="button" className="btn btn--sm" onClick={createMonth}>
-            <Icon name="plus" /> חודש חדש
+        <div className="adm-item__actions">
+          <button type="button" className="adm-icon-btn adm-icon-btn--ok" onClick={createMonth} aria-label="חודש חדש" title="חודש חדש">
+            <Icon name="plus" />
           </button>
-          <button type="button" className="btn btn--ghost btn--sm" onClick={() => setSettingsOpen(true)}>
-            הגדרות
+          <button type="button" className="adm-icon-btn" onClick={() => setSettingsOpen(true)} aria-label="הגדרות משכורת" title="הגדרות">
+            <Icon name="edit" />
           </button>
-          <button type="button" className="btn btn--ghost btn--sm" onClick={exportAll} disabled={!ov.months.length}>
-            <Icon name="download" /> כל החודשים לאקסל
+          <button type="button" className="adm-icon-btn" onClick={exportAll} disabled={!ov.months.length} aria-label="כל החודשים לאקסל" title="כל החודשים לאקסל">
+            <Icon name="download" />
           </button>
         </div>
       </div>
@@ -167,20 +167,18 @@ export function PayrollView({ me }: { me: Me }) {
         <div className="adm-panel adm-empty">אין עדיין חודשים. לוחצים "חודש חדש" כדי לפתוח את החודש הנוכחי.</div>
       ) : (
         <>
+          <Chips<string>
+            value={key}
+            onChange={(v) => (dirty && !window.confirm("יש שינויים שלא נשמרו. לעבור בכל זאת?") ? null : setKey(v))}
+            items={ov.months.map((m) => ({ id: m.id, label: `${m.locked ? "🔒 " : ""}${m.label}` }))}
+          />
           <div className="adm-toolbar">
-            <select className="select adm-select-sm" value={key} onChange={(e) => (dirty && !window.confirm("יש שינויים שלא נשמרו. לעבור בכל זאת?") ? null : setKey(e.target.value))} aria-label="חודש">
-              {ov.months.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.label}
-                  {m.locked ? " · סגור" : ""}
-                </option>
-              ))}
-            </select>
-            <span className={`adm-status ${locked ? "adm-status--done" : "adm-status--in_progress"}`}>{locked ? "סגור לתשלום" : "פתוח לעריכה"}</span>
-            <label className="adm-toggle">
-              <input type="checkbox" checked={onlyMissing} onChange={(e) => setOnlyMissing(e.target.checked)} />
-              מי חסר? ({missing.length})
-            </label>
+            <span className={`adm-status ${locked ? "adm-status--done" : "adm-status--in_progress"}`}>
+              <Icon name={locked ? "lock" : "edit"} width={14} height={14} style={{ verticalAlign: "-2px" }} /> {locked ? "סגור לתשלום" : "פתוח לעריכה"}
+            </span>
+            <button type="button" className="adm-chip" aria-pressed={onlyMissing} onClick={() => setOnlyMissing(!onlyMissing)}>
+              מי חסר? <span className="adm-chip__n">{missing.length}</span>
+            </button>
           </div>
 
           <div className="adm-stats">
@@ -334,10 +332,12 @@ export function PayrollView({ me }: { me: Me }) {
           </div>
 
           <div className="adm-savebar">
-            <span>{dirty ? "יש שינויים שלא נשמרו" : msg?.text ?? (locked ? "החודש סגור לתשלום" : "הכל שמור")}</span>
+            <span>
+              <strong>{money(total)}</strong> · {dirty ? "יש שינויים שלא נשמרו" : msg?.text ?? (locked ? "החודש סגור לתשלום" : "הכל שמור")}
+            </span>
             <div className="btn-row">
               <button type="button" className="btn btn--light btn--sm" onClick={exportMonth}>
-                <Icon name="download" /> אקסל לחודש
+                <Icon name="download" /> אקסל
               </button>
               {!locked ? (
                 <>
@@ -353,12 +353,12 @@ export function PayrollView({ me }: { me: Me }) {
                       saveMonth({ ...month, locked: true }, "החודש נסגר לתשלום");
                     }}
                   >
-                    <Icon name="lock" /> סגירה לתשלום
+                    <Icon name="lock" /> סגירה
                   </button>
                 </>
               ) : privileged ? (
                 <button type="button" className="btn btn--light btn--sm" onClick={() => month && window.confirm("לפתוח את החודש לעריכה?") && saveMonth({ ...month, locked: false }, "החודש נפתח לעריכה")}>
-                  פתיחה לעריכה
+                  <Icon name="lock" /> פתיחה
                 </button>
               ) : null}
             </div>
@@ -386,7 +386,7 @@ function SimchasPanel({ month, lines, settings, locked, onChange }: { month: Mon
       {simchas.map((x) => (
         <div key={x.id} className="adm-row adm-row--tone-green" style={{ cursor: "default", marginBottom: 6 }}>
           <span className="adm-row__title">
-            {name(x.celebrantId)} - {x.note || SIMCHA_LABELS[x.type]}
+            <Icon name="gift" width={18} height={18} style={{ verticalAlign: "-3px", color: "var(--flame)" }} /> {name(x.celebrantId)} - {x.note || SIMCHA_LABELS[x.type]}
           </span>
           {!locked ? (
             <button type="button" className="adm-icon-btn adm-icon-btn--danger" aria-label="הסרת שמחה" onClick={() => onChange(simchas.filter((s) => s.id !== x.id))}>
@@ -413,14 +413,18 @@ function SimchasPanel({ month, lines, settings, locked, onChange }: { month: Mon
               ))}
             </select>
           </label>
-          <label className="field">
+          <div className="field">
             <span className="field__label">סוג</span>
-            <select className="select" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value as Simcha["type"] })}>
-              <option value="bat">הולדת בת ({settings.simchaRates.bat} ₪)</option>
-              <option value="ben">הולדת בן ({settings.simchaRates.ben} ₪)</option>
-              <option value="barmitzva">בר מצווה ({settings.simchaRates.barmitzva} ₪)</option>
-            </select>
-          </label>
+            <Chips<Simcha["type"]>
+              value={form.type}
+              onChange={(type) => setForm({ ...form, type })}
+              items={[
+                { id: "bat", label: `בת · ${settings.simchaRates.bat}₪` },
+                { id: "ben", label: `בן · ${settings.simchaRates.ben}₪` },
+                { id: "barmitzva", label: `בר מצווה · ${settings.simchaRates.barmitzva}₪` },
+              ]}
+            />
+          </div>
           <label className="field span-2">
             <span className="field__label">פירוט (אופציונלי)</span>
             <input className="input" value={form.note} placeholder={SIMCHA_LABELS[form.type]} onChange={(e) => setForm({ ...form, note: e.target.value })} />

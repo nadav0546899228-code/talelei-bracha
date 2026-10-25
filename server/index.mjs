@@ -384,6 +384,27 @@ async function api(req, res, url) {
     return json(res, 200, { ok: true }, { "Set-Cookie": createSessionCookie(real.id, isSecure(req)) });
   }
 
+  // ---- הפרופיל שלי: כל משתמש מעדכן לעצמו שם וטלפון
+  if (pathname === "/api/auth/profile" && method === "POST") {
+    if (user.impersonatedBy || user.kind === "virtual") return send(400, { error: "בתצוגה של משתמש אחר אי אפשר לערוך פרופיל" });
+    const b = await readBody(req);
+    const name = clean(b.name, 80).trim();
+    const ph = b.phone ? phone.normalizePhone(b.phone) : "";
+    if (ph && !phone.validPhone(ph)) return send(400, { error: "מספר טלפון לא תקין" });
+    if (user.kind === "phone") {
+      if (!ph) return send(400, { error: "חובה טלפון - זה שם המשתמש שלך" });
+      const all = await store.list("phoneUsers");
+      if (all.some((u) => u.phone === ph && u.id !== user.subId)) return send(400, { error: "המספר כבר רשום אצל משתמש אחר" });
+      const doc = all.find((u) => u.id === user.subId);
+      await store.put("phoneUsers", doc.id, { ...doc, phone: ph, name: name || doc.name });
+    } else {
+      const prev = (await store.get("users", user.email)) || { roles: [] };
+      await store.put("users", user.email, { ...prev, phone: ph, name: name || prev.name || "" });
+    }
+    await audit(user, "עדכון פרופיל אישי", name || user.name || "");
+    return send(200, { ok: true });
+  }
+
   // ---- החלפת קוד אישי (משתמשי טלפון)
   if (pathname === "/api/auth/change-code" && method === "POST") {
     if (user.kind !== "phone") return send(400, { error: "רלוונטי רק לכניסה בטלפון" });

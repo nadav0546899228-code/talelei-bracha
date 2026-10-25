@@ -2,9 +2,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Icon } from "../../components/Icon";
 import { api, del, post, type Me, type OrgUnit } from "../api";
-import { ContactActions, money, SwipeHint, SwipeRow, ToneLegend } from "../components";
+import { Chips, ContactActions, ExportBtn, Fab, IconActions, money, SwipeRow, ToneLegend } from "../components";
 import { ENTRY_LABELS, type Avrech, type Entry, type EntryType, type KollelSettings } from "../kollelCalc";
-import { parsePasted } from "../xlsx";
+import { buildXlsx, downloadBlob, parsePasted } from "../xlsx";
 
 export type Overview = {
   me: { manager: boolean; canEditAvrechim: boolean; canPayroll: boolean };
@@ -19,6 +19,11 @@ type Tab = "avrechim" | "entries";
 
 const blankAvrech = (branchId: string | null): Avrech => ({ id: "", name: "", phone: "", email: "", branchId, monthlyTravel: 0, inPayroll: true, simchaFund: true, simchaExternal: false, active: true, notes: "" });
 
+const filterFromTab = (t?: string): AvFilter | undefined => {
+  const f = t?.split(":")[1];
+  return f === "nophone" || f === "nobranch" || f === "inactive" ? f : undefined;
+};
+
 /** "סניף רמות (ירושלים)" */
 export function branchLabel(ov: Pick<Overview, "cities" | "branches">, id: string | null | undefined) {
   const b = ov.branches.find((x) => x.id === id);
@@ -29,7 +34,7 @@ export function branchLabel(ov: Pick<Overview, "cities" | "branches">, id: strin
 
 export function KollelView({ me, go, initialTab }: { me: Me; go?: (v: "org") => void; initialTab?: string }) {
   const [ov, setOv] = useState<Overview | null>(null);
-  const [tab, setTab] = useState<Tab>(initialTab === "entries" ? "entries" : "avrechim");
+  const [tab, setTab] = useState<Tab>(initialTab?.startsWith("entries") ? "entries" : "avrechim");
   const [err, setErr] = useState<string | null>(null);
   const load = useCallback(() => api<Overview>("/api/kollel/overview").then(setOv).catch((e) => setErr(e.message)), []);
   useEffect(() => {
@@ -66,7 +71,7 @@ export function KollelView({ me, go, initialTab }: { me: Me; go?: (v: "org") => 
           נסיעות והוצאות
         </button>
       </div>
-      {tab === "avrechim" ? <AvrechimTab ov={ov} reload={load} /> : null}
+      {tab === "avrechim" ? <AvrechimTab ov={ov} reload={load} initialFilter={filterFromTab(initialTab)} /> : null}
       {tab === "entries" ? <EntriesTab ov={ov} /> : null}
     </>
   );
@@ -74,17 +79,32 @@ export function KollelView({ me, go, initialTab }: { me: Me; go?: (v: "org") => 
 
 /* ------------------------------------------------------------------ אברכים */
 
-function AvrechimTab({ ov, reload }: { ov: Overview; reload: () => void }) {
+type AvFilter = "active" | "nophone" | "nobranch" | "inactive";
+
+function AvrechimTab({ ov, reload, initialFilter }: { ov: Overview; reload: () => void; initialFilter?: AvFilter }) {
   const manager = ov.me.manager;
   const canEdit = ov.me.canEditAvrechim;
   const [q, setQ] = useState("");
-  const [showInactive, setShowInactive] = useState(false);
+  const [filter, setFilter] = useState<AvFilter>(initialFilter ?? "active");
+  const [branch, setBranch] = useState<string>("all");
   const [sel, setSel] = useState<Avrech | null>(null);
   const [importing, setImporting] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
-  const list = ov.avrechim.filter((a) => (showInactive || a.active) && (!q.trim() || `${a.name} ${a.phone}`.includes(q.trim())));
   const known = new Set(ov.branches.map((b) => b.id));
+  const noBranch = (a: Avrech) => !a.branchId || !known.has(a.branchId);
+  const test: Record<AvFilter, (a: Avrech) => boolean> = {
+    active: (a) => a.active,
+    nophone: (a) => a.active && !a.phone,
+    nobranch: (a) => a.active && noBranch(a),
+    inactive: (a) => !a.active,
+  };
+  const list = ov.avrechim.filter((a) => test[filter](a) && (branch === "all" || a.branchId === branch) && (!q.trim() || `${a.name} ${a.phone}`.includes(q.trim())));
+  const toneOf = (a: Avrech) => (!a.active ? "grey" : !a.phone || noBranch(a) ? "yellow" : "green") as "grey" | "yellow" | "green";
+  const exportXlsx = () => {
+    const rows = [["שם", "טלפון", "סניף", "נסיעות חודשיות", "פעיל"], ...list.map((a) => [a.name, a.phone, branchLabel(ov, a.branchId), a.monthlyTravel || 0, a.active ? "כן" : "לא"])];
+    downloadBlob(buildXlsx([{ name: "אברכים", rows, widths: [24, 16, 26, 16, 8], moneyCols: [3] }]), "אברכים.xlsx");
+  };
   const groups = [
     ...ov.branches.map((b) => ({ id: b.id, name: `סניף ${branchLabel(ov, b.id)}`, items: list.filter((a) => a.branchId === b.id) })),
     { id: "", name: "ללא סניף", items: list.filter((a) => !a.branchId || !known.has(a.branchId)) },
@@ -105,32 +125,38 @@ function AvrechimTab({ ov, reload }: { ov: Overview; reload: () => void }) {
   return (
     <>
       <div className="adm-toolbar">
-        <input className="input" type="search" placeholder="חיפוש אברך" value={q} onChange={(e) => setQ(e.target.value)} aria-label="חיפוש אברך" />
-        {canEdit ? (
-          <>
-            <label className="adm-toggle">
-              <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
-              כולל לא פעילים
-            </label>
-            <button type="button" className="btn btn--sm" onClick={() => setSel(blankAvrech(ov.branches.length === 1 ? ov.branches[0].id : null))}>
-              <Icon name="plus" /> אברך
-            </button>
-            {manager ? (
-              <button type="button" className="btn btn--ghost btn--sm" onClick={() => setImporting(true)}>
-                ייבוא מאקסל
-              </button>
-            ) : null}
-          </>
+        <input className="input adm-search" type="search" placeholder="חיפוש" value={q} onChange={(e) => setQ(e.target.value)} aria-label="חיפוש אברך" />
+        <ExportBtn onClick={exportXlsx} />
+        {manager ? (
+          <button type="button" className="adm-icon-btn" onClick={() => setImporting(true)} aria-label="ייבוא מאקסל" title="ייבוא מאקסל">
+            <Icon name="arrowUp" />
+          </button>
         ) : null}
       </div>
+      <Chips<AvFilter>
+        value={filter}
+        onChange={setFilter}
+        items={[
+          { id: "active", label: "פעילים", count: ov.avrechim.filter(test.active).length },
+          { id: "nophone", label: "חסר טלפון", count: ov.avrechim.filter(test.nophone).length },
+          { id: "nobranch", label: "ללא סניף", count: ov.avrechim.filter(test.nobranch).length },
+          { id: "inactive", label: "לא פעילים", count: ov.avrechim.filter(test.inactive).length },
+        ]}
+      />
+      {ov.branches.length > 1 ? (
+        <Chips<string>
+          value={branch}
+          onChange={setBranch}
+          items={[{ id: "all", label: "כל הסניפים" }, ...ov.branches.map((b) => ({ id: b.id, label: b.name }))]}
+        />
+      ) : null}
       <ToneLegend
         items={[
-          { tone: "green", label: "פעיל" },
-          { tone: "yellow", label: "חסר טלפון" },
+          { tone: "green", label: "תקין" },
+          { tone: "yellow", label: "חסר טלפון / סניף" },
           { tone: "grey", label: "לא פעיל" },
         ]}
       />
-      <SwipeHint />
       {msg ? <div className={`adm-alert ${msg.ok ? "adm-alert--ok" : "adm-alert--error"}`} style={{ marginBottom: 10 }}>{msg.text}</div> : null}
 
       <div className="adm-split">
@@ -142,14 +168,20 @@ function AvrechimTab({ ov, reload }: { ov: Overview; reload: () => void }) {
               </h2>
               <div className="adm-list">
                 {g.items.map((a) => (
-                  <SwipeRow key={a.id} phone={a.phone || undefined} waText={`שלום ${a.name}, `} tone={!a.active ? "grey" : a.phone ? "green" : "yellow"} current={sel?.id === a.id} onClick={() => setSel({ ...a })}>
+                  <SwipeRow
+                    key={a.id}
+                    phone={a.phone || undefined}
+                    waText={`שלום ${a.name}, `}
+                    tone={toneOf(a)}
+                    current={sel?.id === a.id}
+                    onClick={() => setSel({ ...a })}
+                    actions={<IconActions phone={a.phone || undefined} waText={`שלום ${a.name}, `} />}
+                  >
                     <span className="adm-row__title">{a.name}</span>
-                    <span className="muted" style={{ fontSize: "0.88rem" }}>
-                      {a.monthlyTravel ? `נסיעות ${money(a.monthlyTravel)}` : ""}
-                    </span>
+                    <span />
                     <span className="adm-row__sub" dir="auto">
                       {a.phone || "אין טלפון"}
-
+                      {a.monthlyTravel ? ` · נסיעות ${money(a.monthlyTravel)}` : ""}
                       {manager && !a.inPayroll ? " · לא בטבלת המשכורות" : ""}
                     </span>
                   </SwipeRow>
@@ -261,6 +293,7 @@ function AvrechimTab({ ov, reload }: { ov: Overview; reload: () => void }) {
       </div>
 
       {importing ? <ImportModal ov={ov} onClose={() => setImporting(false)} onDone={reload} /> : null}
+      {canEdit && !sel ? <Fab label="הוספת אברך" onClick={() => setSel(blankAvrech(branch !== "all" ? branch : ov.branches.length === 1 ? ov.branches[0].id : null))} /> : null}
     </>
   );
 }
@@ -313,16 +346,20 @@ function ImportModal({ ov, onClose, onDone }: { ov: Overview; onClose: () => voi
 
 /* ------------------------------------------------------------------ דיווחים */
 
+const STEP = 50;
+
 function EntriesTab({ ov }: { ov: Overview }) {
   const manager = ov.me.manager;
   const open = ov.months.filter((m) => !m.locked);
   const [month, setMonth] = useState<string>(open[0]?.id ?? ov.months[0]?.id ?? "");
   const [entries, setEntries] = useState<Entry[] | null>(null);
-  const [form, setForm] = useState<{ avrechId: string; type: EntryType; amount: string; description: string }>({ avrechId: "", type: "travel", amount: "", description: "" });
+  const [expense, setExpense] = useState<{ avrechId: string; amount: string; description: string } | null>(null);
+  const [full, setFull] = useState(false);
+  const [form, setForm] = useState<{ avrechId: string; type: EntryType; amount: string; description: string }>({ avrechId: "", type: "bonus", amount: "", description: "" });
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [q, setQ] = useState("");
   const locked = ov.months.find((m) => m.id === month)?.locked ?? false;
-  const avs = ov.avrechim.filter((a) => a.active);
-  const types: EntryType[] = manager ? ["travel", "expense", "bonus", "grant", "deduction"] : ["travel", "expense"];
+  const avs = ov.avrechim.filter((a) => a.active && (!q.trim() || a.name.includes(q.trim())));
 
   const load = useCallback(() => {
     if (!month) return;
@@ -336,18 +373,18 @@ function EntriesTab({ ov }: { ov: Overview }) {
     return <div className="adm-panel adm-empty">עדיין לא נפתח חודש. הרכז הראשי פותח חודש חדש במסך "משכורות".</div>;
   }
 
-  const add = async () => {
+  const send = async (body: { avrechId: string; type: EntryType; amount: number; description: string }) => {
     setMsg(null);
     try {
-      await post("/api/kollel/entries", { ...form, amount: Number(form.amount), month });
-      setForm({ ...form, amount: "", description: "" });
-      setMsg({ ok: true, text: "נשמר ואושר" });
+      await post("/api/kollel/entries", { ...body, month });
+      if (navigator.vibrate) navigator.vibrate(10);
       load();
+      return true;
     } catch (e) {
       setMsg({ ok: false, text: e instanceof Error ? e.message : "שגיאה" });
+      return false;
     }
   };
-
   const remove = async (id: string) => {
     if (!window.confirm("למחוק את הדיווח?")) return;
     try {
@@ -359,110 +396,155 @@ function EntriesTab({ ov }: { ov: Overview }) {
   };
 
   const name = (id: string) => ov.avrechim.find((a) => a.id === id)?.name ?? "-";
+  const sumFor = (id: string, types?: EntryType[]) => (entries ?? []).filter((e) => e.avrechId === id && (!types || types.includes(e.type))).reduce((t, e) => t + e.amount, 0);
   const total = (entries ?? []).reduce((t, e) => t + e.amount, 0);
+  const exportXlsx = () => {
+    const label = ov.months.find((m) => m.id === month)?.label ?? month;
+    const rows = [["אברך", "סוג", "סכום", "פירוט", "דווח ע״י"], ...(entries ?? []).map((e) => [name(e.avrechId), ENTRY_LABELS[e.type], e.amount, e.description, e.byName])];
+    downloadBlob(buildXlsx([{ name: label.slice(0, 30), rows, widths: [22, 14, 12, 30, 18], moneyCols: [2], totalRow: true }]), `דיווחים ${label}.xlsx`);
+  };
 
   return (
     <>
-      <div className="adm-toolbar">
-        <label className="field" style={{ minWidth: 200 }}>
-          <span className="field__label">חודש</span>
-          <select className="select" value={month} onChange={(e) => setMonth(e.target.value)}>
-            {ov.months.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.label}
-                {m.locked ? " (סגור לתשלום)" : ""}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
+      <Chips<string> value={month} onChange={setMonth} items={ov.months.map((m) => ({ id: m.id, label: `${m.locked ? "🔒 " : ""}${m.label}` }))} />
+      {msg ? <div className={`adm-alert ${msg.ok ? "adm-alert--ok" : "adm-alert--error"}`} style={{ marginBottom: 10 }}>{msg.text}</div> : null}
+      {locked ? (
+        <div className="adm-alert adm-alert--info" style={{ marginBottom: 14 }}>
+          <Icon name="lock" width={16} height={16} style={{ verticalAlign: "-3px" }} /> החודש סגור לתשלום
+        </div>
+      ) : null}
 
       {!locked ? (
         <section className="adm-panel">
-          <h2>דיווח חדש</h2>
-          <p className="muted" style={{ marginTop: -6 }}>
-            הנסיעות הקבועות של כל אברך נכנסות אוטומטית. כאן מדווחים תוספת או הפחתה (למשל לא הגיע שבוע - סכום שלילי), והוצאות.
-          </p>
-          <div className="adm-fields adm-fields--2">
-            <label className="field">
-              <span className="field__label">אברך</span>
-              <select className="select" value={form.avrechId} onChange={(e) => setForm({ ...form, avrechId: e.target.value })}>
-                <option value="">בחירה…</option>
-                {avs.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="field">
-              <span className="field__label">סוג</span>
-              <select className="select" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value as EntryType })}>
-                {types.map((t) => (
-                  <option key={t} value={t}>
-                    {ENTRY_LABELS[t]}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="field">
-              <span className="field__label">סכום (₪)</span>
-              <input className="input" type="number" inputMode="decimal" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} />
-            </label>
-            <label className="field">
-              <span className="field__label">פירוט</span>
-              <input className="input" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="למשל: נסיעה לכנס / ספרים" />
-            </label>
+          <div className="adm-panel__head">
+            <h2>דיווח מהיר</h2>
+            <input className="input adm-search" type="search" placeholder="חיפוש" value={q} onChange={(e) => setQ(e.target.value)} aria-label="חיפוש אברך" style={{ maxWidth: 180 }} />
           </div>
-          <div className="btn-row" style={{ marginTop: 12 }}>
-            <button type="button" className="btn btn--sm" disabled={!form.avrechId || !Number(form.amount)} onClick={add}>
-              שמירה ואישור
-            </button>
+          <div className="adm-quick">
+            {avs.map((a) => {
+              const t = sumFor(a.id);
+              return (
+                <div key={a.id} className="adm-quick__row">
+                  <div className="adm-quick__name">
+                    <strong>{a.name}</strong>
+                    <small className={t < 0 ? "is-neg" : t > 0 ? "is-pos" : ""}>{t ? money(t) : "ללא שינוי"}</small>
+                  </div>
+                  <button type="button" className="adm-qbtn adm-qbtn--plus" dir="ltr" aria-label={`תוספת ${STEP} ש״ח ל${a.name}`} onClick={() => send({ avrechId: a.id, type: "travel", amount: STEP, description: "תוספת נסיעות" })}>
+                    +{STEP}
+                  </button>
+                  <button type="button" className="adm-qbtn adm-qbtn--minus" dir="ltr" aria-label={`הפחתה ${STEP} ש״ח ל${a.name}`} onClick={() => send({ avrechId: a.id, type: "travel", amount: -STEP, description: "הפחתת נסיעות" })}>
+                    −{STEP}
+                  </button>
+                  <button type="button" className="adm-qbtn" aria-label={`הוצאה ל${a.name}`} title="הוצאה" onClick={() => setExpense({ avrechId: a.id, amount: "", description: "" })}>
+                    <Icon name="file" />
+                  </button>
+                  {expense?.avrechId === a.id ? (
+                    <div className="adm-quick__exp">
+                      <input className="input" type="number" inputMode="decimal" placeholder="₪" autoFocus value={expense.amount} onChange={(e) => setExpense({ ...expense, amount: e.target.value })} />
+                      <input className="input" placeholder="על מה?" value={expense.description} onChange={(e) => setExpense({ ...expense, description: e.target.value })} />
+                      <button
+                        type="button"
+                        className="adm-icon-btn adm-icon-btn--ok"
+                        aria-label="שמירה"
+                        disabled={!Number(expense.amount)}
+                        onClick={async () => {
+                          if (await send({ avrechId: a.id, type: "expense", amount: Number(expense.amount), description: expense.description })) setExpense(null);
+                        }}
+                      >
+                        <Icon name="check" />
+                      </button>
+                      <button type="button" className="adm-icon-btn" aria-label="ביטול" onClick={() => setExpense(null)}>
+                        <Icon name="close" />
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
+            {!avs.length ? <p className="muted">אין אברכים.</p> : null}
           </div>
-          {msg ? <div className={`adm-alert ${msg.ok ? "adm-alert--ok" : "adm-alert--error"}`}>{msg.text}</div> : null}
+          {manager ? (
+            <>
+              <button type="button" className="btn btn--ghost btn--sm" style={{ marginTop: 12 }} onClick={() => setFull(!full)}>
+                <Icon name={full ? "arrowUp" : "plus"} /> מענק, בונוס או הורדה
+              </button>
+              {full ? (
+                <div className="adm-fields adm-fields--2" style={{ marginTop: 10 }}>
+                  <label className="field">
+                    <span className="field__label">אברך</span>
+                    <select className="select" value={form.avrechId} onChange={(e) => setForm({ ...form, avrechId: e.target.value })}>
+                      <option value="">בחירה…</option>
+                      {ov.avrechim
+                        .filter((a) => a.active)
+                        .map((a) => (
+                          <option key={a.id} value={a.id}>
+                            {a.name}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+                  <div className="field">
+                    <span className="field__label">סוג</span>
+                    <Chips<EntryType> value={form.type} onChange={(type) => setForm({ ...form, type })} items={(["bonus", "grant", "deduction"] as EntryType[]).map((t) => ({ id: t, label: ENTRY_LABELS[t] }))} />
+                  </div>
+                  <label className="field">
+                    <span className="field__label">סכום (₪)</span>
+                    <input className="input" type="number" inputMode="decimal" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} />
+                  </label>
+                  <label className="field">
+                    <span className="field__label">פירוט</span>
+                    <input className="input" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+                  </label>
+                  <div className="span-2">
+                    <button
+                      type="button"
+                      className="btn btn--sm"
+                      disabled={!form.avrechId || !Number(form.amount)}
+                      onClick={async () => {
+                        if (await send({ avrechId: form.avrechId, type: form.type, amount: Number(form.amount), description: form.description })) {
+                          setForm({ ...form, amount: "", description: "" });
+                          setMsg({ ok: true, text: "נשמר" });
+                        }
+                      }}
+                    >
+                      <Icon name="check" /> שמירה
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </>
+          ) : null}
         </section>
-      ) : (
-        <div className="adm-alert adm-alert--info" style={{ marginBottom: 14 }}>
-          החודש נסגר לתשלום - אי אפשר להוסיף או למחוק דיווחים.
-        </div>
-      )}
+      ) : null}
 
       <section className="adm-panel">
         <div className="adm-panel__head">
-          <h2>דיווחים בחודש</h2>
-          <strong>{money(total)}</strong>
+          <h2>
+            דיווחים בחודש <span className="muted">({(entries ?? []).length})</span>
+          </h2>
+          <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <strong>{money(total)}</strong>
+            <ExportBtn onClick={exportXlsx} />
+          </span>
         </div>
-        <div className="adm-table-wrap">
-          <table className="adm-table">
-            <thead>
-              <tr>
-                <th scope="col">אברך</th>
-                <th scope="col">סוג</th>
-                <th scope="col">סכום</th>
-                <th scope="col">פירוט</th>
-                <th scope="col">דווח ואושר ע״י</th>
-                <th scope="col" />
-              </tr>
-            </thead>
-            <tbody>
-              {(entries ?? []).map((e) => (
-                <tr key={e.id}>
-                  <td>{name(e.avrechId)}</td>
-                  <td>{ENTRY_LABELS[e.type]}</td>
-                  <td style={{ whiteSpace: "nowrap", color: e.amount < 0 ? "#b3261e" : undefined }}>{money(e.amount)}</td>
-                  <td>{e.description}</td>
-                  <td>{e.byName}</td>
-                  <td>
-                    {!locked ? (
-                      <button type="button" className="adm-icon-btn adm-icon-btn--danger" aria-label="מחיקת דיווח" onClick={() => remove(e.id)}>
-                        <Icon name="trash" />
-                      </button>
-                    ) : null}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="adm-list">
+          {(entries ?? []).map((e) => (
+            <div key={e.id} className={`adm-row adm-row--tone-${e.amount < 0 ? "red" : "green"}`} style={{ cursor: "default" }}>
+              <span className="adm-row__title">{name(e.avrechId)}</span>
+              <span className="adm-item__actions">
+                <strong style={{ whiteSpace: "nowrap", color: e.amount < 0 ? "#b3261e" : undefined }}>{money(e.amount)}</strong>
+                {!locked ? (
+                  <button type="button" className="adm-icon-btn adm-icon-btn--danger" aria-label="מחיקת דיווח" onClick={() => remove(e.id)}>
+                    <Icon name="trash" />
+                  </button>
+                ) : null}
+              </span>
+              <span className="adm-row__sub">
+                {ENTRY_LABELS[e.type]}
+                {e.description ? ` · ${e.description}` : ""} · {e.byName}
+              </span>
+            </div>
+          ))}
         </div>
         {entries && !entries.length ? <p className="muted">אין דיווחים בחודש הזה.</p> : null}
       </section>

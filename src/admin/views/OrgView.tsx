@@ -5,6 +5,7 @@ import { api, del, DOMAIN_LABELS, post, type Domain, type Me, type OrgUnit } fro
 import type { Avrech } from "../kollelCalc";
 import { useOrg, type OrgPerson } from "../org";
 import { PhoneUsersPanel } from "./PhoneUsersPanel";
+import { Fab, IconActions } from "../components";
 
 export function OrgView({ me, domain }: { me: Me; domain: Domain }) {
   const { org, reload } = useOrg();
@@ -90,9 +91,6 @@ export function OrgView({ me, domain }: { me: Me; domain: Domain }) {
             <Icon name="plus" /> עיר
           </button>
         ) : null}
-        <button type="button" className="btn btn--ghost btn--sm" disabled={!cities.length} onClick={() => setEdit({ type: "branch", name: "", parentId: cities[0]?.id ?? null })}>
-          <Icon name="plus" /> סניף
-        </button>
       </div>
 
       {edit ? (
@@ -158,6 +156,7 @@ export function OrgView({ me, domain }: { me: Me; domain: Domain }) {
                   <div key={b.id} className={`adm-row adm-row--tone-${mgrs.length ? "green" : "yellow"}`} style={{ cursor: "default" }}>
                     <span className="adm-row__title">סניף {b.name}</span>
                     <span className="adm-item__actions">
+                      {mgrs[0]?.phone ? <IconActions phone={mgrs[0].phone} waText={`שלום ${mgrs[0].name}, `} /> : null}
                       <button type="button" className="adm-icon-btn" aria-label={`עריכת ${b.name}`} onClick={() => setEdit({ id: b.id, type: "branch", name: b.name, parentId: b.parentId })}>
                         <Icon name="edit" />
                       </button>
@@ -186,6 +185,7 @@ export function OrgView({ me, domain }: { me: Me; domain: Domain }) {
         </div>
       ) : null}
 
+      {cities.length && !edit ? <Fab label="הוספת סניף" onClick={() => setEdit({ type: "branch", name: "", parentId: cities[0]?.id ?? null })} /> : null}
       <div style={{ marginTop: 20 }}>
         <PhoneUsersPanel me={me} org={org} onChange={reload} title="רכזים ומנהלי סניפים (כניסה בטלפון וקוד)" />
       </div>
