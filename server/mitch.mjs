@@ -79,7 +79,8 @@ export async function handleMitch(req, res, url, ctx) {
     if (!m || !can(m.domain) || !inScope(m.domain, m.branchId)) return send(404, { error: "לא נמצא" }), true;
     const updates = (await store.list("mitchUpdates", 5000))
       .filter((u) => u.mitchId === m.id)
-      .sort((a, b) => String(b.submittedAt || b.createdAt || "").localeCompare(String(a.submittedAt || a.createdAt || "")));
+      .sort((a, b) => String(b.submittedAt || b.createdAt || "").localeCompare(String(a.submittedAt || a.createdAt || "")))
+      .slice(0, 60);
     return send(200, { updates }), true;
   }
 
