@@ -62,7 +62,6 @@ export function UsersView({ me }: { me: Me }) {
       <div className="adm-head">
         <div>
           <h1>משתמשים והרשאות</h1>
-          <p>מי נכנס למערכת ומה כל אחד רואה. כניסה בחשבון Google, או בטלפון וקוד (בתחתית העמוד).</p>
         </div>
 
       </div>
