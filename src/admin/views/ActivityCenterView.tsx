@@ -25,6 +25,7 @@ type ActivityItem = {
 };
 type LocationSummary = { city: string; lat: number; lng: number; count: number; boys: number; girls: number; participants: number };
 type Data = {
+  openCities?: { kollel: string[]; bnot: string[] };
   items: ActivityItem[];
   locations: LocationSummary[];
   totals: { activities: number; boys: number; girls: number; participants: number; cities: number };
@@ -204,6 +205,7 @@ export function ActivityCenterView({ go, mode }: { go: (view: View, tab?: string
   const [source,setSource]=useState("all");
   const [city,setCity]=useState("all");
   const [pickOpen,setPickOpen]=useState(false);
+  const [denied,setDenied]=useState("");
   const [calendarSystem,setCalendarSystem]=useState<CalendarSystem>(()=>(localStorage.getItem("tb-calendar-system")==="gregorian"?"gregorian":"hebrew"));
   const [calendarView,setCalendarView]=useState<CalendarView>("month");
   const [wall,setWall]=useState<WallData|null>(null);
@@ -270,6 +272,14 @@ export function ActivityCenterView({ go, mode }: { go: (view: View, tab?: string
     }
     return top;
   }, [mapLocations, city]);
+  // לחיצה על עיר במפה: נפתחת רק אם יש הרשאה לעיר הזאת
+  const canOpenCity=(c:string)=>Boolean(data?.openCities?.[domain]?.includes(c));
+  const pickCity=(c:string)=>{
+    if(city===c){setCity("all");setDenied("");return;}
+    if(!canOpenCity(c)){setDenied(c);return;}
+    setDenied("");setCity(c);
+  };
+  const cityItems=useMemo(()=>city==="all"?[]:(data?.items||[]).filter((x)=>x.domain===domain&&x.city===city).sort((a,b)=>a.date.localeCompare(b.date)),[data,city,domain]);
   const totalParticipants=filtered.reduce((n,x)=>n+Number(x.participants||0),0);
   const activeCities=new Set(filtered.map((x)=>x.city).filter(Boolean)).size;
   const todayCount=filtered.filter((x)=>x.date===todayIso()).length;
@@ -492,12 +502,19 @@ export function ActivityCenterView({ go, mode }: { go: (view: View, tab?: string
               <strong>{mapPins.length} מוקדי פעילות בולטים</strong>
               <span>לחיצה על נעיצה מסננת את כל הלוח</span>
             </div>
-            <IsraelMap3D pins={mapPins} active={city} onPick={(c) => setCity(city === c ? "all" : c)} />
+            <IsraelMap3D pins={mapPins} active={city} onPick={pickCity} />
           </div>
           <div className="adm-map-legend"><span><i className="is-kollel"/> טללי ברכה</span><span><i className="is-bnot"/> בנות צילה</span><span>מוצגים מוקדי הפעילות הבולטים</span></div>
+          {denied?<div className="adm-alert adm-alert--error" role="alert">אין לך הרשאה לנתוני {denied}.</div>:null}
+          {city!=="all"&&canOpenCity(city)?(
+            <div className="adm-citybox">
+              <div className="adm-citybox__head"><strong>{city}</strong><span>{cityItems.length} פעילויות · {cityItems.reduce((n,x)=>n+Number(x.participants||0),0)} משתתפים</span><button type="button" className="adm-icon-btn" aria-label="סגירה" onClick={()=>setCity("all")}><Icon name="close"/></button></div>
+              {cityItems.length?cityItems.slice(-12).reverse().map((x)=><button type="button" key={x.id} className="adm-citybox__row" onClick={()=>{setSelectedDate(x.date);setCursor(new Date(`${x.date}T12:00:00`));setCalendarView("day");}}><span>{x.title}{x.branch?` · ${x.branch}`:""}</span><small>{x.date}{x.time?` · ${x.time}`:""}</small></button>):<p className="muted">אין פעילות בעיר הזאת.</p>}
+            </div>
+          ):null}
           <div className="adm-city-ranking">
             <div className="adm-city-ranking__head"><strong>פעילות לפי עיר</strong><span>{mapLocations.length} ערים בטווח הנבחר</span></div>
-            {mapLocations.slice(0,10).map((l)=><button type="button" className={city===l.city?"is-active":""} key={l.city} onClick={()=>setCity(city===l.city?"all":l.city)}><span>{l.city}</span><strong>{l.count}</strong><small>{l.participants} משתתפים</small></button>)}
+            {mapLocations.slice(0,10).map((l)=><button type="button" className={city===l.city?"is-active":""} key={l.city} onClick={()=>pickCity(l.city)}><span>{canOpenCity(l.city)?"":"🔒 "}{l.city}</span><strong>{l.count}</strong><small>{l.participants} משתתפים</small></button>)}
           </div>
         </section>
       </div>

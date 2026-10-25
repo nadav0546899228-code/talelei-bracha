@@ -230,7 +230,16 @@ export async function handleActivityCenter(req, res, url, ctx) {
     locations.set(x.city, prev);
   }
 
+  // ערים שהמשתמש רשאי "לפתוח" במפה: ערים שיש בהן סניף בהרשאתו (הכל - למי שרואה הכל)
+  const openCities = {};
+  for (const d of ["kollel", "bnot"]) {
+    const scope = d === "bnot" ? bScope : kScope;
+    const allowed = d === "bnot" ? canB : canK;
+    openCities[d] = !allowed ? [] : org.cities.filter((c) => c.domain === d && (globalCalendar || scope === null || org.branches.some((b) => b.parentId === c.id && scope.has(b.id)))).map((c) => c.name);
+  }
+
   return send(200, {
+    openCities,
     items,
     locations:[...locations.values()].sort((a,b)=>b.count-a.count),
     totals:{

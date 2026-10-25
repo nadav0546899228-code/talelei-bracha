@@ -4848,3 +4848,11 @@ table.adm-xl .adm-pay-exrow .input{border:1px solid #cfd8d8 !important;backgroun
 .adm .adm-ut td .adm-ut-sub{display:inline !important;white-space:nowrap}
 .adm .adm-ut td{display:table-cell !important}
 .adm .adm-ut td>*{vertical-align:middle}
+
+/* ===== פירוט עיר במפה ===== */
+.adm-citybox{border:1px solid #cfe0e0;border-radius:14px;background:#f6fbfb;padding:8px 10px;margin:10px 0}
+.adm-citybox__head{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.adm-citybox__head strong{font-size:1.02rem}
+.adm-citybox__head span{flex:1;color:#5b6b6b;font-size:.82rem}
+.adm-citybox__row{display:flex;justify-content:space-between;gap:8px;width:100%;border:0;border-top:1px solid #e1ecec;background:none;padding:7px 2px;font:inherit;font-size:.86rem;cursor:pointer;text-align:start}
+.adm-citybox__row small{color:#6b7a7b;white-space:nowrap}
