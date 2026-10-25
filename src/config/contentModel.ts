@@ -42,9 +42,10 @@ export type Runtime = {
   devLogin: boolean;
   demo?: boolean;
   serverAvailable: boolean;
+  featureFlags: { donations: boolean };
 };
 
-export const runtime: Runtime = { googleClientId: null, env: "static", devLogin: false, serverAvailable: false };
+export const runtime: Runtime = { googleClientId: null, env: "static", devLogin: false, serverAvailable: false, featureFlags: { donations: false } };
 
 /** תמונת מצב של התוכן הנוכחי (ברירות מחדל + מה שנטען) - משמשת את עורך התוכן */
 export function currentContent(): SiteContent {
@@ -106,6 +107,7 @@ export async function loadContent(timeoutMs = 2500) {
     runtime.env = data.env ?? "production";
     runtime.devLogin = Boolean(data.devLogin);
     runtime.demo = Boolean(data.demo);
+    runtime.featureFlags = { donations: data.featureFlags?.donations === true };
     runtime.serverAvailable = true;
     applyContent(data.content);
   } catch {
