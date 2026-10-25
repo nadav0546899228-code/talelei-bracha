@@ -34,13 +34,14 @@ export async function handleActivityCenter(req, res, url, ctx) {
   const org = await loadOrg(store);
   const kScope = branchScope(user, org, "kollel");
   const bScope = branchScope(user, org, "bnot");
-  const canK = user.views.includes("kollel") || user.roles.some((r) => r.startsWith("kollel_")) || user.roles.includes("chief_coordinator") || user.roles.includes("ceo") || user.roles.includes("developer");
-  const canB = user.views.includes("bnot") || user.views.includes("isha") || user.roles.some((r) => r.startsWith("bnot_")) || user.roles.includes("chief_coordinator") || user.roles.includes("ceo") || user.roles.includes("developer");
+  const globalCalendar = user.roles.includes("office") || user.roles.includes("content_editor");
+  const canK = globalCalendar || user.views.includes("kollel") || user.roles.some((r) => r.startsWith("kollel_")) || user.roles.includes("chief_coordinator") || user.roles.includes("ceo") || user.roles.includes("developer");
+  const canB = globalCalendar || user.views.includes("bnot") || user.views.includes("isha") || user.roles.some((r) => r.startsWith("bnot_")) || user.roles.includes("chief_coordinator") || user.roles.includes("ceo") || user.roles.includes("developer");
 
   const from = url.searchParams.get("from") || "";
   const to = url.searchParams.get("to") || "";
   const branchOk = (domain, branchId) => {
-    if (!branchId) return true;
+    if (!branchId || globalCalendar) return true;
     const scope = domain === "bnot" ? bScope : kScope;
     return scope === null || scope.has(branchId);
   };
