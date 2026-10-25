@@ -2596,3 +2596,10 @@
     border-radius: 18px !important;
   }
 }
+
+/* כפתור התצוגה: שם התצוגה הנוכחית + חץ, בלי עין ובלי צבע שונה */
+.adm-views-trigger{max-width:150px!important;background:#fff!important;color:var(--ink)!important;border-color:#dfe5e5!important}
+.adm-views-trigger span{display:inline!important;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.adm-views-trigger svg{width:15px;height:15px;flex:none}
+@media(max-width:719px){.adm-views-trigger{max-width:118px!important;min-width:0!important;width:auto!important;padding-inline:9px!important}}
+@media(max-width:370px){.adm-views-trigger{max-width:92px!important}.adm-views-trigger span{display:inline!important}}

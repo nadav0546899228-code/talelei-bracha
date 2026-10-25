@@ -543,6 +543,12 @@ export default function AdminApp() {
   };
   const ctx = { me, subs, refreshSubs, go, openImpersonate, mode };
   const by = me.user.impersonatedBy;
+  // שם התצוגה שפתוחה עכשיו (התפקיד שלי, או של מי שנכנסתי בשמו)
+  const viewName = by
+    ? me.user.kind === "virtual"
+      ? me.user.name.replace(" (תצוגה לדוגמה)", "")
+      : me.roleLabels[me.user.roles[0]] || me.user.name || ""
+    : me.roleLabels[me.user.roles[0]] || "תצוגות";
 
   return (
     <div className="adm" data-mode={mode} data-display={displayMode}>
@@ -566,13 +572,13 @@ export default function AdminApp() {
           {me.canImpersonate ? (
             <button
               type="button"
-              className={`adm-viewbtn adm-views-trigger${by ? " is-as" : ""}`}
+              className="adm-viewbtn adm-views-trigger"
               onClick={openImpersonate}
               title="מעבר בין תצוגות"
-              aria-label="מעבר בין תצוגות"
+              aria-label={`התצוגה הנוכחית: ${viewName}. מעבר בין תצוגות`}
             >
-              <Icon name="eye" />
-              <span>{by ? "תצוגה אחרת" : "תצוגות"}</span>
+              <span>{viewName}</span>
+              <Icon name="chevronDown" />
             </button>
           ) : null}
           <button type="button" className="adm-icon-btn adm-search-btn" onClick={() => setSearchOpen(true)} aria-label="חיפוש" title="חיפוש">
