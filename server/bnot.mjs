@@ -50,9 +50,13 @@ export async function handleBnot(req, res, url, ctx) {
     const prev = await store.get("bnotActivities", id);
     if (prev && !inScope(prev)) return send(403, { error: "אין הרשאה" }), true;
     const members = new Set((await store.list("bnotMembers", 20000)).filter((m) => m.branchId === branchId).map((m) => m.id));
+    const time = /^([01]\d|2[0-3]):[0-5]\d$/.test(String(b.time || "")) ? String(b.time) : "";
     await store.put("bnotActivities", id, {
       branchId,
       date,
+      time,
+      place: clean(b.place, 120),
+      address: clean(b.address, 180),
       title: clean(b.title, 120).trim() || "פעילות",
       present: (Array.isArray(b.present) ? b.present : []).map(String).filter((x) => members.has(x)),
       by: user.id,
