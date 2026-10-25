@@ -761,7 +761,8 @@ export default function AdminApp() {
             <button
               type="button"
               className="adm-viewbtn"
-              onClick={() => setAsOpen(true)}
+              onClick={() => setAsOpen((o) => !o)}
+              aria-expanded={asOpen}
               aria-label={`תצוגה: ${viewName}. מעבר תצוגה`}
               title="מעבר תצוגה"
             >
@@ -785,6 +786,24 @@ export default function AdminApp() {
           </button>
         </div>
       </header>
+
+      {asOpen ? (
+              <ImpersonateModal
+                mode={mode}
+                current={by ? me.user.id : undefined}
+                backLabel={ownViewLabel}
+                onClose={() => setAsOpen(false)}
+                onSwitched={switched}
+                onBack={
+                  by
+                    ? () => {
+                        setAsOpen(false);
+                        stopImpersonate();
+                      }
+                    : undefined
+                }
+              />
+            ) : null}
 
       <OrgScopeBar me={me} mode={mode} />
 
@@ -1014,23 +1033,6 @@ export default function AdminApp() {
             setProfileOpen(false);
             loadMe();
           }}
-        />
-      ) : null}
-      {asOpen ? (
-        <ImpersonateModal
-          mode={mode}
-          current={by ? me.user.id : undefined}
-          backLabel={ownViewLabel}
-          onClose={() => setAsOpen(false)}
-          onSwitched={switched}
-          onBack={
-            by
-              ? () => {
-                  setAsOpen(false);
-                  stopImpersonate();
-                }
-              : undefined
-          }
         />
       ) : null}
       {codeOpen ? <ChangeCode forced={me.mustChangeCode} onClose={() => { setCodeOpen(false); setMe({ ...me, mustChangeCode: false }); }} /> : null}

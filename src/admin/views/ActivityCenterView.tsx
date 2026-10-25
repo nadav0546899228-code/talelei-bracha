@@ -132,8 +132,8 @@ function monthCells(cursor: Date, system: CalendarSystem) {
 }
 
 
-/** בורר תאריך בגלילה - שלוש עמודות: יום, חודש, שנה (עברי באותיות או לועזי) */
-function DateWheel({ value, system, onPick, onClose }: { value: string; system: CalendarSystem; onPick: (d: Date) => void; onClose: () => void }) {
+/** בורר תאריך בגלילה - פתוח בתוך הדף (בלי חלון): שלוש עמודות יום/חודש/שנה, כל גלילה מעדכנת את התאריך מיד */
+function DateWheel({ value, system, onChange }: { value: string; system: CalendarSystem; onChange: (d: Date) => void }) {
   const base = new Date(`${value}T12:00:00`);
   const years = useMemo(() => {
     const yearStart = (d: Date) => calendarYearMonths(d, system)[0];
@@ -146,11 +146,12 @@ function DateWheel({ value, system, onPick, onClose }: { value: string; system: 
     }
     return list;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value, system]);
-  const [yi, setYi] = useState(5);
+  }, [system]);
+  const curYear = calendarYearKey(base, system);
+  const [yi, setYi] = useState(() => Math.max(0, years.findIndex((y) => calendarYearKey(y, system) === curYear)));
   const months = useMemo(() => calendarYearMonths(years[yi], system), [years, yi, system]);
   const curMonthStart = startOfCalendarMonth(base, system).getTime();
-  const [mi, setMi] = useState(() => Math.max(0, calendarYearMonths(years[5], system).findIndex((m) => m.getTime() === curMonthStart)));
+  const [mi, setMi] = useState(() => Math.max(0, calendarYearMonths(years[yi], system).findIndex((m) => m.getTime() === curMonthStart)));
   const mIdx = Math.min(mi, months.length - 1);
   const mStart = months[mIdx];
   const mLen = Math.round((nextCalendarMonth(mStart, system, 1).getTime() - mStart.getTime()) / 864e5);
@@ -158,37 +159,50 @@ function DateWheel({ value, system, onPick, onClose }: { value: string; system: 
   const dIdx = Math.min(day, mLen);
   const dateOf = (n: number) => { const d = new Date(mStart); d.setDate(d.getDate() + n - 1); return d; };
   const monthName = (d: Date) => system === "hebrew" ? hebParts(d).month : new Intl.DateTimeFormat("he-IL", { month: "long" }).format(d);
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    ref.current?.querySelectorAll<HTMLElement>(".is-on").forEach((el) => el.scrollIntoView({ block: "center" }));
-  }, [yi, mIdx, dIdx]);
   const chosen = dateOf(dIdx);
+  const last = useRef("");
+  useEffect(() => {
+    const iso = dayIso(chosen);
+    if (iso === value || iso === last.current) return;
+    last.current = iso;
+    onChange(chosen);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [yi, mIdx, dIdx]);
+  // גלילה: הפריט שבמרכז העמודה הוא הנבחר
+  const timers = useRef<Record<string, number>>({});
+  const snap = (key: string, el: HTMLElement, set: (i: number) => void) => {
+    window.clearTimeout(timers.current[key]);
+    timers.current[key] = window.setTimeout(() => {
+      const mid = el.getBoundingClientRect().top + el.clientHeight / 2;
+      let best = 0, bd = 1e9;
+      el.querySelectorAll<HTMLElement>("button").forEach((b, i) => {
+        const r = b.getBoundingClientRect(); const d = Math.abs(r.top + r.height / 2 - mid);
+        if (d < bd) { bd = d; best = i; }
+      });
+      set(best);
+    }, 90);
+  };
+  const centered = (el: HTMLElement | null) => el?.querySelector<HTMLElement>(".is-on")?.scrollIntoView({ block: "center" });
+  const colRef = useRef<HTMLDivElement>(null);
+  useEffect(() => { colRef.current?.querySelectorAll<HTMLElement>(".adm-wheel__col").forEach((c) => c.querySelector<HTMLElement>(".is-on") && (c.scrollTop = (c.querySelector<HTMLElement>(".is-on")!.offsetTop - c.clientHeight / 2 + 20))); }, []);
   return (
-    <div className="adm-wheel-back" onClick={onClose}>
-      <div className="adm-wheel" ref={ref} onClick={(e) => e.stopPropagation()} role="dialog" aria-label="בחירת תאריך">
-        <div className="adm-wheel__head">
-          <strong>{system === "hebrew" ? `${weekday(chosen)}, ${gem(hebParts(chosen).day)} ${hebParts(chosen).month} ${gem(hebParts(chosen).year)}` : new Intl.DateTimeFormat("he-IL", { weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(chosen)}</strong>
+    <div className="adm-wheel" role="group" aria-label="בחירת תאריך בגלילה">
+      <div className="adm-wheel__mark" aria-hidden="true" />
+      <div className="adm-wheel__cols" ref={colRef}>
+        <div className="adm-wheel__col" aria-label="יום" onScroll={(e) => snap("d", e.currentTarget, (i) => setDay(i + 1))}>
+          {Array.from({ length: mLen }, (_, i) => i + 1).map((n) => (
+            <button type="button" key={n} className={n === dIdx ? "is-on" : ""} onClick={(e) => { setDay(n); centered(e.currentTarget); e.currentTarget.scrollIntoView({ block: "center", behavior: "smooth" }); }}>{dayLabelOf(dateOf(n), system)}</button>
+          ))}
         </div>
-        <div className="adm-wheel__cols">
-          <div className="adm-wheel__col" aria-label="יום">
-            {Array.from({ length: mLen }, (_, i) => i + 1).map((n) => (
-              <button type="button" key={n} className={n === dIdx ? "is-on" : ""} onClick={() => setDay(n)}>{dayLabelOf(dateOf(n), system)}</button>
-            ))}
-          </div>
-          <div className="adm-wheel__col" aria-label="חודש">
-            {months.map((m, i) => (
-              <button type="button" key={m.getTime()} className={i === mIdx ? "is-on" : ""} onClick={() => setMi(i)}>{monthName(m)}</button>
-            ))}
-          </div>
-          <div className="adm-wheel__col" aria-label="שנה">
-            {years.map((y, i) => (
-              <button type="button" key={y.getTime()} className={i === yi ? "is-on" : ""} onClick={() => setYi(i)}>{yearTitle(y, system)}</button>
-            ))}
-          </div>
+        <div className="adm-wheel__col" aria-label="חודש" onScroll={(e) => snap("m", e.currentTarget, setMi)}>
+          {months.map((m, i) => (
+            <button type="button" key={m.getTime()} className={i === mIdx ? "is-on" : ""} onClick={(e) => { setMi(i); e.currentTarget.scrollIntoView({ block: "center", behavior: "smooth" }); }}>{monthName(m)}</button>
+          ))}
         </div>
-        <div className="adm-wheel__foot">
-          <button type="button" className="btn btn--ghost btn--sm" onClick={() => { onPick(new Date()); }}>היום</button>
-          <button type="button" className="btn btn--sm" onClick={() => onPick(chosen)}>אישור</button>
+        <div className="adm-wheel__col" aria-label="שנה" onScroll={(e) => snap("y", e.currentTarget, setYi)}>
+          {years.map((y, i) => (
+            <button type="button" key={y.getTime()} className={i === yi ? "is-on" : ""} onClick={(e) => { setYi(i); e.currentTarget.scrollIntoView({ block: "center", behavior: "smooth" }); }}>{yearTitle(y, system)}</button>
+          ))}
         </div>
       </div>
     </div>
@@ -332,7 +346,6 @@ export function ActivityCenterView({ go, mode }: { go: (view: View, tab?: string
 
   return (
     <div className="adm-activity-center">
-      {pickOpen ? <DateWheel value={selectedDate} system={calendarSystem} onClose={()=>setPickOpen(false)} onPick={(d)=>{d.setHours(12,0,0,0);setSelectedDate(dayIso(d));setCursor(d);setPickOpen(false);}}/> : null}
       <div className="adm-head">
         <div>
           <span className="adm-eyebrow">תמונת מצב ארצית</span>
@@ -412,13 +425,14 @@ export function ActivityCenterView({ go, mode }: { go: (view: View, tab?: string
         <section className="adm-panel adm-calendar-panel">
           <div className="adm-calendar-nav">
             <button type="button" className="adm-icon-btn" onClick={()=>movePeriod(-1)} aria-label="תקופה קודמת"><Icon name="arrowRight"/></button>
-            <button type="button" className="adm-calendar-nav__title" onClick={()=>setPickOpen(true)}>
+            <button type="button" className="adm-calendar-nav__title" onClick={()=>setPickOpen((o)=>!o)}>
               <strong>{calendarView==="day"?heDay(selectedDate,calendarSystem):calendarView==="year"?yearTitle(cursor,calendarSystem):monthTitle(cursor,calendarSystem)}</strong>
-              <small>לחיצה לבחירת יום, חודש ושנה</small>
+              <small>{pickOpen?"גוללים יום, חודש ושנה · לחיצה לסגירה":"לחיצה לבחירת יום, חודש ושנה"}</small>
             </button>
             <button type="button" className="adm-icon-btn" onClick={()=>movePeriod(1)} aria-label="תקופה הבאה"><Icon name="arrowLeft"/></button>
             <button type="button" className="btn btn--ghost btn--sm adm-calendar-today" onClick={jumpToday}>היום</button>
           </div>
+          {pickOpen ? <DateWheel key={calendarSystem} value={selectedDate} system={calendarSystem} onChange={(d)=>{d.setHours(12,0,0,0);setSelectedDate(dayIso(d));setCursor(d);}}/> : null}
 
           {calendarView==="month" ? <>
             <div className="adm-calendar-weekdays">{["א","ב","ג","ד","ה","ו","ש"].map((x)=><span key={x}>{x}</span>)}</div>
@@ -453,7 +467,7 @@ export function ActivityCenterView({ go, mode }: { go: (view: View, tab?: string
 
           {calendarView==="day" ? <div className="adm-calendar-day-focus">
             <span>{weekday(new Date(`${selectedDate}T12:00:00`))}</span>
-            <button type="button" className="adm-cal-pickbtn" onClick={()=>setPickOpen(true)} aria-label="בחירת תאריך בגלילה">
+            <button type="button" className="adm-cal-pickbtn" onClick={()=>setPickOpen((o)=>!o)} aria-label="בחירת תאריך בגלילה">
               <strong>{dayLabelOf(new Date(`${selectedDate}T12:00:00`),calendarSystem)}</strong>
               <h3>{monthTitle(new Date(`${selectedDate}T12:00:00`),calendarSystem)}</h3>
             </button>
