@@ -4791,3 +4791,4 @@ table.adm-xl .adm-pay-ex{width:28px;height:26px;border-radius:7px}
 .adm-vpanel .adm-views__units{display:flex;flex-wrap:wrap;gap:6px;padding:4px 12px 10px}
 .adm .adm-vpanel .adm-views__btn{min-height:0 !important;height:38px;font-size:.92rem;padding:0 12px;line-height:1.2}
 .adm .adm-vpanel{padding:4px 10px 8px}
+.adm[data-mode="girls"] .adm-activity-filters .adm-segmented button[aria-pressed="true"]{background:#fff !important;border-color:transparent !important;color:#a3184f !important;font-weight:800}
