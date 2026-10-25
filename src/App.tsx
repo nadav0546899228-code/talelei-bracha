@@ -47,8 +47,8 @@ export default function App() {
       document.head.appendChild(canonical);
     }
     canonical.href = window.location.origin + path;
-    if (isDevSite) setMeta('meta[name="robots"]', "name", "robots", "noindex, nofollow");
-  }, [route, path, isAdmin]);
+    setMeta('meta[name="robots"]', "name", "robots", isDevSite || isShare ? "noindex, nofollow" : "index, follow");
+  }, [route, path, isAdmin, isShare]);
 
   if (isAdmin)
     return (
