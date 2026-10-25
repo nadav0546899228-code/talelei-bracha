@@ -64,7 +64,7 @@ export function DevExtras() {
               }
             }}
           >
-            <Icon name={features?.donations ? "eye" : "eyeOff"} /> מודול תרומות: {features?.donations ? "פעיל" : "מוסתר"}
+            <Icon name="eye" /> מודול תרומות: {features?.donations ? "פעיל" : "מוסתר"}
           </button>
         </div>
         <p className="muted" style={{ margin: 0 }}>
