@@ -5,7 +5,7 @@ import { useLive } from "../live";
 
 type ActivityItem = {
   id: string;
-  source: "bnotActivity" | "challah" | "kollelStudy" | "siteEvent";
+  source: "bnotActivity" | "challah" | "kollelStudy" | "siteEvent" | "scheduledLesson";
   sourceLabel: string;
   domain: "kollel" | "bnot";
   title: string;
@@ -41,8 +41,8 @@ const addDays = (iso:string,n:number) => {
 };
 const heDay = (iso:string) => new Intl.DateTimeFormat("he-IL",{weekday:"long",day:"numeric",month:"long"}).format(new Date(`${iso}T12:00:00`));
 const monthTitle = (d:Date) => new Intl.DateTimeFormat("he-IL",{month:"long",year:"numeric"}).format(d);
-const sourceIcon = (s:ActivityItem["source"]): IconName => s==="challah" ? "wheat" : s==="kollelStudy" ? "book" : s==="siteEvent" ? "globe" : "users";
-const sourceClass = (s:ActivityItem["source"]) => s==="challah" ? "challah" : s==="kollelStudy" ? "kollel" : s==="siteEvent" ? "site" : "bnot";
+const sourceIcon = (s:ActivityItem["source"]): IconName => s==="challah" ? "wheat" : s==="kollelStudy" || s==="scheduledLesson" ? "book" : s==="siteEvent" ? "globe" : "users";
+const sourceClass = (s:ActivityItem["source"]) => s==="challah" ? "challah" : s==="kollelStudy" || s==="scheduledLesson" ? "kollel" : s==="siteEvent" ? "site" : "bnot";
 
 function monthCells(cursor: Date) {
   const first=new Date(cursor.getFullYear(),cursor.getMonth(),1,12);
@@ -149,7 +149,7 @@ export function ActivityCenterView() {
           <option value="all">שני הארגונים</option><option value="kollel">טללי ברכה</option><option value="bnot">בנות צילה</option>
         </select>
         <select className="select" value={source} onChange={(e)=>setSource(e.target.value)} aria-label="סוג פעילות">
-          <option value="all">כל סוגי הפעילות</option><option value="bnotActivity">פעילות בנות צילה</option><option value="challah">הפרשת חלה</option><option value="kollelStudy">ערב לימוד</option><option value="siteEvent">אירוע האתר</option>
+          <option value="all">כל סוגי הפעילות</option><option value="bnotActivity">פעילות בנות צילה</option><option value="challah">הפרשת חלה</option><option value="kollelStudy">ערב לימוד</option><option value="scheduledLesson">שיעור</option><option value="siteEvent">אירוע האתר</option>
         </select>
         <select className="select" value={city} onChange={(e)=>setCity(e.target.value)} aria-label="עיר">
           <option value="all">כל הארץ</option>
