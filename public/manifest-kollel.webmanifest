@@ -1,0 +1,24 @@
+{
+  "name": "קרן טללי ברכה",
+  "short_name": "טללי ברכה",
+  "start_url": "/admin",
+  "display": "standalone",
+  "background_color": "#f7fbfa",
+  "theme_color": "#0f7377",
+  "dir": "rtl",
+  "lang": "he",
+  "icons": [
+    {
+      "src": "/brand/icon-kollel-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/brand/icon-kollel-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
