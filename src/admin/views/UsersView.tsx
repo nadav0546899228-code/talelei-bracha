@@ -7,7 +7,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Icon, type IconName } from "../../components/Icon";
 import { api, del, fmtDateTime, post, ROLE_SCOPE, type Me, type Role, type Scope } from "../api";
 import { ScopePicker, scopeText, useOrg } from "../org";
-import { enterAs } from "../Impersonate";
+import { enterAs, roleInMode } from "../Impersonate";
 import { ContactActions, ExportBtn } from "../components";
 import { useLive } from "../live";
 import { buildXlsx, downloadBlob } from "../xlsx";
@@ -60,7 +60,7 @@ const ROLE_HELP: Partial<Record<Role, string>> = {
   content_editor: "תוכן האתר",
 };
 
-export function UsersView({ me }: { me: Me }) {
+export function UsersView({ me, mode }: { me: Me; mode: "boys" | "girls" }) {
   const { org } = useOrg();
   const [gu, setGu] = useState<GU[] | null>(null);
   const [pu, setPu] = useState<PU[] | null>(null);
@@ -95,7 +95,10 @@ export function UsersView({ me }: { me: Me }) {
     return [...g, ...p].sort((a, b) => (a.name || a.email).localeCompare(b.name || b.email, "he"));
   }, [gu, pu]);
 
+  // כמו שני אתרים: מוצגים רק אנשי הארגון של המצב הנוכחי (+ ההנהלה)
+  const inMode = (r: Row) => r.roles.some((x) => roleInMode(x, mode));
   const filtered = rows.filter((r) => {
+    if (!inMode(r)) return false;
     const t = q.trim();
     if (t && !`${r.name} ${r.email} ${r.phone}`.toLowerCase().includes(t.toLowerCase())) return false;
     if (roleF !== "all" && !r.roles.includes(roleF as Role)) return false;
@@ -104,8 +107,8 @@ export function UsersView({ me }: { me: Me }) {
     if (statusF === "locked" && !r.lock?.locked) return false;
     return true;
   });
-  const activeCount = rows.filter((r) => r.active).length;
-  const roleOptions = [...new Set(rows.flatMap((r) => r.roles))];
+  const activeCount = rows.filter((r) => inMode(r) && r.active).length;
+  const roleOptions = [...new Set(rows.flatMap((r) => r.roles))].filter((r) => roleInMode(r, mode));
 
   const fail = (e: unknown) => setMsg({ ok: false, text: e instanceof Error ? e.message : "שגיאה" });
 
@@ -171,7 +174,7 @@ export function UsersView({ me }: { me: Me }) {
   };
 
   const editable = (r: Row) => !r.bootstrap && r.roles.every((x) => me.assignableRoles.includes(x));
-  const assignable = (kind: "google" | "phone") => me.assignableRoles.filter((r) => kind === "google" || r !== "developer");
+  const assignable = (kind: "google" | "phone") => me.assignableRoles.filter((r) => (kind === "google" || r !== "developer") && roleInMode(r, mode));
 
   const act = (icon: IconName, label: string, onClick: () => void, tone = "") => (
     <button type="button" className={`adm-ut-act${tone ? ` adm-ut-act--${tone}` : ""}`} title={label} aria-label={label} onClick={onClick}>
@@ -186,7 +189,7 @@ export function UsersView({ me }: { me: Me }) {
           <Icon name="shield" />
           <div>
             <h1>ניהול משתמשים</h1>
-            <p>{activeCount} משתמשים פעילים · {rows.length} בסה״כ</p>
+            <p>{mode === "boys" ? "טללי ברכה" : "בנות צילה"} · {activeCount} פעילים · {rows.filter(inMode).length} בסה״כ</p>
           </div>
         </div>
         <div className="adm-ut-tools">

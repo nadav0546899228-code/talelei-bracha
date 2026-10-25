@@ -965,7 +965,7 @@ export default function AdminApp() {
               {curView === "broadcast" ? <BroadcastView key={`bc-${mode}-${curTab ?? ""}`} me={me} mode={mode} initialTab={curTab} /> : null}
               {curView === "content" ? <ContentView key={`ct-${curTab ?? ""}`} initialSection={curTab} /> : null}
               {curView === "donations" ? <DonationsView me={me} /> : null}
-              {curView === "users" ? <UsersView me={me} /> : null}
+              {curView === "users" ? <UsersView key={`u-${mode}`} me={me} mode={mode} /> : null}
               {curView === "audit" ? <AuditView /> : null}
               {curView === "developer" ? <DeveloperView {...ctx} /> : null}
             </>
@@ -1027,6 +1027,7 @@ export default function AdminApp() {
       ) : null}
       {asOpen ? (
         <ImpersonateModal
+          mode={mode}
           current={by ? me.user.id : undefined}
           backLabel={ownViewLabel}
           onClose={() => setAsOpen(false)}

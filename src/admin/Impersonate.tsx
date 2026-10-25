@@ -3,12 +3,17 @@ import { useEffect, useState } from "react";
 import { api, post, type Domain, type OrgUnit, type Role } from "./api";
 
 type Targets = {
-  roles: { id: Role; label: string; scope: { domain: Domain; level: "city" | "branch" } | null }[];
+  roles: { id: Role; label: string; scope: { domain: Domain; level: "region" | "city" | "branch" } | null }[];
+  regions?: OrgUnit[];
   cities: OrgUnit[];
   branches: OrgUnit[];
 };
 
-const ORDER: Role[] = ["ceo", "chief_coordinator", "kollel_city", "kollel_branch", "bnot_city", "bnot_branch", "isha_coordinator", "office", "content_editor"];
+const ORDER: Role[] = ["ceo", "chief_coordinator", "kollel_region", "kollel_city", "kollel_branch", "bnot_region", "bnot_city", "bnot_branch", "bnot_caller", "isha_coordinator", "office", "content_editor"];
+
+/** טללי ברכה ובנות צילה כשני אתרים: בכל מצב רק התפקידים של אותו ארגון (+ הנהלה כללית) */
+export const roleInMode = (r: string, mode: "boys" | "girls") =>
+  mode === "boys" ? !(r.startsWith("bnot_") || r === "isha_coordinator") : !r.startsWith("kollel_");
 
 /** כניסה בשם משתמש/תפקיד ורענון */
 export async function enterAs(id: string) {
@@ -17,7 +22,7 @@ export async function enterAs(id: string) {
   window.location.href = "/admin";
 }
 
-export function ImpersonateModal({ onClose, onSwitched, current, onBack, backLabel = "החשבון שלי" }: { onClose: () => void; onSwitched: () => void; current?: string; onBack?: () => void; backLabel?: string }) {
+export function ImpersonateModal({ onClose, onSwitched, current, onBack, backLabel = "החשבון שלי", mode }: { onClose: () => void; onSwitched: () => void; current?: string; onBack?: () => void; backLabel?: string; mode: "boys" | "girls" }) {
   const [t, setT] = useState<Targets | null>(null);
   const [open, setOpen] = useState<Role | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -44,7 +49,7 @@ export function ImpersonateModal({ onClose, onSwitched, current, onBack, backLab
     <div className="adm-modal-back" role="dialog" aria-modal="true" aria-label="תצוגות" onClick={onClose}>
       <div className="adm-modal adm-views" onClick={(e) => e.stopPropagation()}>
         <div className="adm-panel__head">
-          <h2>תצוגות</h2>
+          <h2>תצוגות · {mode === "boys" ? "טללי ברכה" : "בנות צילה"}</h2>
           <button type="button" className="adm-icon-btn" aria-label="סגירה" onClick={onClose}>
             ✕
           </button>
@@ -55,7 +60,7 @@ export function ImpersonateModal({ onClose, onSwitched, current, onBack, backLab
             {backLabel}
           </button>
         ) : null}
-        {(t ? [...t.roles].sort((a, b) => ORDER.indexOf(a.id) - ORDER.indexOf(b.id)) : []).map((r) => {
+        {(t ? [...t.roles].filter((r) => roleInMode(r.id, mode)).sort((a, b) => ORDER.indexOf(a.id) - ORDER.indexOf(b.id)) : []).map((r) => {
           if (!r.scope) {
             const id = `role:${r.id}`;
             return (
@@ -64,12 +69,12 @@ export function ImpersonateModal({ onClose, onSwitched, current, onBack, backLab
               </button>
             );
           }
-          const units = (r.scope.level === "city" ? t!.cities : t!.branches).filter((u) => u.domain === r.scope!.domain);
+          const units = (r.scope.level === "region" ? t!.regions ?? [] : r.scope.level === "city" ? t!.cities : t!.branches).filter((u) => u.domain === r.scope!.domain);
           return (
             <div key={r.id}>
               <button type="button" className="adm-views__btn" aria-expanded={open === r.id} disabled={!units.length} onClick={() => setOpen(open === r.id ? null : r.id)}>
                 {r.label}
-                <span className="muted">{units.length ? "▾" : r.scope.level === "city" ? "אין ערים" : "אין סניפים"}</span>
+                <span className="muted">{units.length ? "▾" : r.scope.level === "region" ? "אין אזורים" : r.scope.level === "city" ? "אין ערים" : "אין סניפים"}</span>
               </button>
               {open === r.id ? (
                 <div className="adm-views__units">
