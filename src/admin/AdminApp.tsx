@@ -367,7 +367,6 @@ export default function AdminApp() {
   const leafBadge = (l: NavLeaf) => (l.badgeForms ? newCount(l.badgeForms) : 0);
   const entryBadge = (e: NavEntry) => (e.leaf ? leafBadge(e.leaf) : (e.hub?.items ?? []).reduce((t, l) => t + leafBadge(l), 0));
 
-  const roleText = me.user.roles.map((r) => me.roleLabels[r]).join(" · ");
   const initial = (me.user.name || me.user.email || "?").trim().charAt(0).toUpperCase();
   const barEntries = bar.map((id) => entries.find((e) => e.id === id)).filter(Boolean) as NavEntry[];
   const curView: View | null = "hub" in current ? null : current.view;
