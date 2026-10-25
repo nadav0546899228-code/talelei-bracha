@@ -226,7 +226,6 @@ export async function handleMitch(req, res, url, ctx) {
         by: user.id,
         byName: user.name || user.email || user.phone || "",
       });
-      await audit(user, "שינוי שיוך מתחזק", name);
     }
 
     await audit(user, prev ? "עדכון מתחזק" : "הוספת מתחזק", `${domain === "bnot" ? "בנות צילה" : "כולל"} · ${name}`);
