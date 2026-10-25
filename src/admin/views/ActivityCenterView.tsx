@@ -105,8 +105,16 @@ export function ActivityCenterView({ go }: { go: (view: View, tab?: string) => v
     return data.locations.map((l)=>{
       const items=filtered.filter((x)=>x.city===l.city);
       return {...l,count:items.length,boys:items.filter((x)=>x.domain==="kollel").length,girls:items.filter((x)=>x.domain==="bnot").length,participants:items.reduce((n,x)=>n+Number(x.participants||0),0)};
-    }).filter((x)=>x.count>0);
+    }).filter((x)=>x.count>0).sort((a,b)=>b.count-a.count);
   },[data,filtered]);
+  const mapPins = useMemo(() => {
+    const top = mapLocations.slice(0, 12);
+    if (city !== "all" && !top.some((x) => x.city === city)) {
+      const selected = mapLocations.find((x) => x.city === city);
+      return selected ? [...top.slice(0, 11), selected] : top;
+    }
+    return top;
+  }, [mapLocations, city]);
   const totalParticipants=filtered.reduce((n,x)=>n+Number(x.participants||0),0);
   const activeCities=new Set(filtered.map((x)=>x.city).filter(Boolean)).size;
   const todayCount=filtered.filter((x)=>x.date===todayIso()).length;
@@ -204,20 +212,34 @@ export function ActivityCenterView({ go }: { go: (view: View, tab?: string) => v
         <section className="adm-panel adm-israel-map-panel">
           <div className="adm-panel__head"><div><span className="adm-eyebrow">פריסה ארצית</span><h2>מפת הפעילות</h2></div><span className="adm-section-count">{mapLocations.length}</span></div>
           <div className="adm-israel-map" aria-label="מפת פעילות בישראל">
-            <svg viewBox="0 0 260 600" role="img" aria-label="מפת ישראל סכמטית">
-              <path className="adm-israel-shape" d="M128 18 L159 62 L151 111 L171 154 L158 203 L178 248 L164 294 L151 336 L155 387 L143 430 L134 475 L123 526 L112 578 L98 548 L103 495 L91 448 L99 397 L85 349 L94 304 L82 257 L93 216 L83 173 L101 132 L96 90 L113 57 Z"/>
-              <path className="adm-israel-river" d="M150 86 C145 150 153 210 145 270 C138 330 145 390 130 455"/>
+            <div className="adm-israel-map__caption">
+              <strong>{mapPins.length} מוקדי פעילות בולטים</strong>
+              <span>לחיצה על נעיצה מסננת את כל הלוח</span>
+            </div>
+            <svg viewBox="0 0 320 700" role="img" aria-label="מפת ישראל">
+              <defs>
+                <linearGradient id="israelFill" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0" stopColor="currentColor" stopOpacity=".18"/>
+                  <stop offset="1" stopColor="currentColor" stopOpacity=".05"/>
+                </linearGradient>
+              </defs>
+              <path className="adm-israel-shape" d="M164 22 L187 48 L184 79 L199 103 L194 137 L210 168 L201 203 L215 239 L204 275 L211 312 L198 347 L201 386 L188 425 L181 465 L168 507 L159 550 L148 596 L138 642 L124 680 L111 650 L115 607 L105 566 L112 525 L102 485 L111 446 L101 405 L112 370 L103 333 L115 299 L107 263 L119 229 L112 194 L125 162 L120 128 L137 99 L136 69 L151 43 Z"/>
+              <path className="adm-israel-coast" d="M151 43 C145 86 140 131 137 177 C134 222 132 270 130 316 C128 365 126 417 123 470 C121 525 119 574 115 607"/>
+              <ellipse className="adm-israel-water" cx="185" cy="168" rx="8" ry="15"/>
+              <path className="adm-israel-deadsea" d="M185 360 C194 377 193 407 184 426 C177 413 177 380 185 360 Z"/>
             </svg>
-            {mapLocations.map((l)=>{
-              const pos=pinPos(l.lat,l.lng);const size=Math.min(46,22+Math.sqrt(l.count)*5);
+            {mapPins.map((l)=>{
+              const pos=pinPos(l.lat,l.lng);
+              const size=Math.min(34,20+Math.sqrt(l.count)*2.6);
               return <button type="button" key={l.city} className={`adm-map-pin${city===l.city?" is-active":""}`} style={{...pos,width:size,height:size}} title={`${l.city}: ${l.count} פעילויות`} onClick={()=>setCity(city===l.city?"all":l.city)}>
                 <span>{l.count}</span><small>{l.city}</small>
               </button>;
             })}
           </div>
-          <div className="adm-map-legend"><span><i className="is-kollel"/> טללי ברכה</span><span><i className="is-bnot"/> בנות צילה</span><span>גודל הנעיצה = עוצמת פעילות</span></div>
+          <div className="adm-map-legend"><span><i className="is-kollel"/> טללי ברכה</span><span><i className="is-bnot"/> בנות צילה</span><span>מוצגים מוקדי הפעילות הבולטים</span></div>
           <div className="adm-city-ranking">
-            {mapLocations.slice(0,6).map((l)=><button type="button" key={l.city} onClick={()=>setCity(l.city)}><span>{l.city}</span><strong>{l.count}</strong><small>{l.participants} משתתפים</small></button>)}
+            <div className="adm-city-ranking__head"><strong>פעילות לפי עיר</strong><span>{mapLocations.length} ערים בטווח הנבחר</span></div>
+            {mapLocations.slice(0,10).map((l)=><button type="button" className={city===l.city?"is-active":""} key={l.city} onClick={()=>setCity(city===l.city?"all":l.city)}><span>{l.city}</span><strong>{l.count}</strong><small>{l.participants} משתתפים</small></button>)}
           </div>
         </section>
       </div>
