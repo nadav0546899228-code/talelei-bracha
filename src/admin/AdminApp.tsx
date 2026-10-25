@@ -484,7 +484,7 @@ export default function AdminApp() {
         </div>
         <div className="adm-top__spacer" />
         <div className="adm-user">
-          <button type="button" className="adm-avatar-btn" onClick={() => setProfileOpen(true)} aria-label="הפרופיל שלי" title="הפרופיל שלי">
+          <button type="button" className="adm-avatar-btn" onClick={() => setProfileOpen(true)} aria-label="האזור האישי" title="האזור האישי">
             {me.user.picture ? <img src={me.user.picture} alt="" referrerPolicy="no-referrer" /> : <span className="adm-avatar">{initial}</span>}
           </button>
           <div className="adm-user__meta">
