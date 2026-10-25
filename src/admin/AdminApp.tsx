@@ -420,9 +420,6 @@ export default function AdminApp() {
   const entryBadge = (e: NavEntry) => (e.leaf ? leafBadge(e.leaf) : (e.hub?.items ?? []).reduce((t, l) => t + leafBadge(l), 0));
 
   const account = me.account ?? me.user;
-  const hasKollelAccess = account.views.includes("kollel");
-  const hasBnotAccess = account.views.includes("bnot");
-  const appBrand = hasKollelAccess && hasBnotAccess ? "combined" : hasBnotAccess ? "bnot" : "kollel";
   const initial = (account.name || account.email || "?").trim().charAt(0).toUpperCase();
   const barEntries = bar.map((id) => entries.find((e) => e.id === id)).filter(Boolean) as NavEntry[];
   const curView: View | null = "hub" in current ? null : current.view;
