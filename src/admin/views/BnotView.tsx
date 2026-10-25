@@ -9,7 +9,7 @@ import { MitchPanel } from "./MitchView";
 import { buildXlsx, downloadBlob } from "../xlsx";
 
 type Member = { id: string; name: string; phone: string; branchId: string; active: boolean; notes?: string };
-type Activity = { id: string; branchId: string; date: string; title: string; present: string[]; byName: string };
+type Activity = { id: string; branchId: string; date: string; time?: string; place?: string; address?: string; title: string; present: string[]; byName: string };
 type Data = { cities: OrgUnit[]; branches: OrgUnit[]; members: Member[]; activities: Activity[] };
 
 const today = () => {
@@ -172,7 +172,7 @@ function Members({ d, branch, bName, reload, initialQ = "" }: { d: Data; branch:
 function Activities({ d, branch, reload }: { d: Data; branch: string; reload: () => void }) {
   const acts = d.activities.filter((a) => a.branchId === branch);
   const [openId, setOpenId] = useState<string | null>(acts[0]?.id ?? null);
-  const [form, setForm] = useState<{ date: string; title: string } | null>(null);
+  const [form, setForm] = useState<{ date: string; time: string; place: string; address: string; title: string } | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const cur = acts.find((a) => a.id === openId) ?? null;
   const members = d.members.filter((m) => m.active && m.branchId === branch);
@@ -204,7 +204,7 @@ function Activities({ d, branch, reload }: { d: Data; branch: string; reload: ()
         <div className="adm-chips" style={{ flex: 1, marginBottom: 0 }}>
           {acts.slice(0, 30).map((a) => (
             <button key={a.id} type="button" className="adm-chip" aria-pressed={a.id === openId} onClick={() => setOpenId(a.id)}>
-              {dayLabel(a.date)} · {a.title} <span className="adm-chip__n">{a.present.length}</span>
+              {dayLabel(a.date)}{a.time ? ` · ${a.time}` : ""} · {a.title} <span className="adm-chip__n">{a.present.length}</span>
             </button>
           ))}
         </div>
@@ -218,8 +218,20 @@ function Activities({ d, branch, reload }: { d: Data; branch: string; reload: ()
               <input className="input" type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
             </label>
             <label className="field">
+              <span className="field__label">שעה</span>
+              <input className="input" type="time" value={form.time} onChange={(e) => setForm({ ...form, time: e.target.value })} />
+            </label>
+            <label className="field span-2">
               <span className="field__label">פעילות</span>
               <input className="input" value={form.title} placeholder="שיעור, ערב נשים, מפגש..." autoFocus onChange={(e) => setForm({ ...form, title: e.target.value })} />
+            </label>
+            <label className="field">
+              <span className="field__label">מקום</span>
+              <input className="input" value={form.place} placeholder="בית הכנסת / אולם / בית..." onChange={(e) => setForm({ ...form, place: e.target.value })} />
+            </label>
+            <label className="field">
+              <span className="field__label">כתובת</span>
+              <input className="input" value={form.address} placeholder="רחוב ומספר" onChange={(e) => setForm({ ...form, address: e.target.value })} />
             </label>
           </div>
           <div className="btn-row" style={{ marginTop: 10 }}>
@@ -227,7 +239,7 @@ function Activities({ d, branch, reload }: { d: Data; branch: string; reload: ()
               type="button"
               className="btn btn--sm"
               onClick={async () => {
-                await saveAct({ branchId: branch, date: form.date, title: form.title, present: [] });
+                await saveAct({ branchId: branch, date: form.date, time: form.time, place: form.place, address: form.address, title: form.title, present: [] });
                 setForm(null);
               }}
             >
@@ -243,7 +255,7 @@ function Activities({ d, branch, reload }: { d: Data; branch: string; reload: ()
         <section className="adm-panel">
           <div className="adm-panel__head">
             <h2>
-              {dayLabel(cur.date)} · {cur.title}
+              {dayLabel(cur.date)}{cur.time ? ` · ${cur.time}` : ""} · {cur.title}
             </h2>
             <button
               type="button"
@@ -283,7 +295,7 @@ function Activities({ d, branch, reload }: { d: Data; branch: string; reload: ()
       ) : !form ? (
         <div className="adm-panel adm-empty">אין עדיין פעילויות בסניף.</div>
       ) : null}
-      {!form ? <Fab label="פעילות חדשה" onClick={() => setForm({ date: today(), title: "" })} /> : null}
+      {!form ? <Fab label="פעילות חדשה" onClick={() => setForm({ date: today(), time: "20:00", place: "", address: "", title: "" })} /> : null}
     </>
   );
 }
