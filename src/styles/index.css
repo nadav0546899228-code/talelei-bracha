@@ -2622,3 +2622,83 @@ html.a11y-no-motion *::after {
   .public-gateway::before,.public-gateway::after,.public-choice,.public-choice::after,.public-choice__glow,.public-choice__logo,
   .public-gateway__head,.page-hero,.bz-feature,.isha-panel,.card,.event-card,.lesson-card{animation:none!important;transition:none!important}
 }
+
+
+/* ===== Transparent footer logos + unobtrusive accessibility ===== */
+.footer-brand__logos{
+  align-items:center;
+  gap:18px;
+}
+.footer-brand__logos .logo-tile{
+  width:132px;
+  height:112px;
+  padding:0!important;
+  background:transparent!important;
+  border:0!important;
+  border-radius:0!important;
+  box-shadow:none!important;
+  display:grid;
+  place-items:center;
+  overflow:visible;
+}
+.footer-brand__logos .logo-tile .logo{
+  width:100%!important;
+  height:100%!important;
+  aspect-ratio:auto!important;
+  background:transparent!important;
+}
+.footer-brand__logos .logo-tile picture,
+.footer-brand__logos .logo-tile img{
+  width:100%!important;
+  height:100%!important;
+  display:block;
+  object-fit:contain!important;
+  background:transparent!important;
+}
+
+/* נגישות: לשונית צד קטנה במקום כפתור שמכסה את הפוטר */
+.float-stack{
+  top:58%;
+  bottom:auto!important;
+  left:0;
+  transform:translateY(-50%);
+  gap:8px;
+}
+.float-btn{
+  width:46px;
+  height:46px;
+}
+.float-btn--a11y{
+  border-radius:0 16px 16px 0;
+  box-shadow:0 6px 20px rgba(5,40,43,.18);
+}
+.a11y-panel{
+  top:50%;
+  bottom:auto!important;
+  left:56px;
+  transform:translateY(-50%);
+  max-height:calc(100dvh - 24px);
+  overflow:auto;
+}
+
+@media(max-width:620px){
+  .footer-brand__logos{
+    justify-content:flex-start;
+    gap:14px;
+  }
+  .footer-brand__logos .logo-tile{
+    width:112px;
+    height:94px;
+  }
+  .float-stack{
+    top:62%;
+  }
+  .float-btn{
+    width:42px;
+    height:42px;
+  }
+  .a11y-panel{
+    left:50px;
+    width:min(300px,calc(100vw - 62px));
+  }
+}
