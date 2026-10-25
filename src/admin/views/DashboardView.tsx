@@ -31,7 +31,16 @@ type BnotOverview = {
   activities: { id: string; date: string; present: string[] }[];
 };
 type MitchOverview = {
-  mitch: { id: string; status: string; nextFollowUp: string | null }[];
+  mitch: {
+    id: string;
+    name: string;
+    status: string;
+    nextFollowUp: string | null;
+    attention?: { id: string; severity: "high" | "medium"; label: string }[];
+    attentionLevel?: "none" | "medium" | "high";
+  }[];
+  attentionSummary: { total: number; high: number; unassigned: number; followup: number; noContact: number; stageStuck: number; missedMeetings: number };
+  monthStats: { active: number; newThisMonth: number; stageChanges: number; contacts: number };
   today: string;
 };
 
@@ -114,6 +123,12 @@ export function DashboardView({ me, subs, go, views: allViews, mode, dash }: Adm
   }).length ?? 0;
   const activeMitch = mitch?.mitch.filter((x) => x.status === "active").length ?? 0;
   const dueMitch = mitch?.mitch.filter((x) => x.status === "active" && x.nextFollowUp && x.nextFollowUp <= (mitch?.today || "")).length ?? 0;
+  const attentionMitch = mitch?.attentionSummary.total ?? 0;
+  const urgentMitch = mitch?.attentionSummary.high ?? 0;
+  const attentionRows = (mitch?.mitch ?? [])
+    .filter((x) => x.status === "active" && x.attention?.length)
+    .sort((a, b) => (a.attentionLevel === "high" ? -1 : 0) - (b.attentionLevel === "high" ? -1 : 0))
+    .slice(0, 5);
 
   return (
     <div className="adm-dashboard">
@@ -164,11 +179,11 @@ export function DashboardView({ me, subs, go, views: allViews, mode, dash }: Adm
                 <small>משתתפות פעילות</small>
                 <em>{recentActivities} פעילויות ב־7 ימים</em>
               </button>
-              <button type="button" className={`adm-command-card${dueMitch ? " is-warn" : ""}`} onClick={() => go("bnot", "mitch")}>
+              <button type="button" className={`adm-command-card${urgentMitch ? " is-urgent" : attentionMitch ? " is-warn" : ""}`} onClick={() => go("bnot", "mitch")}>
                 <span><Icon name="heart" /></span>
-                <strong>{dueMitch}</strong>
-                <small>מתחזקות למעקב היום</small>
-                <em>{activeMitch} פעילות במעקב</em>
+                <strong>{attentionMitch}</strong>
+                <small>מתחזקות שדורשות טיפול</small>
+                <em>{dueMitch} למעקב היום · {activeMitch} פעילות</em>
               </button>
             </>
           ) : null}
@@ -181,11 +196,11 @@ export function DashboardView({ me, subs, go, views: allViews, mode, dash }: Adm
                 <small>אברכים פעילים</small>
                 <em>{kollel?.branches.length ?? 0} סניפים</em>
               </button>
-              <button type="button" className={`adm-command-card${dueMitch ? " is-warn" : ""}`} onClick={() => go("kollel", "mitch")}>
+              <button type="button" className={`adm-command-card${urgentMitch ? " is-urgent" : attentionMitch ? " is-warn" : ""}`} onClick={() => go("kollel", "mitch")}>
                 <span><Icon name="heart" /></span>
-                <strong>{dueMitch}</strong>
-                <small>מתחזקים למעקב היום</small>
-                <em>{activeMitch} פעילים במעקב</em>
+                <strong>{attentionMitch}</strong>
+                <small>מתחזקים שדורשים טיפול</small>
+                <em>{dueMitch} למעקב היום · {activeMitch} פעילים</em>
               </button>
             </>
           ) : null}
@@ -222,6 +237,31 @@ export function DashboardView({ me, subs, go, views: allViews, mode, dash }: Adm
           )}
         </div>
       </section>
+
+      {attentionRows.length ? (
+        <section className="adm-dashboard-section">
+          <div className="adm-section-title">
+            <div><span className="adm-section-icon adm-section-icon--alert"><Icon name="heart" /></span><h2>היום שלי — למי צריך לחזור</h2></div>
+            <span className="adm-section-count">{attentionMitch}</span>
+          </div>
+          <div className="adm-today-list">
+            {attentionRows.map((m) => (
+              <button key={m.id} type="button" className={`adm-today-row${m.attentionLevel === "high" ? " is-urgent" : ""}`} onClick={() => go(mode === "girls" ? "bnot" : "kollel", `mitch:q:${m.name}`)}>
+                <span className="adm-today-row__icon"><Icon name={m.attentionLevel === "high" ? "alert" : "heart"} /></span>
+                <span className="adm-today-row__body"><strong>{m.name}</strong><small>{m.attention?.map((x) => x.label).join(" · ")}</small></span>
+                <Icon name="arrowLeft" />
+              </button>
+            ))}
+          </div>
+          {mitch?.monthStats ? (
+            <div className="adm-today-month">
+              <span><strong>{mitch.monthStats.newThisMonth}</strong> חדשים החודש</span>
+              <span><strong>{mitch.monthStats.stageChanges}</strong> עלו שלב</span>
+              <span><strong>{mitch.monthStats.contacts}</strong> קשרים מתועדים</span>
+            </div>
+          ) : null}
+        </section>
+      ) : null}
 
       {dash.active.length ? (
         <section className="adm-dashboard-section">
