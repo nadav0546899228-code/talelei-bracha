@@ -2,6 +2,8 @@
  * מרכז פעילות ארצי - שכבת קריאה מאוחדת מעל הנתונים הקיימים.
  * אין כאן מאגר פעילות נוסף: כל פריט מגיע מהמקור שבו כבר הוזן.
  */
+import { randomUUID } from "node:crypto";
+import { isPrivileged } from "./roles.mjs";
 import { branchScope, loadOrg } from "./org.mjs";
 
 const CITY_COORDS = {
@@ -26,17 +28,98 @@ const inRange = (date, from, to) => (!from || date >= from) && (!to || date <= t
 
 export async function handleActivityCenter(req, res, url, ctx) {
   const { pathname } = url;
-  if (pathname !== "/api/activity-center") return false;
-  const { user, send, store } = ctx;
-  if ((req.method || "GET") !== "GET") return send(405, { error: "פעולה לא נתמכת" }), true;
+  if (pathname !== "/api/activity-center" && pathname !== "/api/activity-wall" && !pathname.startsWith("/api/activity-wall/")) return false;
+  const { user, send, store, readBody, audit, clean } = ctx;
   if (!user.views.includes("activity")) return send(403, { error: "אין הרשאה" }), true;
 
+  const method = req.method || "GET";
   const org = await loadOrg(store);
   const kScope = branchScope(user, org, "kollel");
   const bScope = branchScope(user, org, "bnot");
   const globalCalendar = user.roles.includes("office") || user.roles.includes("content_editor");
   const canK = globalCalendar || user.views.includes("kollel") || user.roles.some((r) => r.startsWith("kollel_")) || user.roles.includes("chief_coordinator") || user.roles.includes("ceo") || user.roles.includes("developer");
   const canB = globalCalendar || user.views.includes("bnot") || user.views.includes("isha") || user.roles.some((r) => r.startsWith("bnot_")) || user.roles.includes("chief_coordinator") || user.roles.includes("ceo") || user.roles.includes("developer");
+
+  const canPostDomain = (domain) =>
+    isPrivileged(user.roles) ||
+    user.roles.includes("chief_coordinator") ||
+    user.roles.some((r) => r.startsWith(`${domain}_`)) ||
+    (domain === "bnot" && user.views.includes("bnot")) ||
+    (domain === "kollel" && user.views.includes("kollel"));
+
+  const wallVisible = (x) => {
+    const domain = x.domain === "bnot" ? "bnot" : "kollel";
+    if ((domain === "bnot" && !canB) || (domain === "kollel" && !canK)) return false;
+    return branchOk(domain, x.branchId);
+  };
+
+  if (pathname === "/api/activity-wall" && method === "GET") {
+    const entries = (await store.list("activityWall", 3000))
+      .filter(wallVisible)
+      .sort((a, b) => String(b.date || b.createdAt || "").localeCompare(String(a.date || a.createdAt || "")))
+      .slice(0, 300);
+    return send(200, {
+      entries,
+      branches: org.branches.filter((b) => wallVisible({ domain: b.domain, branchId: b.id })),
+      cities: org.cities,
+      canPostDomains: ["kollel", "bnot"].filter((d) => canPostDomain(d) && (d === "kollel" ? canK : canB)),
+    }), true;
+  }
+
+  if (pathname === "/api/activity-wall" && method === "POST") {
+    const body = await readBody(req, 4 * 1024 * 1024);
+    const domain = body.domain === "bnot" ? "bnot" : "kollel";
+    if (!canPostDomain(domain)) return send(403, { error: "אין הרשאה להוסיף תיעוד בתחום הזה" }), true;
+    const branchId = String(body.branchId || "");
+    const branch = org.branches.find((b) => b.id === branchId && b.domain === domain);
+    if (!branch || !branchOk(domain, branchId)) return send(400, { error: "יש לבחור סניף שבאחריותך" }), true;
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(String(body.date || "")) ? String(body.date) : isoDay(new Date().toISOString());
+    const rawPhotos = Array.isArray(body.photos) ? body.photos.slice(0, 3) : [];
+    const photos = [];
+    let total = 0;
+    for (const p of rawPhotos) {
+      const value = String(p || "");
+      if (!/^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/i.test(value)) return send(400, { error: "ניתן לצרף JPG, PNG או WebP בלבד" }), true;
+      const approx = Math.ceil(value.length * 0.75);
+      if (approx > 1_100_000) return send(400, { error: "אחת התמונות גדולה מדי" }), true;
+      total += approx;
+      photos.push(value);
+    }
+    if (total > 3_000_000) return send(400, { error: "סך התמונות גדול מדי" }), true;
+    const title = clean(body.title, 120).trim();
+    const note = clean(body.note, 1200).trim();
+    if (!title && !note && !photos.length) return send(400, { error: "יש להוסיף כותרת, תיאור או תמונה" }), true;
+    const id = randomUUID();
+    const doc = {
+      domain,
+      branchId,
+      date,
+      title: title || "מהשטח",
+      note,
+      photos,
+      shareApproved: body.shareApproved === true,
+      createdAt: new Date().toISOString(),
+      by: user.id,
+      byName: user.name || user.email || user.phone || "",
+    };
+    await store.put("activityWall", id, doc);
+    await audit(user, "תיעוד חדש מהשטח", `${doc.title} · ${branch.name}`);
+    return send(200, { ok: true, id }), true;
+  }
+
+  const wallDelete = pathname.match(/^\/api\/activity-wall\/([\w-]+)$/);
+  if (wallDelete && method === "DELETE") {
+    const row = await store.get("activityWall", wallDelete[1]);
+    if (!row || !wallVisible(row)) return send(404, { error: "לא נמצא" }), true;
+    const allowed = isPrivileged(user.roles) || user.roles.includes("chief_coordinator") || row.by === user.id || canPostDomain(row.domain);
+    if (!allowed) return send(403, { error: "אין הרשאה למחוק" }), true;
+    await store.del("activityWall", row.id);
+    await audit(user, "מחיקת תיעוד מהשטח", row.title || row.id);
+    return send(200, { ok: true }), true;
+  }
+
+  if (pathname !== "/api/activity-center") return send(405, { error: "פעולה לא נתמכת" }), true;
+  if (method !== "GET") return send(405, { error: "פעולה לא נתמכת" }), true;
 
   const from = url.searchParams.get("from") || "";
   const to = url.searchParams.get("to") || "";
