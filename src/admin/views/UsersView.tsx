@@ -11,7 +11,7 @@ type U = { email: string; name: string; phone?: string; picture: string; roles: 
 
 const ROLE_HELP: Record<Role, string> = {
   developer: "כל התצוגות כולל מתכנת",
-  ceo: "כל התצוגות חוץ ממתכנת",
+  ceo: "כל התצוגות חוץ ממתכנת ויומן פעולות",
   chief_coordinator: "מעל כל הרכזים בשני התחומים: כל הכולל, משכורות, ערים וסניפים",
   kollel_city: "כולל ערב - כל סניפי העיר שלו: אברכים, דיווחים, מנהלי סניפים",
   kollel_branch: "כולל ערב - הסניף שלו בלבד: דיווח נסיעות והוצאות ותפוצה",
