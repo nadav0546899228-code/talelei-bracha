@@ -538,10 +538,16 @@ export default function AdminApp() {
         </div>
         <div className="adm-top__spacer" />
         <div className="adm-user">
-          {by ? (
-            <button type="button" className="adm-viewbtn is-as" onClick={openImpersonate} title="תצוגה של משתמש אחר">
+          {me.canImpersonate ? (
+            <button
+              type="button"
+              className={`adm-viewbtn adm-views-trigger${by ? " is-as" : ""}`}
+              onClick={openImpersonate}
+              title="מעבר בין תצוגות"
+              aria-label="מעבר בין תצוגות"
+            >
               <Icon name="eye" />
-              <span>תצוגה אחרת</span>
+              <span>{by ? "תצוגה אחרת" : "תצוגות"}</span>
             </button>
           ) : null}
           <button type="button" className="adm-icon-btn adm-bell" onClick={() => setBellOpen(!bellOpen)} aria-label={`התראות${dash.active.length ? ` (${dash.active.length})` : ""}`} title="התראות">
