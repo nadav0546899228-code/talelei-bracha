@@ -12,7 +12,9 @@
     "start": "node server/index.mjs",
     "demo:seed": "node scripts/seed-demo.mjs",
     "demo:clear": "node scripts/clear-demo.mjs",
-    "demo": "npm run demo:seed && DATABASE_URL= DATA_FILE=data/demo.json ALLOW_DEV_LOGIN=1 node scripts/dev.mjs"
+    "demo": "npm run demo:seed && DATABASE_URL= DATA_FILE=data/demo.json ALLOW_DEV_LOGIN=1 node scripts/dev.mjs",
+    "demo:share": "node scripts/replit-visible-demo.mjs",
+    "status:share": "node scripts/replit-visible-demo.mjs"
   },
   "dependencies": {
     "pg": "^8.13.0",
