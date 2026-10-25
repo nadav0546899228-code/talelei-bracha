@@ -16,18 +16,26 @@ export async function seedDemo(store) {
   };
 
   const org = [
-    ["k-city-zefat", { type: "city", domain: "kollel", name: "צפת", parentId: null }],
-    ["k-city-jlm", { type: "city", domain: "kollel", name: "ירושלים", parentId: null }],
-    ["k-city-bb", { type: "city", domain: "kollel", name: "בני ברק", parentId: null }],
-    ["k-zefat-a", { type: "branch", domain: "kollel", name: "מרכז", parentId: P+"k-city-zefat" }],
-    ["k-zefat-b", { type: "branch", domain: "kollel", name: "דרום", parentId: P+"k-city-zefat" }],
-    ["k-jlm-a", { type: "branch", domain: "kollel", name: "צפון", parentId: P+"k-city-jlm" }],
-    ["k-bb-a", { type: "branch", domain: "kollel", name: "מרכז", parentId: P+"k-city-bb" }],
-    ["b-city-zefat", { type: "city", domain: "bnot", name: "צפת", parentId: null }],
-    ["b-city-jlm", { type: "city", domain: "bnot", name: "ירושלים", parentId: null }],
-    ["b-zefat-a", { type: "branch", domain: "bnot", name: "מרכז", parentId: P+"b-city-zefat" }],
-    ["b-zefat-b", { type: "branch", domain: "bnot", name: "דרום", parentId: P+"b-city-zefat" }],
-    ["b-jlm-a", { type: "branch", domain: "bnot", name: "צפון", parentId: P+"b-city-jlm" }],
+    ["k-region-north", { type: "region", domain: "kollel", name: "צפון", parentId: null }],
+    ["k-region-center", { type: "region", domain: "kollel", name: "מרכז", parentId: null }],
+    ["k-region-south", { type: "region", domain: "kollel", name: "דרום", parentId: null }],
+    ["b-region-north", { type: "region", domain: "bnot", name: "צפון", parentId: null }],
+    ["b-region-center", { type: "region", domain: "bnot", name: "מרכז", parentId: null }],
+    ["b-region-south", { type: "region", domain: "bnot", name: "דרום", parentId: null }],
+
+    ["k-city-zefat", { type: "city", domain: "kollel", name: "צפת", parentId: P+"k-region-north" }],
+    ["k-city-jlm", { type: "city", domain: "kollel", name: "ירושלים", parentId: P+"k-region-center" }],
+    ["k-city-bb", { type: "city", domain: "kollel", name: "בני ברק", parentId: P+"k-region-center" }],
+    ["k-zefat-a", { type: "branch", domain: "kollel", name: "א׳", parentId: P+"k-city-zefat" }],
+    ["k-zefat-b", { type: "branch", domain: "kollel", name: "ב׳", parentId: P+"k-city-zefat" }],
+    ["k-jlm-a", { type: "branch", domain: "kollel", name: "א׳", parentId: P+"k-city-jlm" }],
+    ["k-bb-a", { type: "branch", domain: "kollel", name: "א׳", parentId: P+"k-city-bb" }],
+
+    ["b-city-zefat", { type: "city", domain: "bnot", name: "צפת", parentId: P+"b-region-north" }],
+    ["b-city-jlm", { type: "city", domain: "bnot", name: "ירושלים", parentId: P+"b-region-center" }],
+    ["b-zefat-a", { type: "branch", domain: "bnot", name: "א׳", parentId: P+"b-city-zefat" }],
+    ["b-zefat-b", { type: "branch", domain: "bnot", name: "ב׳", parentId: P+"b-city-zefat" }],
+    ["b-jlm-a", { type: "branch", domain: "bnot", name: "א׳", parentId: P+"b-city-jlm" }],
   ];
   for (const [id, data] of org) await put("orgUnits", id, data);
 
@@ -112,22 +120,22 @@ export async function seedDemo(store) {
   let bBranches=[P+"b-zefat-a",P+"b-zefat-b",P+"b-jlm-a"];
   // פריסה ארצית רחבה לדמו - ערים וסניפים בשני הארגונים
   const demoCities = [
-    ["haifa","חיפה",32.7940,34.9896],["tiberias","טבריה",32.7959,35.5312],["afula","עפולה",32.6076,35.2896],
-    ["netanya","נתניה",32.3215,34.8532],["petah","פתח תקווה",32.0840,34.8878],["telaviv","תל אביב",32.0853,34.7818],
-    ["elad","אלעד",32.0522,34.9512],["modiin","מודיעין עילית",31.9322,35.0442],["beit-shemesh","בית שמש",31.7466,34.9888],
-    ["beitar","ביתר עילית",31.6977,35.1158],["rehovot","רחובות",31.8948,34.8113],["ashdod","אשדוד",31.8014,34.6435],
-    ["kiryat-malachi","קריית מלאכי",31.7308,34.7466],["ashkelon","אשקלון",31.6688,34.5743],["kiryat-gat","קריית גת",31.6100,34.7642],
-    ["netivot","נתיבות",31.4232,34.5893],["beer-sheva","באר שבע",31.2520,34.7915],["arad","ערד",31.2589,35.2128],
+    ["haifa","חיפה","north",32.7940,34.9896],["tiberias","טבריה","north",32.7959,35.5312],["afula","עפולה","north",32.6076,35.2896],
+    ["netanya","נתניה","center",32.3215,34.8532],["petah","פתח תקווה","center",32.0840,34.8878],["telaviv","תל אביב","center",32.0853,34.7818],
+    ["elad","אלעד","center",32.0522,34.9512],["modiin","מודיעין עילית","center",31.9322,35.0442],["beit-shemesh","בית שמש","center",31.7466,34.9888],
+    ["beitar","ביתר עילית","center",31.6977,35.1158],["rehovot","רחובות","center",31.8948,34.8113],["ashdod","אשדוד","south",31.8014,34.6435],
+    ["kiryat-malachi","קריית מלאכי","south",31.7308,34.7466],["ashkelon","אשקלון","south",31.6688,34.5743],["kiryat-gat","קריית גת","south",31.6100,34.7642],
+    ["netivot","נתיבות","south",31.4232,34.5893],["beer-sheva","באר שבע","south",31.2520,34.7915],["arad","ערד","south",31.2589,35.2128],
   ];
-  const branchNames = ["מרכז","צפון","דרום"];
+  const branchNames = ["א׳","ב׳","ג׳"];
   const geoJobs = [];
   const extraK = [], extraB = [];
   for (let ci = 0; ci < demoCities.length; ci++) {
-    const [slug,name,lat,lng] = demoCities[ci];
+    const [slug,name,region,lat,lng] = demoCities[ci];
     for (const domain of ["kollel","bnot"]) {
       const prefix = domain === "kollel" ? "k" : "b";
       const cityRaw = `${prefix}-city-${slug}`;
-      geoJobs.push(["orgUnits", cityRaw, { type:"city", domain, name, parentId:null, lat, lng }]);
+      geoJobs.push(["orgUnits", cityRaw, { type:"city", domain, name, parentId:P+`${prefix}-region-${region}`, lat, lng }]);
       for (let bi = 0; bi < branchNames.length; bi++) {
         const raw = `${prefix}-${slug}-${bi+1}`;
         const full = P + raw;
@@ -340,18 +348,18 @@ export async function seedDemo(store) {
 
   // אנשי צוות לדוגמה - כניסה בטלפון וקוד 1234
   const staff = [
-    ["staff-chief", "רכז ראשי (דמה)", "0500000100", ["chief_coordinator"], {}],
+    ["staff-chief", "רכז ארצי (דמה)", "0500000100", ["chief_coordinator"], {}],
     ["staff-kcity", "רכז עיר צפת (דמה)", "0500000101", ["kollel_city"], { kollel: { cityId: P + "k-city-zefat" } }],
-    ["staff-kbranch", "מנהל סניף מרכז צפת (דמה)", "0500000102", ["kollel_branch"], { kollel: { branchId: P + "k-zefat-a" } }],
+    ["staff-kbranch", "מנהל סניף א׳ צפת (דמה)", "0500000102", ["kollel_branch"], { kollel: { branchId: P + "k-zefat-a" } }],
     ["staff-bcity", "רכזת עיר צפת (דמה)", "0500000103", ["bnot_city"], { bnot: { cityId: P + "b-city-zefat" } }],
-    ["staff-bbranch", "מנהלת סניף מרכז צפת (דמה)", "0500000104", ["bnot_branch"], { bnot: { branchId: P + "b-zefat-a" } }],
+    ["staff-bbranch", "מנהלת סניף א׳ צפת (דמה)", "0500000104", ["bnot_branch"], { bnot: { branchId: P + "b-zefat-a" } }],
   ];
   for (const [raw, name, phone, roles, scope] of staff) {
     await put("phoneUsers", raw, { name, phone, roles, scope, active: true, codeHash: hashCode("1234"), mustChangeCode: false });
   }
   await put("messages", "msg-1", {
     from: "phone:" + P + "staff-kbranch",
-    fromName: "מנהל סניף מרכז צפת (דמה)",
+    fromName: "מנהל סניף א׳ צפת (דמה)",
     to: ["0542577001c@gmail.com", "nadav0546899228@gmail.com"],
     toNames: ["מנכ״ל", "מתכנת"],
     text: "שלום, השבוע היו 2 אברכים חסרים במפגש של יום שלישי. הודעת דמה לבדיקה.",
