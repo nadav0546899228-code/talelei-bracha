@@ -32,7 +32,7 @@ type SelfUpdate = {
   reviewedAt?: string;
   reviewedBy?: string;
 };
-type Data = { mitch: Mitch[]; branches: OrgUnit[]; cities: OrgUnit[]; avrechim: { id: string; name: string; branchId: string }[]; stages: string[]; contactTypes: string[]; today: string };
+type Data = { mitch: Mitch[]; branches: OrgUnit[]; cities: OrgUnit[]; avrechim: { id: string; name: string; branchId: string }[]; stages: string[]; contactTypes: string[]; today: string; pendingByMitch: Record<string, number> };
 
 const dayLabel = (iso: string) => new Intl.DateTimeFormat("he-IL", { day: "numeric", month: "numeric", year: "2-digit" }).format(new Date(`${iso}T12:00:00`));
 const STATUS: Record<Mitch["status"], string> = { active: "פעיל", paused: "בהפסקה", left: "עזב" };
@@ -40,7 +40,7 @@ const STATUS: Record<Mitch["status"], string> = { active: "פעיל", paused: "�
 export function MitchPanel({ domain, initialQ = "" }: { domain: "kollel" | "bnot"; initialQ?: string }) {
   const [d, setD] = useState<Data | null>(null);
   const [q, setQ] = useState(initialQ);
-  const [filter, setFilter] = useState<"all" | "due" | string>("all");
+  const [filter, setFilter] = useState<"all" | "due" | "pending" | string>("all");
   const [sel, setSel] = useState<Mitch | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const word = domain === "kollel" ? { one: "מתחזק", many: "מתחזקים", mentor: "חברותא" } : { one: "מתחזקת", many: "מתחזקות", mentor: "מלווה" };
@@ -49,7 +49,7 @@ export function MitchPanel({ domain, initialQ = "" }: { domain: "kollel" | "bnot
   useEffect(() => {
     load();
   }, [load]);
-  useLive(["mitchazkim", "avrechim", "orgUnits"], load);
+  useLive(["mitchazkim", "mitchUpdates", "avrechim", "orgUnits"], load);
 
   const isDue = useCallback((m: Mitch) => Boolean(d && m.status === "active" && m.nextFollowUp && m.nextFollowUp <= d.today), [d]);
   const rows = useMemo(() => {
@@ -58,6 +58,7 @@ export function MitchPanel({ domain, initialQ = "" }: { domain: "kollel" | "bnot
       if (q.trim() && !`${m.name} ${m.phone}`.includes(q.trim())) return false;
       if (filter === "all") return m.status !== "left";
       if (filter === "due") return isDue(m);
+      if (filter === "pending") return Boolean(d.pendingByMitch[m.id]);
       if (filter === "left") return m.status === "left";
       return m.stage === filter && m.status !== "left";
     });
@@ -69,6 +70,7 @@ export function MitchPanel({ domain, initialQ = "" }: { domain: "kollel" | "bnot
   const avName = (id: string | null) => d.avrechim.find((a) => a.id === id)?.name ?? "";
   const bName = (id: string) => d.branches.find((b) => b.id === id)?.name ?? "";
   const dueCount = d.mitch.filter(isDue).length;
+  const pendingCount = Object.values(d.pendingByMitch || {}).reduce((a, b) => a + b, 0);
 
   const exportXlsx = () => {
     const data = [["שם", "טלפון", "סניף", word.mentor, "שלב", "סטטוס", "קשר אחרון", "מעקב הבא", "מקור"], ...rows.map((m) => [m.name, m.phone, bName(m.branchId), domain === "kollel" ? avName(m.avrechId) : m.mentor, m.stage, STATUS[m.status], m.lastContact || "", m.nextFollowUp || "", m.source])];
@@ -87,6 +89,7 @@ export function MitchPanel({ domain, initialQ = "" }: { domain: "kollel" | "bnot
         items={[
           { id: "all", label: "כולם", count: d.mitch.filter((m) => m.status !== "left").length },
           { id: "due", label: "לחזור אליהם", count: dueCount },
+          { id: "pending", label: "ממתינים לאישור", count: pendingCount },
           ...d.stages.map((s) => ({ id: s, label: s, count: d.mitch.filter((m) => m.stage === s && m.status !== "left").length })),
           { id: "left", label: "עזבו" },
         ]}
@@ -111,6 +114,7 @@ export function MitchPanel({ domain, initialQ = "" }: { domain: "kollel" | "bnot
                   {m.stage}
                   {domain === "kollel" && m.avrechId ? ` · עם ${avName(m.avrechId)}` : m.mentor ? ` · ${m.mentor}` : ""}
                   {m.nextFollowUp ? ` · ${due ? "לחזור!" : "מעקב"} ${dayLabel(m.nextFollowUp)}` : ""}
+                  {d.pendingByMitch?.[m.id] ? ` · ${d.pendingByMitch[m.id]} ממתינים לאישור` : ""}
                 </span>
               </SwipeRow>
             );
