@@ -37,6 +37,7 @@ export type Role =
   | "kollel_branch"
   | "bnot_city"
   | "bnot_branch"
+  | "bnot_caller"
   | "isha_coordinator"
   | "office"
   | "content_editor";
@@ -85,11 +86,13 @@ export const ROLE_SCOPE: Partial<Record<Role, { domain: Domain; level: "city" | 
   kollel_branch: { domain: "kollel", level: "branch" },
   bnot_city: { domain: "bnot", level: "city" },
   bnot_branch: { domain: "bnot", level: "branch" },
+  bnot_caller: { domain: "bnot", level: "branch" },
 };
 
 export const DOMAIN_LABELS: Record<Domain, string> = { kollel: "כולל ערב", bnot: "בנות צילה" };
 
-export type OrgUnit = { id: string; type: "city" | "branch"; domain: Domain; name: string; parentId: string | null };
+export type OrgRegion = "north" | "center" | "south";
+export type OrgUnit = { id: string; type: "city" | "branch"; domain: Domain; name: string; parentId: string | null; region?: OrgRegion | null; lat?: number; lng?: number };
 
 export type Submission = {
   id: string;
