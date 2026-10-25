@@ -12,6 +12,7 @@ import { isDevSite } from "../config/site";
 import { Link } from "../router/Router";
 import { api, ApiError, post, type Me, type Submission, type View } from "./api";
 import { ImpersonateModal } from "./Impersonate";
+import { FirstRunGuide, guideKey } from "./FirstRunGuide";
 import { entriesFor, entryActive, hubsFor, loadBar, loadMode, MODE_LABELS, modesFor, saveBar, saveMode, type Mode, type NavEntry, type NavLeaf, type Screen } from "./nav";
 import { BarEditor, HubView } from "./NavParts";
 import { useAlerts } from "./alerts";
@@ -225,6 +226,7 @@ export default function AdminApp() {
   const [asOpen, setAsOpen] = useState(false);
   const [subs, setSubs] = useState<Submission[] | null>(null);
   const [codeOpen, setCodeOpen] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
 
   const loadMe = useCallback(async () => {
     try {
@@ -287,6 +289,15 @@ export default function AdminApp() {
   useEffect(() => {
     if (me) setBar(loadBar(me, mode, entries));
   }, [me, mode, entries]);
+
+  useEffect(() => {
+    if (!me || state !== "ready") return;
+    try {
+      setGuideOpen(!localStorage.getItem(guideKey(me, mode)));
+    } catch {
+      setGuideOpen(false);
+    }
+  }, [me, mode, state]);
 
   const leaves = hubs.flatMap((h) => h.items);
   const viewOk = (v: View) => leaves.some((l) => l.view === v);
@@ -459,6 +470,9 @@ export default function AdminApp() {
               <Icon name="chevronDown" />
             </button>
           ) : null}
+          <button type="button" className="adm-icon-btn adm-help" onClick={() => setGuideOpen(true)} aria-label="הדרכה" title="הדרכה">
+            <Icon name="info" />
+          </button>
           <button type="button" className="adm-icon-btn adm-bell" onClick={() => setBellOpen(!bellOpen)} aria-label={`התראות${dash.active.length ? ` (${dash.active.length})` : ""}`} title="התראות">
             <Icon name="bell" />
             {dash.active.length ? <span className="adm-badge">{dash.active.length}</span> : null}
@@ -590,6 +604,7 @@ export default function AdminApp() {
         />
       ) : null}
       {codeOpen ? <ChangeCode forced={me.mustChangeCode} onClose={() => { setCodeOpen(false); setMe({ ...me, mustChangeCode: false }); }} /> : null}
+      {guideOpen ? <FirstRunGuide me={me} mode={mode} onClose={() => setGuideOpen(false)} /> : null}
     </div>
   );
 }
