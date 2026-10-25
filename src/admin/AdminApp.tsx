@@ -649,7 +649,7 @@ export default function AdminApp() {
           ) : (
             <>
               {curView === "dashboard" ? <DashboardView {...ctx} views={me.user.views} dash={dash} /> : null}
-              {curView === "activity" ? <ActivityCenterView /> : null}
+              {curView === "activity" ? <ActivityCenterView go={go} /> : null}
               {curView === "isha" ? (
                 <SubmissionsView key={`isha-${curTab ?? ""}`} {...ctx} forms={["ishaRequest", "ishaMentor"]} initialForm={curTab as never} title="אישה לאישה" />
               ) : null}
