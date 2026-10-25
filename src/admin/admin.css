@@ -4673,3 +4673,15 @@
 .adm-sheet__t tbody tr.adm-sheet__band--1:not(.adm-sheet__group) { background: #f6fafa; }
 .adm[data-mode="girls"] .adm-sheet__t tbody tr.adm-sheet__band--1:not(.adm-sheet__group) { background: #fdf6f9; }
 .adm-sheet__t tbody tr.adm-sheet__group.adm-sheet__band--1 td { background: #ddeeee !important; }
+.adm-hub-group { margin-bottom: 14px; }
+.adm-hub-group__title { font-size: 0.88rem !important; color: #5b6b6b; margin: 4px 4px 8px !important; font-weight: 800; }
+/* מסך כפתור-על: רשימה דקה של שורות לחיצות */
+.adm-hub { display: grid !important; grid-template-columns: 1fr !important; gap: 0 !important; background: #fff; border: 1px solid #e3eaea; border-radius: 16px; overflow: hidden; }
+.adm-hub__tile { display: flex !important; align-items: center !important; gap: 10px !important; min-height: 52px !important; height: auto !important; padding: 8px 12px !important; border: 0 !important; border-bottom: 1px solid #eef2f2 !important; border-radius: 0 !important; box-shadow: none !important; background: transparent !important; }
+.adm-hub .adm-hub__tile:last-child { border-bottom: 0 !important; }
+.adm-hub__tile:active, .adm-hub__tile:hover { background: #f3f8f8 !important; }
+.adm-hub__icon { width: 34px !important; height: 34px !important; min-width: 34px !important; border-radius: 10px !important; }
+.adm-hub__icon svg { width: 18px !important; height: 18px !important; stroke-width: 2.2; }
+.adm-hub__text strong { font-size: 0.96rem !important; }
+.adm-hub__text small { font-size: 0.76rem !important; }
+.adm-hub__go { width: 15px !important; height: 15px !important; opacity: 0.4; }

@@ -11,7 +11,7 @@ export const MODE_LABELS: Record<Mode, string> = { boys: "טללי ברכה", gi
 /** מסך = תצוגה + לשונית פנימית אופציונלית, או מסך כפתור-על */
 export type Screen = { view: View; tab?: string } | { hub: string };
 
-export type NavLeaf = { id: string; label: string; icon: IconName; view: View; tab?: string; hint?: string; badgeForms?: FormKey[]; badgeMessages?: boolean; onlyRoles?: string[] };
+export type NavLeaf = { id: string; label: string; icon: IconName; view: View; tab?: string; hint?: string; badgeForms?: FormKey[]; badgeMessages?: boolean; onlyRoles?: string[]; group?: string };
 export type NavHub = { id: string; label: string; icon: IconName; items: NavLeaf[] };
 export type NavEntry = { id: string; label: string; icon: IconName; hub?: NavHub; leaf?: NavLeaf };
 
@@ -28,7 +28,6 @@ function tree(mode: Mode): NavHub[] {
     items: [
       leaf("content", "תוכן האתר", "edit", "content", { hint: "טקסטים, תמונות ופרטי קשר" }),
       leaf("events", "אירועים ושיעורים", "calendar", "content", { tab: "events", hint: "מתעדכן מיד באתר הציבורי" }),
-      leaf("users", "משתמשים והרשאות", "users", "users", { hint: "מי נכנס ומה כל אחד רואה" }),
       leaf("audit", "יומן פעולות", "list", "audit", { hint: "כל פעולה במערכת" }),
       leaf("developer", "מתכנת", "code", "developer", { hint: "בדיקות מערכת, גיבוי וכניסה כ..." }),
       leaf("donations", "תרומות", "gift", "donations"),
@@ -38,14 +37,31 @@ function tree(mode: Mode): NavHub[] {
     home: { id: "home", label: "בית", icon: "grid" as IconName, items: [leaf("dashboard", "לוח בקרה", "grid", "dashboard")] },
     smart: { id: "smart-center", label: "ניהול חכם", icon: "sparkle" as IconName, items: [leaf("smart", "ניהול חכם", "sparkle", "smart", { hint: "משימות, אישורים, משפכים, בריאות סניפים ופעולות מרוכזות" })] },
     activity: { id: "activity-center", label: "פעילות", icon: "calendar" as IconName, items: [leaf("activity", "לוח פעילות ארצי", "calendar", "activity", { hint: "לוח שנה, שעות ומפת הפעילות בארץ" })] },
-    /** תקשורת: הודעות פנימיות + תפוצה + פניות מהאתר - כפתור אחד */
-    comm: { id: "comm", label: "תקשורת", icon: "chat" as IconName, items: [
-      leaf("messages", "הודעות פנימיות", "chat", "messages", { hint: "בין המנכ״ל, הרכזים ומנהלי הסניפים", badgeMessages: true }),
-      leaf("inquiries", "פניות מהאתר", "inbox", "inquiries", { badgeForms: INQ, hint: "צור קשר, התנדבות, עדכונים וסיוע" }),
-      leaf("bc-send", "שליחת תפוצה", "phone", "broadcast", { tab: "send", hint: "קולית, צינתוק, SMS, וואטסאפ, מייל" }),
-      leaf("bc-history", "היסטוריית תפוצה", "clock", "broadcast", { tab: "history" }),
-      leaf("bc-contacts", "אנשי קשר", "users", "broadcast", { tab: "contacts", onlyRoles: ["ceo", "developer", "office"] }),
-    ] },
+  };
+  /** קשרי לקוחות: אנשים + יצירת קשר */
+  const P = "אנשים";
+  const C = "יצירת קשר";
+  const crm: NavHub = {
+    id: "crm",
+    label: "קשרי לקוחות",
+    icon: "users",
+    items: [
+      ...(mode === "boys"
+        ? [
+            leaf("avrechim", "אברכים", "users", "kollel", { tab: "avrechim", hint: "לפי ערים וסניפים", group: P }),
+            leaf("mitch-k", "מתחזקים", "heart", "kollel", { tab: "mitch", hint: "כל מתחזק, עם מי לומד, שלב ומעקב", group: P }),
+          ]
+        : [
+            leaf("bnot-members", "משתתפות", "users", "bnot", { tab: "members", hint: "לפי ערים וסניפים", group: P }),
+            leaf("mitch-b", "מתחזקות", "heart", "bnot", { tab: "mitch", hint: "קשר מתמשך: שיחות, שלב ומעקב", group: P }),
+          ]),
+      leaf("bc-contacts", "אנשי קשר", "book", "broadcast", { tab: "contacts", onlyRoles: ["ceo", "developer", "office"], group: P }),
+      leaf("users", "משתמשים והרשאות", "shield", "users", { hint: "מי נכנס ומה כל אחד רואה", group: P }),
+      leaf("bc-send", "שליחת תפוצה", "phone", "broadcast", { tab: "send", hint: "קולית, צינתוק, SMS, וואטסאפ, מייל", group: C }),
+      leaf("bc-history", "היסטוריית תפוצה", "clock", "broadcast", { tab: "history", group: C }),
+      leaf("messages", "הודעות פנימיות", "chat", "messages", { hint: "בין המנכ״ל, הרכזים ומנהלי הסניפים", badgeMessages: true, group: C }),
+      leaf("inquiries", "הודעות מהאתר", "inbox", "inquiries", { badgeForms: INQ, hint: "צור קשר, התנדבות, עדכונים וסיוע", group: C }),
+    ],
   };
   if (mode === "boys") {
     return [
@@ -58,15 +74,13 @@ function tree(mode: Mode): NavHub[] {
         icon: "book",
         items: [
           leaf("attendance", "ערב לימוד", "calendar", "kollel", { tab: "attendance", hint: "מי הגיע הערב - אברכים והמתחזקים שלהם" }),
-          leaf("mitch-k", "מתחזקים", "heart", "kollel", { tab: "mitch", hint: "כל מתחזק, עם מי לומד, שלב ומעקב" }),
-          leaf("avrechim", "אברכים", "users", "kollel", { tab: "avrechim", hint: "לפי ערים וסניפים" }),
           leaf("entries", "נסיעות והוצאות", "file", "kollel", { tab: "entries", hint: "דיווח ואישור בחודש הפתוח" }),
           leaf("payroll", "משכורות", "file", "payroll", { hint: "טבלת החודש, שמחות, ייצוא לאקסל" }),
           leaf("reports", "דוחות וייצוא", "download", "reports", { hint: "כל דוח לאקסל + גרפים" }),
           leaf("org-kollel", "ערים, סניפים ורכזים", "pin", "org", { hint: "מבנה הכולל ומי אחראי על מה" }),
         ],
       },
-      common.comm,
+      crm,
       manage,
     ];
   }
@@ -79,8 +93,6 @@ function tree(mode: Mode): NavHub[] {
       icon: "heart",
       items: [
         leaf("challah", "הפרשת חלה", "wheat", "bnot", { tab: "challah", hint: "אירוע, הרשמה, הגעה ותיעוד" }),
-        leaf("mitch-b", "מתחזקות", "heart", "bnot", { tab: "mitch", hint: "קשר מתמשך: שיחות, שלב ומעקב" }),
-        leaf("bnot-members", "משתתפות", "users", "bnot", { tab: "members", hint: "לפי ערים וסניפים" }),
         leaf("bnot-acts", "פעילויות ונוכחות", "calendar", "bnot", { tab: "activities", hint: "מפגשים בסניפים ומי הגיעה" }),
         leaf("isha-req", "בקשות שיחה", "chat", "isha", { tab: "ishaRequest", badgeForms: ["ishaRequest"], hint: "אישה לאישה - שיבוץ מלווה" }),
         leaf("isha-mentors", "מלוות", "hands", "isha", { tab: "ishaMentor", badgeForms: ["ishaMentor"], hint: "מתנדבות שנרשמו ואושרו" }),
@@ -88,7 +100,7 @@ function tree(mode: Mode): NavHub[] {
         leaf("org-bnot", "ערים, סניפים ורכזות", "pin", "org", { hint: "מבנה בנות צילה ומי אחראית על מה" }),
       ],
     },
-    common.comm,
+    crm,
     manage,
   ];
 }
@@ -130,15 +142,15 @@ export function entriesFor(hubs: NavHub[]): NavEntry[] {
  */
 export const defaultBar = (entries: NavEntry[], mode: Mode) => {
   const mains = entries.filter((e) => !e.id.startsWith("leaf:"));
-  if (mode === "boys") {
-    const preferred = ["home", "kollel", "activity-center", "comm"];
-    return preferred.filter((id) => mains.some((e) => e.id === id));
-  }
-  return mains.map((e) => e.id);
+  const preferred = mode === "boys" ? ["home", "kollel", "crm", "activity-center"] : ["home", "bnot", "crm", "activity-center"];
+  const out = preferred.filter((id) => mains.some((e) => e.id === id));
+  // משתמש בלי חלק מהמסכים - משלימים מהכפתורים הקיימים עד 4
+  for (const e of mains) if (out.length < 4 && !out.includes(e.id)) out.push(e.id);
+  return out;
 };
 
 /** שמירת השורה התחתונה לכל משתמש ולכל מצב בנפרד (במכשיר) */
-const key = (me: Me, mode: Mode) => `tb-bar-v2:${me.user.impersonatedBy ? "as:" : ""}${me.user.id}:${mode}`;
+const key = (me: Me, mode: Mode) => `tb-bar-v3:${me.user.impersonatedBy ? "as:" : ""}${me.user.id}:${mode}`;
 export function loadBar(me: Me, mode: Mode, entries: NavEntry[]): string[] {
   const mains = defaultBar(entries, mode);
   try {

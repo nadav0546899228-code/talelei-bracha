@@ -728,6 +728,7 @@ export default function AdminApp() {
   const ownViewLabel = me.roleLabels[ownRole] || "החשבון שלי";
   const menuQuery = appMenuQuery.trim().toLocaleLowerCase("he");
   const menuGroups = hubs
+    .flatMap((h) => (h.items.some((l) => l.group) ? [...new Set(h.items.map((l) => l.group || ""))].map((g) => ({ ...h, id: `${h.id}:${g}`, label: g ? `${h.label} · ${g}` : h.label, items: h.items.filter((l) => (l.group || "") === g) })) : [h]))
     .map((h) => ({
       ...h,
       items: h.items.filter((l) => !menuQuery || `${h.label} ${l.label} ${l.hint || ""}`.toLocaleLowerCase("he").includes(menuQuery)),
@@ -1080,6 +1081,7 @@ function Profile({
   const [err, setErr] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
   const [alertsOpen, setAlertsOpen] = useState(false);
+  const [prefsOpen, setPrefsOpen] = useState(false);
   const [push, setPush] = useState<"on" | "off" | "blocked" | "unsupported" | "busy">("busy");
 
   useEffect(() => {
@@ -1216,11 +1218,14 @@ function Profile({
         </section>
 
         {/* העדפות אישיות */}
-        <section className="adm-personal__card">
-          <div className="adm-personal__heading">
-            <span><Icon name="monitor" /></span>
-            <div><h2>העדפות אישיות</h2><p>נשמרות במכשיר הזה.</p></div>
-          </div>
+        <section className="adm-personal__card adm-personal__hub">
+          <button type="button" className="adm-personal__row" onClick={() => setPrefsOpen(!prefsOpen)} aria-expanded={prefsOpen}>
+            <span className="adm-personal__rowicon"><Icon name="monitor" /></span>
+            <span><strong>העדפות אישיות</strong><small>תצוגה, גודל כתב ומיקום הסרגל</small></span>
+            <Icon name="chevronDown" className={`adm-personal__arrow${prefsOpen ? " is-open" : ""}`} />
+          </button>
+          {prefsOpen ? (
+          <div style={{ padding: "0 14px 12px" }}>
           <div className="adm-pf-pref">
             <span>מצב תצוגה</span>
             <div className="adm-display-picker" role="radiogroup" aria-label="מצב תצוגה">
@@ -1252,6 +1257,8 @@ function Profile({
             </div>
             <small className="muted">אפשר גם לגרור את שש הנקודות לצד המסך.</small>
           </div>
+          </div>
+          ) : null}
         </section>
 
         <section className="adm-personal__card adm-personal__hub">

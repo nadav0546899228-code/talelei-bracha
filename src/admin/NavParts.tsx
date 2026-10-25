@@ -11,8 +11,11 @@ export function HubView({ hub, badge, onOpen }: { hub: NavHub; badge: (l: NavLea
           <h1>{hub.label}</h1>
         </div>
       </div>
+      {(hub.items.some((l) => l.group) ? [...new Set(hub.items.map((l) => l.group || ""))] : [""]).map((g) => (
+      <section key={g || "all"} className="adm-hub-group">
+      {g ? <h2 className="adm-hub-group__title">{g}</h2> : null}
       <div className="adm-hub">
-        {hub.items.map((l) => {
+        {hub.items.filter((l) => !g || l.group === g).map((l) => {
           const b = badge(l);
           return (
             <button key={l.id} type="button" className="adm-hub__tile" onClick={() => onOpen(l)}>
@@ -29,6 +32,8 @@ export function HubView({ hub, badge, onOpen }: { hub: NavHub; badge: (l: NavLea
           );
         })}
       </div>
+      </section>
+      ))}
     </>
   );
 }
