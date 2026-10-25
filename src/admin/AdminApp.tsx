@@ -243,22 +243,6 @@ export default function AdminApp() {
   const barPress = useRef<{ id: string; x: number; y: number; pointerId: number; el: HTMLElement } | null>(null);
   const suppressBarClick = useRef(false);
   const barScrollRef = useRef<HTMLDivElement>(null);
-  // סימון שיש עוד כפתורים בגלילה (דהייה בקצה)
-  useEffect(() => {
-    const el = barScrollRef.current;
-    if (!el) return;
-    const upd = () => {
-      el.classList.toggle("has-more", el.scrollWidth > el.clientWidth + 4);
-      el.classList.toggle("at-end", Math.abs(el.scrollLeft) + el.clientWidth >= el.scrollWidth - 4);
-    };
-    upd();
-    el.addEventListener("scroll", upd, { passive: true });
-    window.addEventListener("resize", upd);
-    return () => {
-      el.removeEventListener("scroll", upd);
-      window.removeEventListener("resize", upd);
-    };
-  });
 
   const loadMe = useCallback(async () => {
     try {
@@ -405,7 +389,8 @@ export default function AdminApp() {
   }
 
   const newCount = (forms: string[]) => (subs ?? []).filter((x) => forms.includes(x.form) && x.status === "new").length;
-  const leafBadge = (l: NavLeaf) => (l.badgeForms ? newCount(l.badgeForms) : 0);
+  const unreadMsgs = dash.alerts.find((x) => x.id === "msgs")?.count ?? 0;
+  const leafBadge = (l: NavLeaf) => (l.badgeMessages ? unreadMsgs : 0) + (l.badgeForms ? newCount(l.badgeForms) : 0);
   const entryBadge = (e: NavEntry) => (e.leaf ? leafBadge(e.leaf) : (e.hub?.items ?? []).reduce((t, l) => t + leafBadge(l), 0));
 
   const initial = (me.user.name || me.user.email || "?").trim().charAt(0).toUpperCase();

@@ -11,7 +11,7 @@ export const MODE_LABELS: Record<Mode, string> = { boys: "טללי ברכה", gi
 /** מסך = תצוגה + לשונית פנימית אופציונלית, או מסך כפתור-על */
 export type Screen = { view: View; tab?: string } | { hub: string };
 
-export type NavLeaf = { id: string; label: string; icon: IconName; view: View; tab?: string; hint?: string; badgeForms?: FormKey[] };
+export type NavLeaf = { id: string; label: string; icon: IconName; view: View; tab?: string; hint?: string; badgeForms?: FormKey[]; badgeMessages?: boolean };
 export type NavHub = { id: string; label: string; icon: IconName; items: NavLeaf[] };
 export type NavEntry = { id: string; label: string; icon: IconName; hub?: NavHub; leaf?: NavLeaf };
 
@@ -34,11 +34,12 @@ function tree(mode: Mode): NavHub[] {
   };
   const common = {
     home: { id: "home", label: "בית", icon: "grid" as IconName, items: [leaf("dashboard", "לוח בקרה", "grid", "dashboard")] },
-    inquiries: { id: "inquiries", label: "פניות", icon: "inbox" as IconName, items: [leaf("inquiries", "פניות מהאתר", "inbox", "inquiries", { badgeForms: INQ })] },
-    messages: { id: "messages", label: "הודעות", icon: "chat" as IconName, items: [leaf("messages", "הודעות פנימיות", "chat", "messages")] },
-    broadcast: { id: "broadcast", label: "תפוצה", icon: "phone" as IconName, items: [
-      leaf("bc-send", "שליחת הודעה", "phone", "broadcast", { tab: "send", hint: "קולית, צינתוק, SMS, וואטסאפ, מייל" }),
-      leaf("bc-history", "היסטוריית שליחות", "clock", "broadcast", { tab: "history" }),
+    /** תקשורת: הודעות פנימיות + תפוצה + פניות מהאתר - כפתור אחד */
+    comm: { id: "comm", label: "תקשורת", icon: "chat" as IconName, items: [
+      leaf("messages", "הודעות פנימיות", "chat", "messages", { hint: "בין המנכ״ל, הרכזים ומנהלי הסניפים", badgeMessages: true }),
+      leaf("inquiries", "פניות מהאתר", "inbox", "inquiries", { badgeForms: INQ, hint: "צור קשר, התנדבות, עדכונים וסיוע" }),
+      leaf("bc-send", "שליחת תפוצה", "phone", "broadcast", { tab: "send", hint: "קולית, צינתוק, SMS, וואטסאפ, מייל" }),
+      leaf("bc-history", "היסטוריית תפוצה", "clock", "broadcast", { tab: "history" }),
       leaf("bc-contacts", "אנשי קשר", "users", "broadcast", { tab: "contacts" }),
     ] },
   };
@@ -58,9 +59,7 @@ function tree(mode: Mode): NavHub[] {
           leaf("org-kollel", "ערים, סניפים ורכזים", "pin", "org", { hint: "מבנה הכולל ומי אחראי על מה" }),
         ],
       },
-      common.messages,
-      common.broadcast,
-      common.inquiries,
+      common.comm,
       manage,
     ];
   }
@@ -78,9 +77,7 @@ function tree(mode: Mode): NavHub[] {
         leaf("org-bnot", "ערים, סניפים ורכזות", "pin", "org", { hint: "מבנה בנות צילה ומי אחראית על מה" }),
       ],
     },
-    common.messages,
-    common.broadcast,
-    common.inquiries,
+    common.comm,
     manage,
   ];
 }
