@@ -529,6 +529,9 @@ async function api(req, res, url) {
     const doc = users.find((u) => u.phone === ph);
     const generic = { error: "מספר טלפון או קוד שגויים" };
     if (!doc || doc.active === false) return json(res, 401, generic);
+    // באתר המפורסם: משתמשי הדמה (קוד 1234) לא נכנסים - אחרת כל אחד היה נכנס כרכז ארצי ורואה נתונים אמיתיים.
+    // לבדיקה כמותם: "מעבר בין תצוגות" של מנכ״ל/מתכנת.
+    if (IS_PROD && (String(doc.id).startsWith("demo-") || doc.demo === true)) return json(res, 401, generic);
     const lock = phone.lockState(doc);
     if (lock.locked) {
       return json(res, 423, {
@@ -563,7 +566,8 @@ async function api(req, res, url) {
 
   // ---- מכאן והלאה: נדרש משתמש מחובר
   const session = readSession(req);
-  const real = session ? await resolveUser(session.email) : null;
+  const demoPhoneSession = IS_PROD && String(session?.email || "").startsWith("phone:demo-");
+  const real = session && !demoPhoneSession ? await resolveUser(session.email) : null;
   if (!real) return json(res, 401, { error: "נדרשת התחברות" }, session ? { "Set-Cookie": clearSessionCookie(isSecure(req)) } : {});
   let user = real;
   let asId = null;

@@ -4,7 +4,7 @@
  */
 import { randomUUID } from "node:crypto";
 import { branchScope, loadOrg } from "./org.mjs";
-import { normalizeRoles } from "./roles.mjs";
+import { FORM_VIEW, isPrivileged, normalizeRoles } from "./roles.mjs";
 import { normalizePhone, validPhone } from "./phoneAuth.mjs";
 import { dispatch } from "./broadcast.mjs";
 
@@ -161,7 +161,10 @@ async function person360(user, store, kind, id) {
   if(kind==="avrech"){person=await store.get("avrechim",id);domain="kollel";branchId=person?.branchId;}
   if(kind==="submission"){person=await store.get("submissions",id);domain=person?.form?.startsWith("isha")?"bnot":null;}
   if(!person) return null;
-  if(branchId && domain && !sees(domain,branchId)) return null;
+  // פניות מהאתר: רק מי שמורשה למסך של אותו טופס
+  if(kind==="submission"){ const v=FORM_VIEW[person.form]; if(!v||!user.views.includes(v)) return null; }
+  // אנשים: רק בסניפים שבאחריות המשתמש (גם כשאין סניף - רק מי שרואה הכל)
+  else if(!domain || !sees(domain,branchId)) return null;
   const loc=branchId?branchInfo(org,branchId):{branch:"",city:""};
   const phone=normalizePhone(person.phone||person.data?.phone);
   const timeline=[];
@@ -329,7 +332,10 @@ export async function handleSmart(req,res,url,ctx){
     const [,kind,id,action]=ap;
     if(kind==="mitchUpdate"){
       const u=await store.get("mitchUpdates",id);
+      const uDomain=u?.domain==="bnot"?"bnot":"kollel";
       if(!u||u.status!=="pending") return send(404,{error:"לא נמצא"}),true;
+      const {sees}=await visibleData(user,store);
+      if(!user.views.includes(uDomain)||!sees(uDomain,u.branchId)) return send(404,{error:"לא נמצא"}),true;
       if(action==="approve"){
         const m=await store.get("mitchazkim",u.mitchId);
         if(!m) return send(404,{error:"לא נמצא"}),true;
@@ -339,7 +345,7 @@ export async function handleSmart(req,res,url,ctx){
       } else await store.put("mitchUpdates",u.id,{...u,status:"rejected",reviewedAt:new Date().toISOString(),reviewedBy:user.name||user.email});
     } else if(kind==="mentor"){
       const s=await store.get("submissions",id);
-      if(!s||s.form!=="ishaMentor") return send(404,{error:"לא נמצא"}),true;
+      if(!s||s.form!=="ishaMentor"||!user.views.includes("isha")) return send(404,{error:"לא נמצא"}),true;
       await store.put("submissions",s.id,{...s,status:action==="approve"?"approved":"rejected"});
     } else return send(400,{error:"סוג אישור לא מוכר"}),true;
     await audit(user,action==="approve"?"אישור במרכז האישורים":"דחייה במרכז האישורים",id);
@@ -417,6 +423,7 @@ export async function handleSmart(req,res,url,ctx){
   }
 
   if(pathname==="/api/smart/run"&&method==="POST"){
+    if(!isPrivileged(user.roles)&&!user.roles.includes("chief_coordinator")) return send(403,{error:"אין הרשאה"}),true;
     const n=await runSmartAutomationSweep(store,notify);
     await audit(user,"הרצת אוטומציות חכמות",`${n} משימות חדשות`);
     return send(200,{ok:true,created:n}),true;
