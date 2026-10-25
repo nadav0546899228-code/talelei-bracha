@@ -270,6 +270,7 @@ export default function AdminApp() {
   const barPress = useRef<{ id: string; x: number; y: number; lastX: number; lastY: number; pointerId: number; el: HTMLElement; panning: boolean } | null>(null);
   const suppressBarClick = useRef(false);
   const barScrollRef = useRef<HTMLDivElement>(null);
+  const barGrip = useRef<{ pointerId: number; lastX: number; el: HTMLElement } | null>(null);
 
   const loadMe = useCallback(async () => {
     try {
@@ -328,6 +329,7 @@ export default function AdminApp() {
   const entries = useMemo(() => entriesFor(hubs), [hubs]);
   const dash = useAlerts(state === "ready" ? me : null, mode, subs);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [searchSeed, setSearchSeed] = useState("");
   const [profileOpen, setProfileOpen] = useState(false);
   const [appMenuOpen, setAppMenuOpen] = useState(false);
   const [appMenuQuery, setAppMenuQuery] = useState("");
@@ -521,6 +523,28 @@ export default function AdminApp() {
     setDraggingBarId(null);
     setBarSorting(false);
   };
+  const gripPointerDown = (ev: ReactPointerEvent<HTMLButtonElement>) => {
+    if (ev.pointerType === "mouse" && ev.button !== 0) return;
+    barGrip.current = { pointerId: ev.pointerId, lastX: ev.clientX, el: ev.currentTarget };
+    try { ev.currentTarget.setPointerCapture(ev.pointerId); } catch { /* לא קריטי */ }
+  };
+  const gripPointerMove = (ev: ReactPointerEvent<HTMLButtonElement>) => {
+    const g = barGrip.current;
+    const tabs = barScrollRef.current;
+    if (!g || !tabs) return;
+    ev.preventDefault();
+    const dx = ev.clientX - g.lastX;
+    tabs.scrollBy({ left: -dx * 1.35, behavior: "auto" });
+    g.lastX = ev.clientX;
+  };
+  const gripPointerEnd = (ev: ReactPointerEvent<HTMLButtonElement>) => {
+    const g = barGrip.current;
+    if (g) {
+      try { ev.currentTarget.releasePointerCapture(g.pointerId); } catch { /* לא קריטי */ }
+    }
+    barGrip.current = null;
+  };
+
   const barNav = (
     <nav aria-label="ניווט ראשי" className={`adm-bar${barSorting ? " is-sorting" : ""}`}>
       {barEntries.map((e) => {
@@ -626,6 +650,9 @@ export default function AdminApp() {
   return (
     <div className="adm" data-mode={mode} data-display={displayMode}>
       <header className="adm-top">
+        <button type="button" className="adm-icon-btn adm-top-menu-btn" onClick={() => setAppMenuOpen(true)} aria-label="פתיחת תפריט המערכת" title="תפריט המערכת">
+          <Icon name="menu" />
+        </button>
         {modes.length > 1 ? (
           <button type="button" className="adm-mode adm-mode--logo-only" onClick={switchMode} aria-label={`מעבר ל${MODE_LABELS[mode === "boys" ? "girls" : "boys"]}`} title={`מעבר ל${MODE_LABELS[mode === "boys" ? "girls" : "boys"]}`}>
             <Logo org={mode === "boys" ? "taleiBracha" : "bnotTzila"} height={42} />
@@ -641,9 +668,6 @@ export default function AdminApp() {
         </div>
         <div className="adm-top__spacer" />
         <div className="adm-user">
-          <button type="button" className="adm-icon-btn adm-search-btn" onClick={() => setSearchOpen(true)} aria-label="חיפוש" title="חיפוש">
-            <Icon name="search" />
-          </button>
           <button type="button" className="adm-account-btn adm-account-btn--notified" onClick={() => setProfileOpen(true)} aria-label={`האזור האישי${unreadMessages ? `, ${unreadMessages} הודעות שלא נקראו` : ""}`} title="האזור האישי">
             <span className="adm-account-btn__avatar-wrap">
               {account.picture ? <img src={account.picture} alt="" referrerPolicy="no-referrer" /> : <span className="adm-avatar">{initial}</span>}
@@ -660,20 +684,14 @@ export default function AdminApp() {
 
       <OrgScopeBar me={me} mode={mode} />
 
-      <button type="button" className="adm-system-launcher adm-system-launcher--mobile" onClick={() => setAppMenuOpen(true)}>
-        <span className="adm-system-launcher__icon"><Icon name="menu" /></span>
-        <span><strong>כל המערכת</strong><small>כל האפשרויות במקום אחד</small></span>
-        <Icon name="arrowLeft" />
-      </button>
-
       {appMenuOpen ? (
         <div className="adm-appmenu-back" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && setAppMenuOpen(false)}>
           <section className="adm-appmenu" role="dialog" aria-modal="true" aria-label="כל אפשרויות המערכת">
             <header className="adm-appmenu__head">
               <div>
-                <span className="adm-eyebrow">גישה מהירה</span>
-                <h2>כל המערכת</h2>
-                <small>{MODE_LABELS[mode]} · מוצגות רק אפשרויות שמותר לך לראות</small>
+                <span className="adm-eyebrow">{MODE_LABELS[mode]}</span>
+                <h2>תפריט המערכת</h2>
+                <small>אפשרויות לפי ההרשאות שלך</small>
               </div>
               <button type="button" className="adm-icon-btn" onClick={() => setAppMenuOpen(false)} aria-label="סגירת התפריט">
                 <Icon name="close" />
@@ -687,11 +705,34 @@ export default function AdminApp() {
                   type="search"
                   value={appMenuQuery}
                   onChange={(e) => setAppMenuQuery(e.target.value)}
-                  placeholder="חיפוש פעולה, מסך או תחום…"
+                  placeholder="חיפוש בתפריט או בכל המערכת…"
                   autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && appMenuQuery.trim().length >= 2) {
+                      e.preventDefault();
+                      setSearchSeed(appMenuQuery.trim());
+                      setAppMenuOpen(false);
+                      setSearchOpen(true);
+                    }
+                  }}
                 />
                 {appMenuQuery ? <button type="button" onClick={() => setAppMenuQuery("")} aria-label="ניקוי חיפוש"><Icon name="close" /></button> : null}
               </label>
+              {appMenuQuery.trim().length >= 2 ? (
+                <button
+                  type="button"
+                  className="adm-appmenu__global-search"
+                  onClick={() => {
+                    setSearchSeed(appMenuQuery.trim());
+                    setAppMenuOpen(false);
+                    setSearchOpen(true);
+                  }}
+                >
+                  <Icon name="search" />
+                  <span><strong>חיפוש בכל המערכת</strong><small>“{appMenuQuery.trim()}”</small></span>
+                  <Icon name="arrowLeft" />
+                </button>
+              ) : null}
               {modes.length > 1 ? (
                 <div className="adm-appmenu__modes" role="group" aria-label="בחירת מערכת">
                   <button type="button" aria-pressed={mode === "boys"} onClick={() => mode !== "boys" && switchMode()}>
@@ -751,11 +792,6 @@ export default function AdminApp() {
 
       <div className="adm-layout">
         <aside className="adm-side">
-          <button type="button" className="adm-system-launcher adm-system-launcher--side" onClick={() => setAppMenuOpen(true)}>
-            <span className="adm-system-launcher__icon"><Icon name="menu" /></span>
-            <span><strong>כל המערכת</strong><small>חיפוש וקיצורים</small></span>
-            <Icon name="arrowLeft" />
-          </button>
           {modes.length > 1 ? (
             <div className="adm-modes" role="tablist" aria-label="מצב">
               {modes.map((m) => (
@@ -799,8 +835,24 @@ export default function AdminApp() {
           )}
         </main>
       </div>
-      <div className="adm-tabs" ref={barScrollRef}>{barNav}</div>
-      {searchOpen ? <SearchModal onClose={() => setSearchOpen(false)} onGo={go} /> : null}
+      <div className="adm-tabs" ref={barScrollRef}>
+        {barNav}
+        <button
+          type="button"
+          className="adm-bar-grip"
+          aria-label="גרירת סרגל הניווט לצדדים"
+          title="גרירה לצדדים"
+          onPointerDown={gripPointerDown}
+          onPointerMove={gripPointerMove}
+          onPointerUp={gripPointerEnd}
+          onPointerCancel={gripPointerEnd}
+        >
+          <span className="adm-bar-grip__dots" aria-hidden="true">
+            <i /><i /><i /><i /><i /><i />
+          </span>
+        </button>
+      </div>
+      {searchOpen ? <SearchModal initialQuery={searchSeed} onClose={() => { setSearchOpen(false); setSearchSeed(""); }} onGo={go} /> : null}
       {profileOpen ? (
         <Profile
           me={me}
