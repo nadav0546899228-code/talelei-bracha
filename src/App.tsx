@@ -28,6 +28,7 @@ function setMeta(selector: string, attr: "name" | "property", key: string, conte
 export default function App() {
   const { path } = useRouter();
   const isAdmin = path === "/admin" || path.startsWith("/admin/");
+  const isShare = path === "/share";
   const route = matchRoute(path);
   const Page = route.component;
 
@@ -58,6 +59,13 @@ export default function App() {
           <AdminApp />
         </Suspense>
       </>
+    );
+
+  if (isShare)
+    return (
+      <Suspense fallback={loading}>
+        <Page />
+      </Suspense>
     );
 
   return (
