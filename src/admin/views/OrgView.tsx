@@ -73,9 +73,7 @@ export function OrgView({ me, domain }: { me: Me; domain: Domain }) {
       <div className="adm-head">
         <div>
           <h1>{domain === "bnot" ? "ערים, סניפים ורכזות" : "ערים, סניפים ורכזים"}</h1>
-          <p>
-            {DOMAIN_LABELS[domain]} · {seesAll ? "מנכ״ל ← רכז ראשי ← רכזי ערים ← מנהלי סניפים." : "העיר שלך, הסניפים שבה ומנהלי הסניפים."}
-          </p>
+          <span className="adm-scope-chip">{DOMAIN_LABELS[domain]}</span>
         </div>
       </div>
 
@@ -191,9 +189,7 @@ export function OrgView({ me, domain }: { me: Me; domain: Domain }) {
       <div style={{ marginTop: 20 }}>
         <PhoneUsersPanel me={me} org={org} onChange={reload} title="רכזים ומנהלי סניפים (כניסה בטלפון וקוד)" />
       </div>
-      {me.user.views.includes("users") ? (
-        <p className="muted">רכזים עם חשבון Google מוסיפים במסך "משתמשים והרשאות", עם אותה בחירת עיר וסניף.</p>
-      ) : null}
+
     </>
   );
 }
