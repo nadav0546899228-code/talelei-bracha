@@ -76,7 +76,7 @@ function tree(mode: Mode): NavHub[] {
       label: "בנות צילה",
       icon: "heart",
       items: [
-        leaf("challah", "הפרשת חלה", "sparkle", "bnot", { tab: "challah", hint: "אירוע, הרשמה, הגעה ותיעוד" }),
+        leaf("challah", "הפרשת חלה", "wheat", "bnot", { tab: "challah", hint: "אירוע, הרשמה, הגעה ותיעוד" }),
         leaf("mitch-b", "מתחזקות", "heart", "bnot", { tab: "mitch", hint: "קשר מתמשך: שיחות, שלב ומעקב" }),
         leaf("bnot-members", "משתתפות", "users", "bnot", { tab: "members", hint: "לפי ערים וסניפים" }),
         leaf("bnot-acts", "פעילויות ונוכחות", "calendar", "bnot", { tab: "activities", hint: "מפגשים בסניפים ומי הגיעה" }),
