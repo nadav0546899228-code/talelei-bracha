@@ -24,7 +24,7 @@ import {
   verifyGoogleCredential,
 } from "./auth.mjs";
 import { BOOTSTRAP, FORM_VIEW, ROLES, ROLE_SCOPE, VIEW_LABELS, bootstrapRoles, grantableRoles, isPrivileged, normalizeRoles, viewsFor } from "./roles.mjs";
-import { canAssignScope, cityScope, cleanScope, handleOrg, loadOrg } from "./org.mjs";
+import { canAssignScope, cleanScope, handleOrg, loadOrg } from "./org.mjs";
 import { createStore } from "./store.mjs";
 import * as phone from "./phoneAuth.mjs";
 import { handleKollel } from "./kollel.mjs";
@@ -54,7 +54,7 @@ const store = await createStore();
 /* באתר המפורסם: נתוני דמה נטענים פעם אחת אוטומטית (לבקשת נדב, עד שינקה אותם במסך מתכנת).
    אחרי "ניקוי" הם לא חוזרים. לכיבוי: SEED_DEMO_ONCE = false */
 const SEED_DEMO_ONCE = true;
-const DEMO_VERSION = 3; // גרסת דמו ארצית: 1000+ אנשים, סניפים ופעילות ללוח הארצי
+const DEMO_VERSION = 4; // דמו ארצי עם היררכיה: אזור → עיר → סניף ו-1000+ אנשים
 if (!DEMO && SEED_DEMO_ONCE) {
   const st = await store.get("settings", "demoState");
   if (!st || (st.state === "seeded" && (st.v || 1) < DEMO_VERSION)) {
@@ -190,7 +190,7 @@ async function resolveUser(sessionId) {
     if (rs) {
       const unit = unitId ? await store.get("orgUnits", unitId) : null;
       if (!unit || unit.domain !== rs.domain || unit.type !== rs.level) return null;
-      scope[rs.domain] = rs.level === "city" ? { cityId: unit.id } : { branchId: unit.id };
+      scope[rs.domain] = rs.level === "region" ? { regionId: unit.id } : rs.level === "city" ? { cityId: unit.id } : { branchId: unit.id };
       unitName = unit.name;
     }
     const roles = [role];
@@ -234,16 +234,7 @@ const impersonationAllowed = (real, target) => target.id !== real.id && (real.ro
 /** האם המשתמש אחראי על רכז/מנהל סניף מסוים (לפי עיר) */
 function manages(user, org, doc) {
   const roles = normalizeRoles(doc.roles);
-  for (const r of roles) {
-    const rs = ROLE_SCOPE[r];
-    if (!rs) continue;
-    const cities = cityScope(user, rs.domain);
-    if (cities === null) continue;
-    if (rs.level === "city") return false;
-    const branch = org.branches.find((b) => b.id === doc.scope?.[rs.domain]?.branchId);
-    if (!branch || !cities.has(branch.parentId)) return false;
-  }
-  return true;
+  return canAssignScope(user, org, roles, doc.scope || {});
 }
 
 async function audit(user, action, target = "", details = {}) {
