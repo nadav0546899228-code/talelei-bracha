@@ -33,6 +33,7 @@ import { yemotConfigured } from "./yemot.mjs";
 import { handleMessages } from "./messages.mjs";
 import { handleBnot } from "./bnot.mjs";
 import { challahReminders, handleMitch, publicChallah, publicMitchShare } from "./mitch.mjs";
+import { handleActivityCenter } from "./activityCenter.mjs";
 import * as push from "./webpush.mjs";
 
 const ROOT = join(fileURLToPath(new URL(".", import.meta.url)), "..", "dist");
@@ -904,6 +905,7 @@ async function api(req, res, url) {
     const origin = `${isSecure(req) ? "https" : "http"}://${req.headers.host}`;
     return send(200, { url: `${origin}/api/yemot/attendance?key=${hook.key}` });
   }
+  if (await handleActivityCenter(req, res, url, ctx)) return;
   if (await handleKollel(req, res, url, ctx)) return;
   if (await handleBroadcast(req, res, url, ctx)) return;
 
