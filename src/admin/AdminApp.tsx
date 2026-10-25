@@ -28,6 +28,7 @@ import { AuditView } from "./views/AuditView";
 import { ContentView } from "./views/ContentView";
 import { DashboardView } from "./views/DashboardView";
 import { ActivityCenterView } from "./views/ActivityCenterView";
+import { SmartCenterView } from "./views/SmartCenterView";
 import { DeveloperView } from "./views/DeveloperView";
 import { SubmissionsView } from "./views/SubmissionsView";
 import { UsersView } from "./views/UsersView";
@@ -776,6 +777,7 @@ export default function AdminApp() {
           ) : (
             <>
               {curView === "dashboard" ? <DashboardView {...ctx} views={me.user.views} dash={dash} /> : null}
+              {curView === "smart" ? <SmartCenterView go={go} initialTab={curTab} /> : null}
               {curView === "activity" ? <ActivityCenterView go={go} /> : null}
               {curView === "isha" ? (
                 <SubmissionsView key={`isha-${curTab ?? ""}`} {...ctx} forms={["ishaRequest", "ishaMentor"]} initialForm={curTab as never} title="אישה לאישה" />
