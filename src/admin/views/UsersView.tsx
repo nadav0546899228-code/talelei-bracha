@@ -3,6 +3,7 @@ import { Icon } from "../../components/Icon";
 import { api, del, fmtDateTime, post, ROLE_SCOPE, type Me, type Role, type Scope } from "../api";
 import { ScopePicker, scopeText, useOrg } from "../org";
 import { PhoneUsersPanel } from "./PhoneUsersPanel";
+import { enterAs } from "../Impersonate";
 
 type U = { email: string; name: string; phone?: string; picture: string; roles: Role[]; scope?: Scope; active: boolean; bootstrap: boolean; lastLoginAt: string | null };
 
@@ -155,20 +156,27 @@ export function UsersView({ me }: { me: Me }) {
                 </td>
                 <td>{fmtDateTime(u.lastLoginAt)}</td>
                 <td>
-                  {u.bootstrap ? (
-                    <span className="muted" title="משתמש יסוד מוגדר בשרת">
-                      <Icon name="lock" width={16} height={16} style={{ display: "inline", verticalAlign: "-3px" }} /> משתמש יסוד
-                    </span>
-                  ) : (
-                    <div className="adm-item__actions">
-                      <button type="button" className="adm-icon-btn" aria-label={`עריכת ${u.email}`} onClick={() => setEditing({ email: u.email, name: u.name, phone: u.phone || "", roles: u.roles, scope: u.scope || {}, active: u.active, isNew: false })}>
-                        <Icon name="edit" />
+                  <div className="adm-item__actions">
+                    {me.canImpersonate && u.email !== me.user.email ? (
+                      <button type="button" className="adm-icon-btn" title="כניסה כ..." aria-label={`כניסה בשם ${u.name || u.email}`} onClick={() => enterAs(u.email).catch((e) => setMsg({ ok: false, text: e.message }))}>
+                        <Icon name="eye" />
                       </button>
-                      <button type="button" className="adm-icon-btn adm-icon-btn--danger" aria-label={`הסרת ${u.email}`} onClick={() => remove(u.email)}>
-                        <Icon name="trash" />
-                      </button>
-                    </div>
-                  )}
+                    ) : null}
+                    {u.bootstrap ? (
+                      <span className="muted" title="משתמש יסוד מוגדר בשרת">
+                        <Icon name="lock" width={16} height={16} style={{ display: "inline", verticalAlign: "-3px" }} /> משתמש יסוד
+                      </span>
+                    ) : (
+                      <>
+                        <button type="button" className="adm-icon-btn" aria-label={`עריכת ${u.email}`} onClick={() => setEditing({ email: u.email, name: u.name, phone: u.phone || "", roles: u.roles, scope: u.scope || {}, active: u.active, isNew: false })}>
+                          <Icon name="edit" />
+                        </button>
+                        <button type="button" className="adm-icon-btn adm-icon-btn--danger" aria-label={`הסרת ${u.email}`} onClick={() => remove(u.email)}>
+                          <Icon name="trash" />
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}

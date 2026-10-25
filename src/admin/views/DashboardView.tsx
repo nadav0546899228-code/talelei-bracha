@@ -11,7 +11,7 @@ export function DashboardView({ me, subs, go, views: allViews, mode }: AdminCtx 
   const count = (form: FormKey, status?: string) => list.filter((s) => s.form === form && (!status || s.status === status)).length;
   const hour = new Date().getHours();
   const greet = hour < 12 ? "בוקר טוב" : hour < 17 ? "צהריים טובים" : "ערב טוב";
-  const firstName = (me.user.name || "").split(" ")[0];
+  const firstName = me.user.kind === "virtual" ? "" : (me.user.name || "").split(" ")[0];
 
   const ishaUnassigned = list.filter((s) => s.form === "ishaRequest" && !s.assignedMentorId && !["done", "archived"].includes(s.status)).length;
   const recent = list.filter((s) => s.status === "new").slice(0, 8);

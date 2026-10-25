@@ -2180,3 +2180,65 @@ html.a11y-no-motion *::after {
     clip: rect(0 0 0 0);
   }
 }
+
+/* הודעת גרסה חדשה */
+.update-banner {
+  position: fixed;
+  top: calc(10px + env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #0e3f43;
+  color: #fff;
+  border-radius: 999px;
+  padding: 6px 6px 6px 8px;
+  padding-inline-start: 16px;
+  font-weight: 700;
+  font-size: 0.95rem;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+  white-space: nowrap;
+  animation: update-in 0.3s ease-out;
+}
+.update-banner__go {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: #ffd23f;
+  color: #2b1d00;
+  font: inherit;
+  font-weight: 800;
+  border-radius: 999px;
+  padding: 6px 14px;
+  cursor: pointer;
+}
+.update-banner__go svg,
+.update-banner__x svg {
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+.update-banner__x {
+  border: 0;
+  background: none;
+  color: #fff;
+  opacity: 0.75;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  padding: 4px;
+}
+@keyframes update-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -12px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .update-banner {
+    animation: none;
+  }
+}

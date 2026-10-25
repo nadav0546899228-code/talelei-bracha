@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Icon } from "../../components/Icon";
 import { api, del, fmtDateTime, post, ROLE_SCOPE, type Me, type Role, type Scope } from "../api";
 import { ScopePicker, scopeText, useOrg, type OrgData } from "../org";
+import { enterAs } from "../Impersonate";
 import { ContactActions } from "../components";
 
 type PU = {
@@ -135,6 +136,11 @@ export function PhoneUsersPanel({ me, onChange, title = "כניסה בטלפון
               {u.lock.locked ? (
                 <button type="button" className="btn btn--sm btn--rose" onClick={() => action(u, "unlock")}>
                   שחרור נעילה
+                </button>
+              ) : null}
+              {me.canImpersonate ? (
+                <button type="button" className="adm-icon-btn" title="כניסה כ..." aria-label={`כניסה בשם ${u.name}`} onClick={() => enterAs(`phone:${u.id}`).catch((e) => setErr(e.message))}>
+                  <Icon name="eye" />
                 </button>
               ) : null}
               <button type="button" className="adm-icon-btn" title="עריכה" aria-label={`עריכת ${u.name}`} onClick={() => setEdit({ id: u.id, name: u.name, phone: u.phone, roles: u.roles, scope: u.scope || {}, active: u.active })}>

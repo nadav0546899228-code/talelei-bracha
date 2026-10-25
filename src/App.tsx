@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect } from "react";
 import { Footer } from "./components/Footer";
 import { Header } from "./components/Header";
 import { FloatingButtons } from "./components/Floating";
+import { UpdateBanner } from "./components/UpdateBanner";
 import { isDevSite } from "./config/site";
 import { useRouter } from "./router/Router";
 import { matchRoute } from "./router/routes";
@@ -47,7 +48,15 @@ export default function App() {
     if (isDevSite) setMeta('meta[name="robots"]', "name", "robots", "noindex, nofollow");
   }, [route, path, isAdmin]);
 
-  if (isAdmin) return <Suspense fallback={loading}><AdminApp /></Suspense>;
+  if (isAdmin)
+    return (
+      <>
+        <UpdateBanner />
+        <Suspense fallback={loading}>
+          <AdminApp />
+        </Suspense>
+      </>
+    );
 
   return (
     <>
@@ -63,6 +72,7 @@ export default function App() {
       </main>
       <Footer />
       <FloatingButtons />
+      <UpdateBanner />
     </>
   );
 }

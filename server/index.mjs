@@ -212,6 +212,18 @@ async function api(req, res, url) {
     });
   }
 
+  // גרסת האתר הבנוי - לפי שם קובץ הסקריפט הראשי (משתנה בכל בנייה). משמש להודעת "יש גרסה חדשה"
+  if (pathname === "/api/public/version" && method === "GET") {
+    let v = "";
+    try {
+      const html = await readFile(join(ROOT, "index.html"), "utf8");
+      v = (html.match(/src="(\/assets\/[^"]+\.js)"/) || [])[1] || "";
+    } catch {
+      v = "";
+    }
+    return json(res, 200, { v });
+  }
+
   const formMatch = pathname.match(/^\/api\/forms\/([a-zA-Z]+)$/);
   if (formMatch && method === "POST") {
     const formId = formMatch[1];
@@ -363,11 +375,12 @@ async function api(req, res, url) {
     const { id } = await readBody(req);
     const target = await resolveUser(String(id || ""));
     if (!target || target.id === real.id || !impersonationAllowed(real, target)) return send(400, { error: "אי אפשר להיכנס לתצוגה הזו" });
-    await audit(real, "כניסה כ...", target.name || target.email || target.phone || target.id);
+    // מעבר לתצוגת תפקיד - לא נרשם. כניסה בשם אדם מסוים - נרשמת
+    if (target.kind !== "virtual") await audit(real, "כניסה כ...", target.name || target.email || target.phone || target.id);
     return json(res, 200, { ok: true }, { "Set-Cookie": createSessionCookie(real.id, isSecure(req), target.id) });
   }
   if (pathname === "/api/auth/stop-impersonate" && method === "POST") {
-    if (user.impersonatedBy) await audit(real, "חזרה לחשבון שלי", user.name || user.email || user.phone || "");
+    if (user.impersonatedBy && user.kind !== "virtual") await audit(real, "חזרה לחשבון שלי", user.name || user.email || user.phone || "");
     return json(res, 200, { ok: true }, { "Set-Cookie": createSessionCookie(real.id, isSecure(req)) });
   }
 

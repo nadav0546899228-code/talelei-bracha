@@ -407,16 +407,12 @@ export default function AdminApp() {
       {by ? (
         <div className="adm-viewas" role="status">
           <span>
-            את/ה בתצוגה של: <strong>{me.user.name || me.user.email || me.user.phone}</strong> ({roleText})
+            {me.user.kind === "virtual" ? "תצוגה: " : "בשם: "}
+            <strong>{me.user.kind === "virtual" ? me.user.name.replace(" (תצוגה לדוגמה)", "") : me.user.name || me.user.email || me.user.phone}</strong>
           </span>
-          <span className="adm-viewas__acts">
-            <button type="button" onClick={openImpersonate}>
-              החלפה
-            </button>
-            <button type="button" className="adm-viewas__back" onClick={stopImpersonate}>
-              חזרה לחשבון שלי
-            </button>
-          </span>
+          <button type="button" className="adm-viewas__back" onClick={stopImpersonate}>
+            חזרה
+          </button>
         </div>
       ) : null}
       <header className="adm-top">
@@ -441,9 +437,9 @@ export default function AdminApp() {
             <strong>{me.user.name || me.user.email}</strong>
             <span>{roleText}</span>
           </div>
-          {me.canImpersonate && !by ? (
-            <button type="button" className="btn btn--ghost btn--sm adm-as-btn" onClick={openImpersonate} title="כניסה לתצוגה של מנכ״ל, רכז או מנהל סניף">
-              <Icon name="eye" /> <span>כניסה כ...</span>
+          {me.canImpersonate || by ? (
+            <button type="button" className="btn btn--ghost btn--sm adm-as-btn" onClick={openImpersonate} title="מעבר בין תצוגות">
+              <Icon name="eye" /> <span>תצוגות</span>
             </button>
           ) : null}
           {me.user.kind === "phone" && !by ? (
@@ -514,7 +510,21 @@ export default function AdminApp() {
           }}
         />
       ) : null}
-      {asOpen ? <ImpersonateModal me={me} onClose={() => setAsOpen(false)} onSwitched={switched} /> : null}
+      {asOpen ? (
+        <ImpersonateModal
+          current={by ? me.user.id : undefined}
+          onClose={() => setAsOpen(false)}
+          onSwitched={switched}
+          onBack={
+            by
+              ? () => {
+                  setAsOpen(false);
+                  stopImpersonate();
+                }
+              : undefined
+          }
+        />
+      ) : null}
       {codeOpen ? <ChangeCode forced={me.mustChangeCode} onClose={() => { setCodeOpen(false); setMe({ ...me, mustChangeCode: false }); }} /> : null}
     </div>
   );
