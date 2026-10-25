@@ -4797,3 +4797,59 @@ table.adm-xl .adm-pay-ex{width:28px;height:26px;border-radius:7px}
 .adm-map3d__labels g{cursor:pointer}
 .adm-map3d__labels g.is-on .adm-map3d__lbl{fill:#a3184f;font-size:10px;font-weight:900}
 .adm-map3d__labels g.is-on .adm-map3d__lead{stroke:#a3184f;stroke-dasharray:none}
+
+/* ===== משתמשים: כמו אקסל - שורה אחת, רשת, כותרת וטור שם נעולים ===== */
+.adm-ut-filters .select{padding:0 12px 0 34px !important;background-position:left 10px center !important;min-width:130px}
+.adm .adm-ut-wrap{max-height:calc(100vh - 330px);overflow:auto;border-radius:8px;border:1px solid #cfd8d8}
+.adm .adm-ut{min-width:760px;border-collapse:collapse}
+.adm .adm-ut th,.adm .adm-ut td{border:1px solid #dde4e4 !important;padding:0 8px !important;height:32px !important;min-height:0 !important;max-height:32px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;vertical-align:middle;font-size:.84rem;display:table-cell !important}
+.adm .adm-ut thead th{position:sticky;top:0;z-index:3;background:#eef2f2;text-align:center}
+.adm[data-mode="girls"] .adm-ut thead th{background:#fbeef3}
+.adm .adm-ut td:first-child,.adm .adm-ut th:first-child{position:sticky;right:0;z-index:2;background:#fff;max-width:230px;min-width:130px;box-shadow:-2px 0 0 #dde4e4 inset}
+.adm .adm-ut thead th:first-child{z-index:4;background:#eef2f2}
+.adm[data-mode="girls"] .adm-ut thead th:first-child{background:#fbeef3}
+.adm .adm-ut tr.is-off td:first-child{background:#f8f9f9}
+.adm .adm-ut tr.is-locked td:first-child{background:#fff8ee}
+.adm .adm-ut tbody tr:hover td{background:#f5faf9}
+.adm .adm-ut td>div{display:inline;white-space:nowrap}
+.adm .adm-ut .adm-ut-sub{display:inline !important;margin:0 6px 0 0;font-size:.72rem;white-space:nowrap;line-height:1.2}
+.adm .adm-ut td:first-child .adm-ut-sub{display:none !important}
+.adm .adm-ut .adm-ut-name{display:inline}
+.adm .adm-ut-roles{display:inline-flex;flex-wrap:nowrap}
+.adm .adm-ut-pill{padding:1px 8px;font-size:.72rem}
+.adm .adm-ut-acts{display:inline-flex;gap:2px;flex-wrap:nowrap}
+.adm .adm-ut td .adm-ut-act{width:26px;height:26px;border-radius:6px}
+.adm .adm-ut td .adm-ut-act svg{width:14px;height:14px}
+.adm .adm-ut-st{padding:0 8px;font-size:.72rem}
+.adm .adm-ut td>*{vertical-align:middle}
+
+/* ===== פירוט עיר במפה ===== */
+.adm-citybox{border:1px solid #cfe0e0;border-radius:14px;background:#f6fbfb;padding:8px 10px;margin:10px 0}
+.adm-citybox__head{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.adm-citybox__head strong{font-size:1.02rem}
+.adm-citybox__head span{flex:1;color:#5b6b6b;font-size:.82rem}
+.adm-citybox__row{display:flex;justify-content:space-between;gap:8px;width:100%;border:0;border-top:1px solid #e1ecec;background:none;padding:7px 2px;font:inherit;font-size:.86rem;cursor:pointer;text-align:start}
+.adm-citybox__row small{color:#6b7a7b;white-space:nowrap}
+
+/* ===== משכורות: חריגים + הוצאות סניף ===== */
+.adm-pay-ex{width:36px;height:36px;border-radius:12px;border:1.5px dashed #9bbcbc;background:#fff;color:#286366;display:inline-grid;place-items:center;cursor:pointer;font:inherit}
+.adm-pay-ex strong{font-size:.95rem}
+.adm-pay-ex.is-on,.adm-pay-ex:has(strong){border-style:solid;background:#e7f2f1}
+.adm-pay-exrow td{background:#f6faf9 !important;padding:10px !important}
+.adm-pay-exchip{display:inline-flex;align-items:center;gap:6px;background:#e3f3ea;color:#1f5f45;border-radius:999px;padding:4px 10px;margin:0 0 6px 6px;font-size:.86rem}
+.adm-pay-exchip.is-neg{background:#fbe7e7;color:#9b2323}
+.adm-pay-exchip button{border:0;background:none;cursor:pointer;color:inherit;opacity:.7;padding:0 2px}
+.adm-pay-exform{display:flex;flex-direction:column;gap:8px;margin-top:4px}
+.adm-bx__row{display:flex;gap:6px;align-items:center}
+.adm-bx__row .input{flex:1;min-width:0}
+.adm-bx__row .input[type=number]{flex:0 0 110px}
+.adm-bx__form{display:flex;flex-direction:column;gap:8px}
+.adm-bx__sum{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.adm-bx__sum span{background:#eef5f5;border-radius:10px;padding:4px 10px;font-size:.86rem}
+
+.adm-pay-exbox{position:sticky;right:6px;width:min(560px,calc(100vw - 60px))}
+table.adm-xl .adm-pay-exrow .input{border:1px solid #cfd8d8 !important;background:#fff !important;border-radius:8px !important;height:36px !important;width:auto;text-align:start}
+.adm-pay-exrow .adm-chip{padding:4px 10px;min-height:30px;font-size:.84rem}
+.adm-pay-exform .adm-chips,.adm-pay-exform [role="radiogroup"]{flex-wrap:wrap}
+.adm-xl-sum>*{padding:3px 9px;font-size:.84rem}
+
