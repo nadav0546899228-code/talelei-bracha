@@ -8,7 +8,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "../components/Icon";
 import { Logo } from "../components/Logo";
 import { runtime } from "../config/contentModel";
-import { isDevSite } from "../config/site";
 import { Link } from "../router/Router";
 import { api, ApiError, post, type Me, type Submission, type View } from "./api";
 import { ImpersonateModal } from "./Impersonate";
@@ -65,7 +64,6 @@ function LoginScreen({ onLoggedIn }: { onLoggedIn: () => void }) {
   const btnRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [devEmail, setDevEmail] = useState("");
   const [mode, setMode] = useState<"google" | "phone">("google");
   const [ph, setPh] = useState("");
   const [code, setCode] = useState("");
@@ -121,15 +119,6 @@ function LoginScreen({ onLoggedIn }: { onLoggedIn: () => void }) {
     };
   }, [clientId, onLoggedIn, mode]);
 
-  const devLogin = async () => {
-    try {
-      await post("/api/auth/dev-login", { email: devEmail });
-      onLoggedIn();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "שגיאה");
-    }
-  };
-
   return (
     <div className="adm-login">
       <div className="adm-login__card">
@@ -178,17 +167,6 @@ function LoginScreen({ onLoggedIn }: { onLoggedIn: () => void }) {
         {error ? (
           <div className="adm-alert adm-alert--error" role="alert">
             {error}
-          </div>
-        ) : null}
-        {runtime.devLogin && mode === "google" ? (
-          <div className="adm-alert adm-alert--info">
-            <strong>כניסת בדיקה מקומית</strong> (פעילה רק עם ALLOW_DEV_LOGIN=1 ומחוץ לייצור)
-            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-              <input className="input" dir="ltr" value={devEmail} onChange={(e) => setDevEmail(e.target.value)} placeholder="email" aria-label="מייל לבדיקה" />
-              <button type="button" className="btn btn--sm" onClick={devLogin}>
-                כניסה
-              </button>
-            </div>
           </div>
         ) : null}
         <p style={{ marginTop: 20, marginBottom: 0 }}>
@@ -298,6 +276,7 @@ export default function AdminApp() {
   const dash = useAlerts(state === "ready" ? me : null, mode, subs);
   const [bellOpen, setBellOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [navOpen, setNavOpen] = useState(false);
   useEffect(() => {
     if (me) setBar(loadBar(me, mode, entries));
   }, [me, mode, entries]);
@@ -395,9 +374,11 @@ export default function AdminApp() {
   const curTab = "hub" in current ? undefined : current.tab;
   const title = "hub" in current ? hubs.find((h) => h.id === current.hub)?.label ?? "" : leaves.find((l) => l.view === current.view && (!l.tab || l.tab === curTab))?.label ?? me.viewLabels[current.view];
 
+  const mobileBarEntries = barEntries.slice(0, 4);
+  const mobileMoreActive = !mobileBarEntries.some((e) => entryActive(e, current));
   const barNav = (
     <nav aria-label="ניווט ראשי" className="adm-bar">
-      {barEntries.map((e) => {
+      {mobileBarEntries.map((e) => {
         const b = entryBadge(e);
         return (
           <button key={e.id} type="button" className="adm-tab" aria-current={entryActive(e, current) ? "page" : undefined} onClick={() => openEntry(e)}>
@@ -407,9 +388,9 @@ export default function AdminApp() {
           </button>
         );
       })}
-      <button type="button" className="adm-tab adm-tab--edit" onClick={() => setBarEdit(true)} aria-label="עריכת השורה התחתונה">
-        <Icon name="edit" />
-        <span>עריכה</span>
+      <button type="button" className="adm-tab adm-tab--more" aria-current={navOpen || mobileMoreActive ? "page" : undefined} onClick={() => setNavOpen(true)} aria-label="כל האפשרויות">
+        <Icon name="menu" />
+        <span>עוד</span>
       </button>
     </nav>
   );
@@ -466,7 +447,6 @@ export default function AdminApp() {
 
   return (
     <div className="adm" data-mode={mode} data-display={displayMode}>
-      {isDevSite ? <div className="dev-banner">אתר פיתוח</div> : null}
       <header className="adm-top">
         {modes.length > 1 ? (
           <button type="button" className="adm-mode" onClick={switchMode} aria-label={`מעבר ל${MODE_LABELS[mode === "boys" ? "girls" : "boys"]}`} title={`מעבר ל${MODE_LABELS[mode === "boys" ? "girls" : "boys"]}`}>
@@ -484,28 +464,23 @@ export default function AdminApp() {
         </div>
         <div className="adm-top__spacer" />
         <div className="adm-user">
-          <button type="button" className="adm-avatar-btn" onClick={() => setProfileOpen(true)} aria-label="האזור האישי" title="האזור האישי">
-            {me.user.picture ? <img src={me.user.picture} alt="" referrerPolicy="no-referrer" /> : <span className="adm-avatar">{initial}</span>}
-          </button>
-          <div className="adm-user__meta">
-            <strong>{me.user.name || me.user.email}</strong>
-            <span>{roleText}</span>
-          </div>
-          {me.canImpersonate ? (
-            <button type="button" className={`adm-viewbtn${by ? " is-as" : ""}`} onClick={openImpersonate} title="מעבר בין תצוגות">
-              <span>{by ? (me.user.kind === "virtual" ? me.user.name.replace(" (תצוגה לדוגמה)", "") : me.user.name || me.user.email || me.user.phone) : me.roleLabels[me.user.roles[0]]}</span>
-              <Icon name="chevronDown" />
+          {by ? (
+            <button type="button" className="adm-viewbtn is-as" onClick={openImpersonate} title="תצוגה של משתמש אחר">
+              <Icon name="eye" />
+              <span>תצוגה אחרת</span>
             </button>
           ) : null}
-          <button type="button" className="adm-icon-btn adm-help" onClick={() => setGuideOpen(true)} aria-label="הדרכה" title="הדרכה">
-            <Icon name="info" />
-          </button>
           <button type="button" className="adm-icon-btn adm-bell" onClick={() => setBellOpen(!bellOpen)} aria-label={`התראות${dash.active.length ? ` (${dash.active.length})` : ""}`} title="התראות">
             <Icon name="bell" />
             {dash.active.length ? <span className="adm-badge">{dash.active.length}</span> : null}
           </button>
-          <button type="button" className="adm-icon-btn adm-logout" onClick={logout} aria-label="יציאה מהמערכת" title="יציאה">
-            <Icon name="logout" />
+          <button type="button" className="adm-account-btn" onClick={() => setProfileOpen(true)} aria-label="האזור האישי" title="האזור האישי">
+            {me.user.picture ? <img src={me.user.picture} alt="" referrerPolicy="no-referrer" /> : <span className="adm-avatar">{initial}</span>}
+            <span className="adm-account-btn__text">
+              <strong>{me.user.name || me.user.email}</strong>
+              <small>האזור האישי</small>
+            </span>
+            <Icon name="chevronDown" className="adm-account-btn__arrow" />
           </button>
         </div>
       </header>
@@ -553,6 +528,41 @@ export default function AdminApp() {
         </main>
       </div>
       <div className="adm-tabs">{barNav}</div>
+      {navOpen ? (
+        <>
+          <button type="button" className="adm-sheet-back" aria-label="סגירה" onClick={() => setNavOpen(false)} />
+          <section className="adm-mobile-sheet" role="dialog" aria-modal="true" aria-label="כל האפשרויות">
+            <div className="adm-mobile-sheet__head">
+              <div><strong>כל האפשרויות</strong><small>{MODE_LABELS[mode]}</small></div>
+              <button type="button" className="adm-icon-btn" aria-label="סגירה" onClick={() => setNavOpen(false)}><Icon name="close" /></button>
+            </div>
+            <div className="adm-mobile-sheet__scroll">
+              {hubs.map((h) => (
+                <section className="adm-mobile-sheet__group" key={h.id}>
+                  <h3><Icon name={h.icon} /> {h.label}</h3>
+                  <div>
+                    {h.items.map((l) => {
+                      const b = leafBadge(l);
+                      return (
+                        <button key={l.id} type="button" className="adm-mobile-sheet__item" aria-current={curView === l.view && (!l.tab || !curTab || l.tab === curTab) ? "page" : undefined} onClick={() => { setNavOpen(false); openLeaf(l); }}>
+                          <span className="adm-mobile-sheet__itemicon"><Icon name={l.icon} /></span>
+                          <strong>{l.label}</strong>
+                          {b ? <span className="adm-badge">{b}</span> : null}
+                          <Icon name="arrowLeft" className="adm-mobile-sheet__arrow" />
+                        </button>
+                      );
+                    })}
+                  </div>
+                </section>
+              ))}
+            </div>
+            <div className="adm-mobile-sheet__foot">
+              <button type="button" onClick={() => { setNavOpen(false); setProfileOpen(true); }}><Icon name="users" /> האזור האישי</button>
+              <button type="button" onClick={() => { setNavOpen(false); setBarEdit(true); }}><Icon name="edit" /> התאמת הסרגל</button>
+            </div>
+          </section>
+        </>
+      ) : null}
       {barEdit ? (
         <BarEditor
           entries={entries}
@@ -615,6 +625,14 @@ export default function AdminApp() {
             setProfileOpen(false);
             setGuideOpen(true);
           }}
+          onViews={me.canImpersonate ? () => {
+            setProfileOpen(false);
+            setAsOpen(true);
+          } : undefined}
+          onNavEdit={() => {
+            setProfileOpen(false);
+            setBarEdit(true);
+          }}
           onSaved={() => {
             setProfileOpen(false);
             loadMe();
@@ -649,6 +667,8 @@ function Profile({
   onSaved,
   onLogout,
   onGuide,
+  onViews,
+  onNavEdit,
   displayMode,
   onDisplayMode,
 }: {
@@ -658,6 +678,8 @@ function Profile({
   onSaved: () => void;
   onLogout: () => void;
   onGuide: () => void;
+  onViews?: () => void;
+  onNavEdit: () => void;
   displayMode: DisplayMode;
   onDisplayMode: (mode: DisplayMode) => void;
 }) {
@@ -757,6 +779,20 @@ function Profile({
               </small>
             </span>
             <span className={`adm-switch${push === "on" ? " is-on" : ""}`} aria-hidden="true" />
+          </button>
+
+          {onViews ? (
+            <button type="button" className="adm-personal__row" onClick={onViews}>
+              <span className="adm-personal__rowicon"><Icon name="grid" /></span>
+              <span><strong>מעבר בין תצוגות</strong><small>צפייה במערכת לפי תפקיד או משתמש</small></span>
+              <Icon name="arrowLeft" className="adm-personal__arrow" />
+            </button>
+          ) : null}
+
+          <button type="button" className="adm-personal__row" onClick={onNavEdit}>
+            <span className="adm-personal__rowicon"><Icon name="edit" /></span>
+            <span><strong>התאמת ניווט</strong><small>בחירת הקיצורים שיופיעו בתחתית</small></span>
+            <Icon name="arrowLeft" className="adm-personal__arrow" />
           </button>
 
           <button type="button" className="adm-personal__row" onClick={onGuide}>
