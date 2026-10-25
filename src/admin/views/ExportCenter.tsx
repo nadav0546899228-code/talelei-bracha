@@ -6,7 +6,7 @@ import { buildXlsx, downloadBlob } from "../xlsx";
 import { ReportsView } from "./ReportsView";
 
 type Ctx = { from: string; to: string };
-type Report = { id: string; title: string; sub: string; icon: IconName; show: (me: Me) => boolean; run: (c: Ctx) => Promise<{ name: string; rows: (string | number)[][]; widths?: number[] }> };
+type Report = { domain?: "kollel" | "bnot"; id: string; title: string; sub: string; icon: IconName; show: (me: Me) => boolean; run: (c: Ctx) => Promise<{ name: string; rows: (string | number)[][]; widths?: number[] }> };
 
 const inRange = (d: string | undefined, c: Ctx) => !d || ((!c.from || d.slice(0, 10) >= c.from) && (!c.to || d.slice(0, 10) <= c.to));
 const has = (me: Me, v: string) => me.user.views.includes(v as never);
@@ -19,14 +19,14 @@ const place = (o: Org, id: string | null | undefined) => {
 
 const REPORTS: Report[] = [
   {
-    id: "avrechim", title: "אברכים", sub: "שם, טלפון, עיר, סניף, סטטוס", icon: "users", show: (me) => has(me, "kollel"),
+    domain: "kollel", id: "avrechim", title: "אברכים", sub: "שם, טלפון, עיר, סניף, סטטוס", icon: "users", show: (me) => has(me, "kollel"),
     run: async () => {
       const ov = await api<{ avrechim: { name: string; phone: string; branchId: string; active: boolean }[]; branches: OrgUnit[]; cities: OrgUnit[] }>("/api/kollel/overview");
       return { name: "אברכים", widths: [24, 14, 16, 18, 10], rows: [["שם", "טלפון", "עיר", "סניף", "סטטוס"], ...ov.avrechim.map((a) => [a.name, a.phone || "", ...place(ov, a.branchId), a.active ? "פעיל" : "לא פעיל"])] };
     },
   },
   {
-    id: "attendance", title: "נוכחות בערבי לימוד", sub: "כל מפגש: תאריך, סניף, כמה הגיעו", icon: "calendar", show: (me) => has(me, "kollel"),
+    domain: "kollel", id: "attendance", title: "נוכחות בערבי לימוד", sub: "כל מפגש: תאריך, סניף, כמה הגיעו", icon: "calendar", show: (me) => has(me, "kollel"),
     run: async (c) => {
       const [ov, a] = await Promise.all([
         api<{ avrechim: { id: string; name: string }[]; branches: OrgUnit[]; cities: OrgUnit[] }>("/api/kollel/overview"),
@@ -37,7 +37,7 @@ const REPORTS: Report[] = [
     },
   },
   ...(["kollel", "bnot"] as const).map((domain): Report => ({
-    id: `mitch-${domain}`, title: domain === "kollel" ? "מתחזקים" : "מתחזקות", sub: "שלב, מלווה, קשר אחרון, מעקב הבא", icon: "heart", show: (me) => has(me, domain),
+    domain, id: `mitch-${domain}`, title: domain === "kollel" ? "מתחזקים" : "מתחזקות", sub: "שלב, מלווה, קשר אחרון, מעקב הבא", icon: "heart", show: (me) => has(me, domain),
     run: async (c) => {
       const d = await api<{ mitch: { name: string; phone: string; branchId: string; stage: string; status: string; mentor?: string; avrechId?: string | null; lastContact?: string; nextFollowUp?: string | null; startDate?: string; source?: string; log?: unknown[] }[]; branches: OrgUnit[]; cities: OrgUnit[]; avrechim: { id: string; name: string }[] }>(`/api/mitch?domain=${domain}`);
       const rows = d.mitch.filter((m) => inRange(m.startDate, c));
@@ -46,14 +46,14 @@ const REPORTS: Report[] = [
     },
   })),
   {
-    id: "members", title: "משתתפות בנות צילה", sub: "שם, טלפון, עיר, סניף", icon: "users", show: (me) => has(me, "bnot"),
+    domain: "bnot", id: "members", title: "משתתפות בנות צילה", sub: "שם, טלפון, עיר, סניף", icon: "users", show: (me) => has(me, "bnot"),
     run: async () => {
       const d = await api<{ members: { name: string; phone: string; branchId: string; active: boolean; notes?: string }[]; branches: OrgUnit[]; cities: OrgUnit[] }>("/api/bnot/overview");
       return { name: "משתתפות", widths: [24, 14, 16, 18, 10, 30], rows: [["שם", "טלפון", "עיר", "סניף", "סטטוס", "הערות"], ...d.members.map((m) => [m.name, m.phone || "", ...place(d, m.branchId), m.active ? "פעילה" : "לא פעילה", m.notes || ""])] };
     },
   },
   {
-    id: "activities", title: "פעילויות בנות צילה", sub: "תאריך, סניף, נושא, כמה הגיעו", icon: "calendar", show: (me) => has(me, "bnot"),
+    domain: "bnot", id: "activities", title: "פעילויות בנות צילה", sub: "תאריך, סניף, נושא, כמה הגיעו", icon: "calendar", show: (me) => has(me, "bnot"),
     run: async (c) => {
       const d = await api<{ activities: { date: string; branchId: string; title?: string; present?: string[] }[]; branches: OrgUnit[]; cities: OrgUnit[] }>("/api/bnot/overview");
       const rows = d.activities.filter((a) => inRange(a.date, c));
@@ -61,7 +61,7 @@ const REPORTS: Report[] = [
     },
   },
   {
-    id: "challah", title: "הפרשות חלה", sub: "כל אירוע עם הנרשמות ומי הגיעה", icon: "sparkle", show: (me) => has(me, "bnot"),
+    domain: "bnot", id: "challah", title: "הפרשות חלה", sub: "כל אירוע עם הנרשמות ומי הגיעה", icon: "sparkle", show: (me) => has(me, "bnot"),
     run: async (c) => {
       const d = await api<{ events: { title: string; date: string; place: string; branchId: string; registrations: { name: string; phone: string; arrived: boolean }[] }[]; branches: OrgUnit[]; cities: OrgUnit[] }>("/api/challah");
       const rows: (string | number)[][] = [["תאריך", "אירוע", "מקום", "עיר", "סניף", "נרשמת", "טלפון", "הגיעה"]];
@@ -87,8 +87,8 @@ const REPORTS: Report[] = [
   },
 ];
 
-export function ReportsHub({ me, initialTab }: { me: Me; initialTab?: string }) {
-  const charts = has(me, "kollel") && me.user.roles.some((r) => ["developer", "ceo", "chief_coordinator", "kollel_region"].includes(r));
+export function ReportsHub({ me, initialTab, mode }: { me: Me; initialTab?: string; mode: "boys" | "girls" }) {
+  const charts = mode === "boys" && has(me, "kollel") && me.user.roles.some((r) => ["developer", "ceo", "chief_coordinator", "kollel_region"].includes(r));
   const [tab, setTab] = useState<"export" | "charts">(initialTab === "charts" && charts ? "charts" : "export");
   return (
     <>
@@ -102,17 +102,18 @@ export function ReportsHub({ me, initialTab }: { me: Me; initialTab?: string }) 
           </button>
         </div>
       ) : null}
-      {tab === "charts" ? <ReportsView /> : <ExportCenter me={me} />}
+      {tab === "charts" ? <ReportsView /> : <ExportCenter me={me} mode={mode} />}
     </>
   );
 }
 
-function ExportCenter({ me }: { me: Me }) {
+function ExportCenter({ me, mode }: { me: Me; mode: "boys" | "girls" }) {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const list = REPORTS.filter((r) => r.show(me));
+  const dom = mode === "girls" ? "bnot" : "kollel";
+  const list = REPORTS.filter((r) => r.show(me) && (!r.domain || r.domain === dom));
 
   const run = async (r: Report) => {
     setBusy(r.id);

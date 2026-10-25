@@ -970,7 +970,7 @@ export default function AdminApp() {
               {curView === "payroll" ? <PayrollView me={me} /> : null}
               {curView === "messages" ? <MessagesView key={`msg-${mode}`} me={me} mode={mode} /> : null}
               {curView === "bnot" ? <BnotView key={`bn-${curTab ?? ""}`} me={me} initialTab={curTab} /> : null}
-              {curView === "reports" ? <ReportsHub key={`rp-${curTab ?? ""}`} me={me} initialTab={curTab} /> : null}
+              {curView === "reports" ? <ReportsHub key={`rp-${mode}-${curTab ?? ""}`} me={me} initialTab={curTab} mode={mode} /> : null}
               {curView === "org" ? <OrgView key={mode} me={me} domain={mode === "boys" ? "kollel" : "bnot"} /> : null}
               {curView === "broadcast" ? <BroadcastView key={`bc-${mode}-${curTab ?? ""}`} me={me} mode={mode} initialTab={curTab} /> : null}
               {curView === "content" ? <ContentView key={`ct-${curTab ?? ""}`} initialSection={curTab} /> : null}
