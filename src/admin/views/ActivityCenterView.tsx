@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { IsraelMap3D } from "../IsraelMap3D";
 import { Icon, type IconName } from "../../components/Icon";
 import { apiCached, del, post, type View } from "../api";
 import { useLive } from "../live";
@@ -112,15 +113,6 @@ function monthCells(cursor: Date, system: CalendarSystem) {
   });
 }
 
-function pinPos(lat:number,lng:number){
-  // ההקרנה מותאמת לצללית הצרה של ישראל בתוך כרטיס המפה,
-  // ולא לכל רוחב הכרטיס - כך שהנעיצות נשארות על גבי הארץ.
-  const lon=Math.max(0,Math.min(1,(lng-34.25)/(35.7-34.25)));
-  const latNorm=Math.max(0,Math.min(1,(33.35-lat)/(33.35-29.45)));
-  const left=34 + lon*31;
-  const top=14 + latNorm*75;
-  return {left:`${left}%`,top:`${top}%`};
-}
 
 export function ActivityCenterView({ go }: { go: (view: View, tab?: string) => void }) {
   const [data,setData]=useState<Data|null>(null);
@@ -414,30 +406,12 @@ export function ActivityCenterView({ go }: { go: (view: View, tab?: string) => v
 
         <section className="adm-panel adm-israel-map-panel">
           <div className="adm-panel__head"><div><span className="adm-eyebrow">פריסה ארצית</span><h2>מפת הפעילות</h2></div><span className="adm-section-count">{mapLocations.length}</span></div>
-          <div className="adm-israel-map" aria-label="מפת פעילות בישראל">
+          <div className="adm-israel-map adm-israel-map--3d" aria-label="מפת פעילות בישראל">
             <div className="adm-israel-map__caption">
               <strong>{mapPins.length} מוקדי פעילות בולטים</strong>
               <span>לחיצה על נעיצה מסננת את כל הלוח</span>
             </div>
-            <svg viewBox="0 0 320 700" role="img" aria-label="מפת ישראל">
-              <defs>
-                <linearGradient id="israelFill" x1="0" y1="0" x2="1" y2="1">
-                  <stop offset="0" stopColor="currentColor" stopOpacity=".18"/>
-                  <stop offset="1" stopColor="currentColor" stopOpacity=".05"/>
-                </linearGradient>
-              </defs>
-              <path className="adm-israel-shape" d="M164 22 L187 48 L184 79 L199 103 L194 137 L210 168 L201 203 L215 239 L204 275 L211 312 L198 347 L201 386 L188 425 L181 465 L168 507 L159 550 L148 596 L138 642 L124 680 L111 650 L115 607 L105 566 L112 525 L102 485 L111 446 L101 405 L112 370 L103 333 L115 299 L107 263 L119 229 L112 194 L125 162 L120 128 L137 99 L136 69 L151 43 Z"/>
-              <path className="adm-israel-coast" d="M151 43 C145 86 140 131 137 177 C134 222 132 270 130 316 C128 365 126 417 123 470 C121 525 119 574 115 607"/>
-              <ellipse className="adm-israel-water" cx="185" cy="168" rx="8" ry="15"/>
-              <path className="adm-israel-deadsea" d="M185 360 C194 377 193 407 184 426 C177 413 177 380 185 360 Z"/>
-            </svg>
-            {mapPins.map((l)=>{
-              const pos=pinPos(l.lat,l.lng);
-              const size=Math.min(34,20+Math.sqrt(l.count)*2.6);
-              return <button type="button" key={l.city} className={`adm-map-pin${city===l.city?" is-active":""}`} style={{...pos,width:size,height:size}} title={`${l.city}: ${l.count} פעילויות`} onClick={()=>setCity(city===l.city?"all":l.city)}>
-                <span>{l.count}</span><small>{l.city}</small>
-              </button>;
-            })}
+            <IsraelMap3D pins={mapPins} active={city} onPick={(c) => setCity(city === c ? "all" : c)} />
           </div>
           <div className="adm-map-legend"><span><i className="is-kollel"/> טללי ברכה</span><span><i className="is-bnot"/> בנות צילה</span><span>מוצגים מוקדי הפעילות הבולטים</span></div>
           <div className="adm-city-ranking">

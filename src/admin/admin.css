@@ -4697,3 +4697,28 @@
 .adm-isha-command > * { flex: 1 1 0 !important; min-width: 70px !important; min-height: 0 !important; padding: 6px 8px !important; border-radius: 12px !important; display: flex !important; flex-direction: column-reverse !important; align-items: center !important; gap: 0 !important; box-shadow: none !important; }
 .adm-isha-command > * strong { font-size: 1.1rem !important; line-height: 1.1; }
 .adm-isha-command > * span { font-size: 0.7rem !important; white-space: nowrap; }
+
+/* ===== מפת ישראל תלת-ממד ===== */
+.adm-israel-map.adm-israel-map--3d { height: auto !important; min-height: 0 !important; padding: 8px 6px 4px !important; background: radial-gradient(ellipse at 50% 35%, #f3fbfb 0%, #e3f0f0 60%, #d9e9e8 100%) !important; overflow: visible !important; }
+.adm-israel-map--3d:before { display: none !important; }
+.adm-israel-map--3d .adm-israel-map__caption { position: static !important; margin: 0 auto 4px !important; display: grid; text-align: center; }
+.adm-map3d { position: static !important; display: block; width: 100% !important; height: auto !important; max-height: 640px; inset: auto !important; margin: 0 auto; filter: drop-shadow(0 10px 18px rgb(16 58 60 / 0.18)); }
+.adm-map3d__sea { font-size: 8px; fill: #6aa3b6; font-weight: 700; }
+.adm-map3d__col { cursor: pointer; }
+.adm-map3d__col:hover .adm-map3d__grow, .adm-map3d__col.is-on .adm-map3d__grow { filter: brightness(1.12) drop-shadow(0 0 4px rgb(255 255 255 / 0.9)); }
+.adm-map3d__num { font-size: 8.5px; font-weight: 900; fill: #10393c; text-anchor: middle; paint-order: stroke; stroke: #fff; stroke-width: 2.6px; }
+.adm-map3d__city { font-size: 8px; font-weight: 800; fill: #10393c; text-anchor: middle; paint-order: stroke; stroke: #fff; stroke-width: 2.4px; }
+.adm-map3d__grow { animation: adm-map3d-grow 0.7s cubic-bezier(.2,.8,.2,1) both; transform-box: view-box; }
+@keyframes adm-map3d-grow { from { transform: scaleY(0.05); opacity: 0.2; } to { transform: scaleY(1); opacity: 1; } }
+/* תפריט: גוון בינוני ועדין יותר (לא כהה מדי), קריא */
+.adm .adm-appmenu { background: linear-gradient(180deg, #2f7477 0%, #286366 100%) !important; }
+.adm[data-mode="girls"] .adm-appmenu { background: linear-gradient(180deg, #94436a 0%, #7d3558 100%) !important; }
+.adm .adm-appmenu .adm-appmenu__grid { background: rgb(255 255 255 / 0.12) !important; }
+.adm .adm-appmenu .adm-appmenu__item { border-bottom-color: rgb(255 255 255 / 0.12) !important; }
+.adm .adm-appmenu .adm-appmenu__item[aria-current="page"] { background: rgb(255 255 255 / 0.24) !important; }
+.adm .adm-appmenu .adm-appmenu__item[aria-current="page"] .adm-appmenu__item-copy strong, .adm .adm-appmenu .adm-appmenu__item[aria-current="page"] .adm-appmenu__item-copy small { color: #fff !important; }
+.adm .adm-appmenu .adm-appmenu__item-icon { background: rgb(255 255 255 / 0.18) !important; }
+.adm .adm-appmenu .adm-appmenu__item-copy small { color: rgb(255 255 255 / 0.75) !important; }
+.adm .adm-appmenu .adm-appmenu__group-head strong { color: rgb(255 255 255 / 0.8) !important; }
+.adm .adm-appmenu .adm-appmenu__search { background: rgb(255 255 255 / 0.16) !important; }
+.adm .adm-appmenu .adm-appmenu__foot { background: rgb(0 0 0 / 0.12) !important; }
