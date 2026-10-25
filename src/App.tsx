@@ -51,6 +51,7 @@ export default function App() {
   if (isAdmin)
     return (
       <>
+        {isDevSite ? <div className="dev-banner">אתר פיתוח</div> : null}
         <UpdateBanner />
         <Suspense fallback={loading}>
           <AdminApp />

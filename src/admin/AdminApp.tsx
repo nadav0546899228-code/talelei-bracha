@@ -68,6 +68,16 @@ function LoginScreen({ onLoggedIn }: { onLoggedIn: () => void }) {
   const [ph, setPh] = useState("");
   const [code, setCode] = useState("");
   const clientId = runtime.googleClientId;
+  // כניסת בדיקה - רק כשהאתר רץ על המחשב המקומי (השרת חוסם בכל מקום אחר)
+  const [devEmail, setDevEmail] = useState("");
+  const devLogin = async () => {
+    try {
+      await post("/api/auth/dev-login", { email: devEmail });
+      onLoggedIn();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "שגיאה");
+    }
+  };
 
   const phoneLogin = async (e: { preventDefault: () => void }) => {
     e.preventDefault();
@@ -163,6 +173,17 @@ function LoginScreen({ onLoggedIn }: { onLoggedIn: () => void }) {
             כניסת Google עדיין לא הוגדרה. יש להוסיף את <code>GOOGLE_CLIENT_ID</code> ל-Secrets.
           </div>
         )}
+        {runtime.devLogin && mode === "google" ? (
+          <div className="adm-alert adm-alert--info">
+            <strong>כניסת בדיקה מקומית</strong>
+            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+              <input className="input" dir="ltr" value={devEmail} onChange={(e) => setDevEmail(e.target.value)} placeholder="email" aria-label="מייל לבדיקה" />
+              <button type="button" className="btn btn--sm" onClick={devLogin}>
+                כניסה
+              </button>
+            </div>
+          </div>
+        ) : null}
         {busy ? <p className="muted">מתחבר…</p> : null}
         {error ? (
           <div className="adm-alert adm-alert--error" role="alert">
