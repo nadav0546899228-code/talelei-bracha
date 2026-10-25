@@ -1,7 +1,7 @@
 /** עורך תוכן האתר - טקסטים, פרטי קשר, תרומות, מתגים ורשימות (שיעורים, אירועים, פרויקטים, גלריה) */
 import { useEffect, useState } from "react";
 import { Icon } from "../../components/Icon";
-import { applyContent, currentContent, type SiteContent } from "../../config/contentModel";
+import { applyContent, currentContent, runtime, type SiteContent } from "../../config/contentModel";
 import { api, put } from "../api";
 
 type FieldType = "text" | "textarea" | "url" | "select" | "datetime" | "bool" | "lines";
@@ -50,12 +50,12 @@ const SCHEMAS: Record<"lessons" | "events" | "projects" | "impactStats" | "testi
     ],
   },
   projects: {
-    label: "פרויקטים ויעדי תרומה",
+    label: "פרויקטים",
     title: (x) => String(x.title || "פרויקט חדש"),
     blank: () => ({ id: crypto.randomUUID(), title: "", description: "", donationUrl: null }),
     fields: [
       { key: "title", label: "שם הפרויקט" },
-      { key: "donationUrl", label: "קישור תרומה ייעודי", type: "url", hint: "ריק = קישור התרומה הכללי" },
+      ...(runtime.featureFlags.donations ? [{ key: "donationUrl", label: "קישור תרומה ייעודי", type: "url" as const, hint: "ריק = קישור התרומה הכללי" }] : []),
       { key: "description", label: "תיאור", type: "textarea" },
     ],
   },
@@ -97,7 +97,7 @@ type Section = "texts" | "contact" | "donation" | "features" | keyof typeof SCHE
 const SECTIONS: { k: Section; l: string }[] = [
   { k: "texts", l: "טקסטים" },
   { k: "contact", l: "פרטי קשר" },
-  { k: "donation", l: "תרומות" },
+  ...(runtime.featureFlags.donations ? [{ k: "donation" as const, l: "תרומות" }] : []),
   { k: "features", l: "הגדרות תצוגה" },
   { k: "lessons", l: "שיעורים" },
   { k: "events", l: "אירועים" },
@@ -249,7 +249,8 @@ function ListEditor({ k, items, onChange }: { k: keyof typeof SCHEMAS; items: Re
 /* ---------- התצוגה ---------- */
 export function ContentView({ initialSection }: { initialSection?: string } = {}) {
   const [content, setContent] = useState<SiteContent | null>(null);
-  const [section, setSection] = useState<Section>((initialSection as Section) || "texts");
+  const requestedSection = (initialSection as Section) || "texts";
+  const [section, setSection] = useState<Section>(!runtime.featureFlags.donations && requestedSection === "donation" ? "texts" : requestedSection);
   const [dirty, setDirty] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [saving, setSaving] = useState(false);
@@ -318,7 +319,7 @@ export function ContentView({ initialSection }: { initialSection?: string } = {}
       { key: "showContentFlags", label: 'הצגת תגיות "טיוטה/דוגמה" ומשבצות תוכן חסר (לכבות לפני פרסום סופי)', type: "bool" },
       { key: "floatingWhatsapp", label: "כפתור וואטסאפ צף", type: "bool" },
       { key: "assistanceForm", label: "טופס בקשת סיוע בעמוד הקרן", type: "bool" },
-      { key: "donationDedication", label: "הצגת אפשרות הקדשה בתרומה", type: "bool" },
+      ...(runtime.featureFlags.donations ? [{ key: "donationDedication", label: "הצגת אפשרות הקדשה בתרומה", type: "bool" as const }] : []),
     ],
   };
 
