@@ -99,7 +99,11 @@ export function DashboardView({ me, subs, go, views: allViews, mode, dash }: Adm
   const firstName = me.user.kind === "virtual" ? "" : (me.user.name || "").split(" ")[0];
   const recent = list.filter((s) => s.status === "new").slice(0, 5);
   const newTotal = list.filter((s) => s.status === "new").length;
-  const attentionTotal = dash.active.reduce((n, a) => n + a.count, 0);
+  const hasMitchAggregate = dash.active.some((a) => a.id === "mitch-attention");
+  const attentionTotal = dash.active.reduce(
+    (n, a) => n + (hasMitchAggregate && (a.id === "due" || a.id === "mitch-unassigned") ? 0 : a.count),
+    0,
+  );
   const kollel = dash.kollel;
   const openMonth = kollel?.months.find((m) => !m.locked);
   const today = new Intl.DateTimeFormat("he-IL", { weekday: "long", day: "numeric", month: "long" }).format(new Date());
