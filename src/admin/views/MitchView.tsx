@@ -178,13 +178,16 @@ function MitchCard({ d, m: initial, domain, word, onClose, onSaved }: { d: Data;
     }
     setLinkBusy(true);
     setErr(null);
+    const waWindow = window.open("about:blank", "_blank");
     try {
       const r = await post<{ token: string }>(`/api/mitch/${m.id}/access-link`, {});
       const url = `${window.location.origin}/share?t=${encodeURIComponent(r.token)}`;
-      const who = domain === "bnot" ? "מתחזקת" : "מתחזק";
       const msg = `שלום ${m.name}, זה הקישור האישי שלך לעדכונים במערכת. אפשר לכתוב ולצרף תמונות בלבד. הקישור אישי ואין להעביר אותו לאחרים:\n${url}`;
-      window.open(waLink(m.phone, msg), "_blank", "noopener,noreferrer");
+      const target = waLink(m.phone, msg);
+      if (waWindow) waWindow.location.href = target;
+      else window.location.href = target;
     } catch (e) {
+      waWindow?.close();
       setErr(e instanceof Error ? e.message : "לא ניתן ליצור קישור");
     } finally {
       setLinkBusy(false);
