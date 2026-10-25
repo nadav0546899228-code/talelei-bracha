@@ -121,29 +121,37 @@ export function SwipeRow({
   );
 }
 
-/** כפתורי קשר מהירים */
+/** כפתורי קשר מהירים - תמיד ארבע פעולות באותו סדר */
 export function ContactActions({ phone, email, waText, smsText }: { phone?: string; email?: string; waText?: string; smsText?: string }) {
-  if (!phone && !email) return null;
+  const phoneOk=Boolean(phone);
+  const emailOk=Boolean(email);
+  const disabled=(label:string,icon:"whatsapp"|"phone"|"chat"|"mail",reason:string,cls:string)=>(
+    <span className={`adm-act ${cls} is-disabled`} aria-disabled="true" title={reason}>
+      <Icon name={icon} /> {label}
+    </span>
+  );
   return (
     <div className="adm-contact-actions">
-      {phone ? (
-        <>
-          <a className="adm-act adm-act--wa" href={waLink(phone, waText)} target="_blank" rel="noopener noreferrer">
-            <Icon name="whatsapp" /> וואטסאפ
-          </a>
-          <a className="adm-act adm-act--call" href={`tel:${phone}`}>
-            <Icon name="phone" /> חיוג
-          </a>
-          <a className="adm-act adm-act--sms" href={`sms:${phone}${smsText ? `?&body=${encodeURIComponent(smsText)}` : ""}`}>
-            <Icon name="chat" /> SMS
-          </a>
-        </>
-      ) : null}
-      {email ? (
+      {phoneOk ? (
+        <a className="adm-act adm-act--wa" href={waLink(phone!, waText)} target="_blank" rel="noopener noreferrer">
+          <Icon name="whatsapp" /> וואטסאפ
+        </a>
+      ) : disabled("וואטסאפ","whatsapp","לא הוזן מספר טלפון","adm-act--wa")}
+      {phoneOk ? (
+        <a className="adm-act adm-act--call" href={`tel:${phone}`}>
+          <Icon name="phone" /> טלפון
+        </a>
+      ) : disabled("טלפון","phone","לא הוזן מספר טלפון","adm-act--call")}
+      {phoneOk ? (
+        <a className="adm-act adm-act--sms" href={`sms:${phone}${smsText ? `?&body=${encodeURIComponent(smsText)}` : ""}`}>
+          <Icon name="chat" /> SMS
+        </a>
+      ) : disabled("SMS","chat","לא הוזן מספר טלפון","adm-act--sms")}
+      {emailOk ? (
         <a className="adm-act adm-act--mail" href={`mailto:${email}`}>
           <Icon name="mail" /> מייל
         </a>
-      ) : null}
+      ) : disabled("מייל","mail","לא הוזן מייל","adm-act--mail")}
     </div>
   );
 }
@@ -172,26 +180,19 @@ export function ToneLegend({ items }: { items: { tone: Tone; label: string }[] }
 
 export const money = (n: number) => `${n < 0 ? "\u200E-" : ""}${Math.abs(n).toLocaleString("he-IL")} ₪`;
 
-/** כפתורי קשר - אייקונים בלבד (לשורות) */
-export function IconActions({ phone, email, waText }: { phone?: string; email?: string; waText?: string }) {
-  if (!phone && !email) return null;
+/** כפתורי קשר - אייקונים בלבד (לשורות), תמיד ארבעה */
+export function IconActions({ phone, email, waText, smsText }: { phone?: string; email?: string; waText?: string; smsText?: string }) {
+  const disabled=(label:string,icon:"whatsapp"|"phone"|"chat"|"mail",cls:string)=>(
+    <span className={`adm-ia ${cls} is-disabled`} aria-label={`${label} - חסר פרט קשר`} title={`${label} - חסר פרט קשר`}>
+      <Icon name={icon} />
+    </span>
+  );
   return (
     <>
-      {phone ? (
-        <>
-          <a className="adm-ia adm-ia--wa" href={waLink(phone, waText)} target="_blank" rel="noopener noreferrer" aria-label="וואטסאפ" title="וואטסאפ">
-            <Icon name="whatsapp" />
-          </a>
-          <a className="adm-ia adm-ia--call" href={`tel:${phone}`} aria-label="חיוג" title="חיוג">
-            <Icon name="phone" />
-          </a>
-        </>
-      ) : null}
-      {email ? (
-        <a className="adm-ia adm-ia--mail" href={`mailto:${email}`} aria-label="מייל" title="מייל">
-          <Icon name="mail" />
-        </a>
-      ) : null}
+      {phone ? <a className="adm-ia adm-ia--wa" href={waLink(phone, waText)} target="_blank" rel="noopener noreferrer" aria-label="וואטסאפ" title="וואטסאפ"><Icon name="whatsapp" /></a> : disabled("וואטסאפ","whatsapp","adm-ia--wa")}
+      {phone ? <a className="adm-ia adm-ia--call" href={`tel:${phone}`} aria-label="טלפון" title="טלפון"><Icon name="phone" /></a> : disabled("טלפון","phone","adm-ia--call")}
+      {phone ? <a className="adm-ia adm-ia--sms" href={`sms:${phone}${smsText ? `?&body=${encodeURIComponent(smsText)}` : ""}`} aria-label="SMS" title="SMS"><Icon name="chat" /></a> : disabled("SMS","chat","adm-ia--sms")}
+      {email ? <a className="adm-ia adm-ia--mail" href={`mailto:${email}`} aria-label="מייל" title="מייל"><Icon name="mail" /></a> : disabled("מייל","mail","adm-ia--mail")}
     </>
   );
 }
