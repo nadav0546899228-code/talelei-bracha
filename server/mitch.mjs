@@ -325,6 +325,7 @@ export async function handleMitch(req, res, url, ctx) {
     const ev = await store.get("challahEvents", toMitch[1]);
     if (!ev || !inScope("bnot", ev.branchId)) return send(404, { error: "לא נמצא" }), true;
     const existing = await store.list("mitchazkim", 20000);
+    const bnotConfig = await loadMitchConfig(store, "bnot");
     let added = 0;
     const regs = [];
     for (const r of ev.registrations || []) {
@@ -337,7 +338,7 @@ export async function handleMitch(req, res, url, ctx) {
       if (!same) {
         mid = randomUUID();
         await store.put("mitchazkim", mid, {
-          domain: "bnot", name: r.name, phone: r.phone, branchId: ev.branchId, avrechId: null, mentor: "", stage: STAGES.bnot[0], status: "active",
+          domain: "bnot", name: r.name, phone: r.phone, branchId: ev.branchId, avrechId: null, mentor: "", stage: bnotConfig.stages[0], stageChangedAt: new Date().toISOString(), status: "active",
           nextFollowUp: null, source: `${ev.title} ${ev.date}`, notes: "", startDate: ev.date,
           log: [{ id: randomUUID().slice(0, 8), date: ev.date, type: "אירוע", note: ev.title, by: user.name || user.email || "" }], lastContact: ev.date,
         });
