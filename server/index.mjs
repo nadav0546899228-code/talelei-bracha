@@ -577,6 +577,22 @@ async function api(req, res, url) {
       asId = session.as;
     }
   }
+  const rawOrgScope = req.headers["x-tb-org-scope"];
+  if (typeof rawOrgScope === "string" && rawOrgScope.length < 1500) {
+    try {
+      const parsed = JSON.parse(rawOrgScope);
+      const activeOrgScope = {};
+      for (const domain of ["kollel", "bnot"]) {
+        const x = parsed?.[domain];
+        if (x && ["region", "city", "branch"].includes(String(x.level)) && /^[\w-]{1,120}$/.test(String(x.id || ""))) {
+          activeOrgScope[domain] = { level: String(x.level), id: String(x.id) };
+        }
+      }
+      user = { ...user, activeOrgScope };
+    } catch {
+      // בחירה מקומית פגומה לא משפיעה על ההרשאות או על הכניסה.
+    }
+  }
   const renew = shouldRenew(session) ? { "Set-Cookie": createSessionCookie(real.id, isSecure(req), asId) } : {};
   const can = (view) => user.views.includes(view);
   const send = (status, body) => json(res, status, body, renew);
