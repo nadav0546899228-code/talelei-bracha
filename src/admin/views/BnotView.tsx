@@ -6,6 +6,7 @@ import { Chips, Combo, ContactActions, ExportBtn, Fab, IconActions, SwipeRow } f
 import { useLive } from "../live";
 import { ChallahPanel } from "./ChallahView";
 import { MitchPanel } from "./MitchView";
+import { SharesPanel } from "./SharesView";
 import { buildXlsx, downloadBlob } from "../xlsx";
 
 type Member = { id: string; name: string; phone: string; branchId: string; active: boolean; notes?: string };
@@ -20,9 +21,9 @@ const dayLabel = (iso: string) => new Intl.DateTimeFormat("he-IL", { weekday: "s
 
 export function BnotView({ initialTab }: { me: Me; initialTab?: string }) {
   const [d, setD] = useState<Data | null>(null);
-  type BTab = "challah" | "mitch" | "members" | "activities";
+  type BTab = "challah" | "mitch" | "members" | "activities" | "shares";
   const [tab, setTab] = useState<BTab>(
-    initialTab === "activities" ? "activities" : initialTab?.startsWith("members") ? "members" : initialTab?.startsWith("mitch") ? "mitch" : initialTab === "challah" ? "challah" : "challah",
+    initialTab === "activities" ? "activities" : initialTab?.startsWith("members") ? "members" : initialTab?.startsWith("mitch") ? "mitch" : initialTab === "shares" ? "shares" : "challah",
   );
   const [branch, setBranch] = useState("all");
   const [err, setErr] = useState<string | null>(null);
@@ -52,6 +53,9 @@ export function BnotView({ initialTab }: { me: Me; initialTab?: string }) {
         <button type="button" role="tab" className="adm-chip" aria-pressed={tab === "mitch"} onClick={() => setTab("mitch")}>
           <Icon name="heart" width={16} height={16} /> מתחזקות
         </button>
+        <button type="button" role="tab" className="adm-chip" aria-pressed={tab === "shares"} onClick={() => setTab("shares")}>
+          <Icon name="share" width={16} height={16} /> שיתופים
+        </button>
         <button type="button" role="tab" className="adm-chip" aria-pressed={tab === "members"} onClick={() => setTab("members")}>
           <Icon name="users" width={16} height={16} /> משתתפות ({d.members.filter((m) => m.active).length})
         </button>
@@ -60,6 +64,7 @@ export function BnotView({ initialTab }: { me: Me; initialTab?: string }) {
         </button>
       </div>
       {tab === "challah" ? <ChallahPanel /> : null}
+      {tab === "shares" ? <SharesPanel domain="bnot" /> : null}
       {tab === "mitch" ? <MitchPanel domain="bnot" initialQ={initialTab?.startsWith("mitch:q:") ? initialTab.slice(8) : ""} /> : null}
       {(tab === "members" || tab === "activities") && d.branches.length > 1 ? (
         <Chips<string> value={tab === "activities" && branch === "all" ? d.branches[0].id : branch} onChange={setBranch} items={[...(tab === "members" ? [{ id: "all", label: "כל הסניפים" }] : []), ...d.branches.map((b) => ({ id: b.id, label: b.name }))]} />

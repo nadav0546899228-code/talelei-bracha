@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Icon } from "../../components/Icon";
 import { api, del, post, type OrgUnit } from "../api";
-import { Chips, Combo, ExportBtn, Fab, IconActions, SwipeRow } from "../components";
+import { Chips, Combo, ExportBtn, Fab, IconActions, SwipeRow, waLink } from "../components";
 import { useLive } from "../live";
 import { buildXlsx, downloadBlob } from "../xlsx";
 
@@ -21,7 +21,8 @@ export type Mitch = {
   source: string;
   notes: string;
   startDate: string;
-  log: { id: string; date: string; type: string; note: string; by: string }[];
+  log: { id: string; date: string; type: string; note: string; by: string; images?: string[]; shareId?: string }[];
+  token?: string;
 };
 type Data = { mitch: Mitch[]; branches: OrgUnit[]; cities: OrgUnit[]; avrechim: { id: string; name: string; branchId: string }[]; stages: string[]; contactTypes: string[]; today: string };
 
@@ -197,6 +198,8 @@ function MitchCard({ d, m: initial, domain, word, onClose, onSaved }: { d: Data;
         </div>
       ) : null}
 
+      {m.id ? <PersonalLink id={m.id} name={m.name} phone={m.phone} domain={domain} /> : null}
+
       <div className="adm-fields adm-fields--2" style={{ marginTop: 12 }}>
         <label className="field">
           <span className="field__label">שם</span>
@@ -274,10 +277,71 @@ function MitchCard({ d, m: initial, domain, word, onClose, onSaved }: { d: Data;
               </strong>
               <span className="muted"> · {e.by}</span>
               {e.note ? <div>{e.note}</div> : null}
+              {e.images?.length ? (
+                <div className="adm-thumbs">
+                  {e.images.map((f) => (
+                    <a key={f} href={`/api/shares/file/${f}`} target="_blank" rel="noreferrer">
+                      <img src={`/api/shares/file/${f}`} alt="" loading="lazy" />
+                    </a>
+                  ))}
+                </div>
+              ) : null}
             </div>
           ))}
         </div>
       ) : null}
     </section>
+  );
+}
+
+/** קישור אישי (בלי סיסמה) שהמתחזק/ת פותח/ת בוואטסאפ ומשתף/ת ממנו טקסט ותמונות */
+function PersonalLink({ id, name, phone, domain }: { id: string; name: string; phone: string; domain: "kollel" | "bnot" }) {
+  const [msg, setMsg] = useState<string | null>(null);
+  const getUrl = async (reset = false) => {
+    const r = await post<{ token: string }>(`/api/mitch/${id}/link`, { reset });
+    return `${window.location.origin}/me?t=${r.token}`;
+  };
+  const first = name.replace(/\s*\(דמה\)$/, "").split(" ")[0];
+  const text = (u: string) => `שלום ${first}! זה הקישור האישי שלך לשתף אותנו - מה למדת, רגע מיוחד או תמונה${domain === "bnot" ? " (למשל מהפרשת חלה)" : ""}:\n${u}`;
+  const wa = async () => {
+    const w = window.open("", "_blank");
+    try {
+      const u = await getUrl();
+      if (w) w.location.href = phone ? waLink(phone, text(u)) : `https://wa.me/?text=${encodeURIComponent(text(u))}`;
+    } catch (e) {
+      w?.close();
+      setMsg(e instanceof Error ? e.message : "שגיאה");
+    }
+  };
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(await getUrl());
+      setMsg("הקישור הועתק ✓");
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "שגיאה");
+    }
+  };
+  const reset = async () => {
+    if (!window.confirm("להחליף קישור? הקישור הקודם יפסיק לעבוד.")) return;
+    await getUrl(true).then(() => setMsg("נוצר קישור חדש ✓")).catch((e) => setMsg(e.message));
+  };
+  return (
+    <div className="adm-linkbox">
+      <span className="adm-linkbox__t">
+        <Icon name="share" width={18} height={18} /> קישור אישי לשיתוף
+      </span>
+      <div className="adm-linkbox__b">
+        <button type="button" className="adm-ia adm-ia--wa" aria-label="שליחה בוואטסאפ" title="שליחה בוואטסאפ" onClick={wa}>
+          <Icon name="whatsapp" />
+        </button>
+        <button type="button" className="adm-ia" aria-label="העתקת קישור" title="העתקת קישור" onClick={copy}>
+          <Icon name="file" />
+        </button>
+        <button type="button" className="adm-ia" aria-label="החלפת קישור" title="החלפת קישור" onClick={reset}>
+          <Icon name="refresh" />
+        </button>
+      </div>
+      {msg ? <span className="muted adm-linkbox__m">{msg}</span> : null}
+    </div>
   );
 }

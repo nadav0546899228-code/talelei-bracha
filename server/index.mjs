@@ -33,6 +33,7 @@ import { yemotConfigured } from "./yemot.mjs";
 import { handleMessages } from "./messages.mjs";
 import { handleBnot } from "./bnot.mjs";
 import { challahReminders, handleMitch, publicChallah } from "./mitch.mjs";
+import { handleShares, publicShares, userCoversBranch } from "./shares.mjs";
 import * as push from "./webpush.mjs";
 
 const ROOT = join(fileURLToPath(new URL(".", import.meta.url)), "..", "dist");
@@ -52,7 +53,7 @@ const store = await createStore();
 /* באתר המפורסם: נתוני דמה נטענים פעם אחת אוטומטית (לבקשת נדב, עד שינקה אותם במסך מתכנת).
    אחרי "ניקוי" הם לא חוזרים. לכיבוי: SEED_DEMO_ONCE = false */
 const SEED_DEMO_ONCE = true;
-const DEMO_VERSION = 2; // עולה כשמתווספים סוגי נתוני דמה חדשים (למשל מתחזקים והפרשת חלה)
+const DEMO_VERSION = 3; // עולה כשמתווספים סוגי נתוני דמה חדשים (למשל מתחזקים והפרשת חלה)
 if (!DEMO && SEED_DEMO_ONCE) {
   const st = await store.get("settings", "demoState");
   if (!st || (st.state === "seeded" && (st.v || 1) < DEMO_VERSION)) {
@@ -263,7 +264,7 @@ const ROLE_LABELS = Object.fromEntries(Object.entries(ROLES).map(([k, v]) => [k,
 const BACKUP_COLLECTIONS = [
   "users", "phoneUsers", "submissions", "content", "avrechim", "kollelEntries", "kollelMonths", "kollelSettings", "kollelAttendance",
   "orgUnits", "contacts", "broadcasts", "settings", "messages", "bnotMembers", "bnotActivities", "pushSubs",
-  "kollelMonthStatus", "bcTemplates", "bcScheduled", "donations", "avrechFiles", "mitchazkim", "challahEvents",
+  "kollelMonthStatus", "bcTemplates", "bcScheduled", "donations", "avrechFiles", "mitchazkim", "challahEvents", "mitchShares", "shareFiles",
 ];
 async function makeBackup(reason, byName = "מערכת") {
   const data = {};
@@ -432,6 +433,11 @@ async function api(req, res, url) {
   // הרשמה ציבורית להפרשת חלה
   if (pathname.startsWith("/api/public/challah/")) {
     if (await publicChallah(req, res, url, { store, json, readBody, clean, rateLimited, clientIp, notify })) return;
+  }
+
+  // הדף האישי של מתחזק/ת (קישור בוואטסאפ)
+  if (pathname.startsWith("/api/public/me")) {
+    if (await publicShares(req, res, url, { store, json, readBody, clean, rateLimited, clientIp, notify, resolveUserScope: userCoversBranch })) return;
   }
 
   // גרסת האתר הבנוי - לפי שם קובץ הסקריפט הראשי (משתנה בכל בנייה). משמש להודעת "יש גרסה חדשה"
@@ -718,6 +724,7 @@ async function api(req, res, url) {
   if (await handleOrg(req, res, url, ctx)) return;
   if (await handleMessages(req, res, url, ctx)) return;
   if (await handleBnot(req, res, url, ctx)) return;
+  if (await handleShares(req, res, url, ctx)) return;
   if (await handleMitch(req, res, url, ctx)) return;
 
   // ---- התראות לטלפון

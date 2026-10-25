@@ -7,6 +7,7 @@ import { computePayroll, ENTRY_LABELS, type Avrech, type Entry, type EntryType, 
 import { buildXlsx, downloadBlob, parsePasted } from "../xlsx";
 import { useLive } from "../live";
 import { MitchPanel, type Mitch } from "./MitchView";
+import { SharesPanel } from "./SharesView";
 
 export type Overview = {
   me: { manager: boolean; canEditAvrechim: boolean; canPayroll: boolean };
@@ -17,7 +18,7 @@ export type Overview = {
   months: { id: string; label: string; locked: boolean; order: number }[];
 };
 
-type Tab = "avrechim" | "mitch" | "entries" | "attendance";
+type Tab = "avrechim" | "mitch" | "entries" | "attendance" | "shares";
 
 const blankAvrech = (branchId: string | null): Avrech => ({ id: "", name: "", phone: "", email: "", branchId, monthlyTravel: 0, inPayroll: true, simchaFund: true, simchaExternal: false, active: true, notes: "" });
 
@@ -36,7 +37,7 @@ export function branchLabel(ov: Pick<Overview, "cities" | "branches">, id: strin
 
 export function KollelView({ me, go, initialTab }: { me: Me; go?: (v: "org") => void; initialTab?: string }) {
   const [ov, setOv] = useState<Overview | null>(null);
-  const [tab, setTab] = useState<Tab>(initialTab?.startsWith("entries") ? "entries" : initialTab === "attendance" ? "attendance" : initialTab?.startsWith("mitch") ? "mitch" : "avrechim");
+  const [tab, setTab] = useState<Tab>(initialTab?.startsWith("entries") ? "entries" : initialTab === "attendance" ? "attendance" : initialTab?.startsWith("mitch") ? "mitch" : initialTab === "shares" ? "shares" : "avrechim");
   const [err, setErr] = useState<string | null>(null);
   const load = useCallback(() => api<Overview>("/api/kollel/overview").then(setOv).catch((e) => setErr(e.message)), []);
   useLive(["avrechim", "kollelMonths", "orgUnits", "kollelSettings"], load);
@@ -79,10 +80,14 @@ export function KollelView({ me, go, initialTab }: { me: Me; go?: (v: "org") => 
         <button type="button" role="tab" className="adm-chip" aria-pressed={tab === "attendance"} onClick={() => setTab("attendance")}>
           <Icon name="calendar" width={16} height={16} /> ערב לימוד
         </button>
+        <button type="button" role="tab" className="adm-chip" aria-pressed={tab === "shares"} onClick={() => setTab("shares")}>
+          <Icon name="share" width={16} height={16} /> שיתופים
+        </button>
       </div>
       {tab === "avrechim" ? <AvrechimTab ov={ov} reload={load} initialFilter={filterFromTab(initialTab)} initialQ={initialTab?.startsWith("avrechim:q:") ? initialTab.slice(11) : ""} /> : null}
       {tab === "entries" ? <EntriesTab ov={ov} /> : null}
       {tab === "attendance" ? <AttendanceTab ov={ov} /> : null}
+      {tab === "shares" ? <SharesPanel domain="kollel" /> : null}
       {tab === "mitch" ? <MitchPanel domain="kollel" initialQ={initialTab?.startsWith("mitch:q:") ? initialTab.slice(8) : ""} /> : null}
     </>
   );

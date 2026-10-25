@@ -9,6 +9,7 @@ import { useRouter } from "./router/Router";
 import { matchRoute } from "./router/routes";
 
 const AdminApp = lazy(() => import("./admin/AdminApp"));
+const MePage = lazy(() => import("./pages/Me"));
 const loading = (
   <div className="page-loading" aria-live="polite">
     <div className="spinner" aria-label="טוען" />
@@ -33,7 +34,7 @@ export default function App() {
 
   // SEO בסיסי לכל עמוד
   useEffect(() => {
-    if (isAdmin) return;
+    if (isAdmin || path === "/me") return;
     document.title = route.title;
     setMeta('meta[name="description"]', "name", "description", route.description);
     setMeta('meta[property="og:title"]', "property", "og:title", route.title);
@@ -49,6 +50,16 @@ export default function App() {
     if (isDevSite) setMeta('meta[name="robots"]', "name", "robots", "noindex, nofollow");
   }, [route, path, isAdmin]);
 
+  // הדף האישי של מתחזק/ת - בלי תפריט האתר
+  if (path === "/me")
+    return (
+      <>
+        {isDevSite ? <div className="dev-banner">אתר פיתוח</div> : null}
+        <Suspense fallback={loading}>
+          <MePage />
+        </Suspense>
+      </>
+    );
   if (isAdmin)
     return (
       <>

@@ -11,7 +11,7 @@ export const MODE_LABELS: Record<Mode, string> = { boys: "טללי ברכה", gi
 /** מסך = תצוגה + לשונית פנימית אופציונלית, או מסך כפתור-על */
 export type Screen = { view: View; tab?: string } | { hub: string };
 
-export type NavLeaf = { id: string; label: string; icon: IconName; view: View; tab?: string; hint?: string; badgeForms?: FormKey[]; badgeMessages?: boolean };
+export type NavLeaf = { id: string; label: string; icon: IconName; view: View; tab?: string; hint?: string; badgeForms?: FormKey[]; badgeMessages?: boolean; badgeAlert?: string };
 export type NavHub = { id: string; label: string; icon: IconName; items: NavLeaf[] };
 export type NavEntry = { id: string; label: string; icon: IconName; hub?: NavHub; leaf?: NavLeaf };
 
@@ -55,6 +55,7 @@ function tree(mode: Mode): NavHub[] {
         items: [
           leaf("attendance", "ערב לימוד", "calendar", "kollel", { tab: "attendance", hint: "מי הגיע הערב - אברכים והמתחזקים שלהם" }),
           leaf("mitch-k", "מתחזקים", "heart", "kollel", { tab: "mitch", hint: "כל מתחזק, עם מי לומד, שלב ומעקב" }),
+          leaf("shares-k", "שיתופים לאישור", "share", "kollel", { tab: "shares", hint: "תמונות וטקסט מהמתחזקים - אישור או דחייה", badgeAlert: "shares" }),
           leaf("avrechim", "אברכים", "users", "kollel", { tab: "avrechim", hint: "לפי ערים וסניפים" }),
           leaf("entries", "נסיעות והוצאות", "file", "kollel", { tab: "entries", hint: "דיווח ואישור בחודש הפתוח" }),
           leaf("payroll", "משכורות", "file", "payroll", { hint: "טבלת החודש, שמחות, ייצוא לאקסל" }),
@@ -75,6 +76,7 @@ function tree(mode: Mode): NavHub[] {
       items: [
         leaf("challah", "הפרשת חלה", "sparkle", "bnot", { tab: "challah", hint: "אירוע, הרשמה, הגעה ותיעוד" }),
         leaf("mitch-b", "מתחזקות", "heart", "bnot", { tab: "mitch", hint: "קשר מתמשך: שיחות, שלב ומעקב" }),
+        leaf("shares-b", "שיתופים לאישור", "share", "bnot", { tab: "shares", hint: "תמונות וטקסט מהמתחזקות - אישור או דחייה", badgeAlert: "shares" }),
         leaf("bnot-members", "משתתפות", "users", "bnot", { tab: "members", hint: "לפי ערים וסניפים" }),
         leaf("bnot-acts", "פעילויות ונוכחות", "calendar", "bnot", { tab: "activities", hint: "מפגשים בסניפים ומי הגיעה" }),
         leaf("isha-req", "בקשות שיחה", "chat", "isha", { tab: "ishaRequest", badgeForms: ["ishaRequest"], hint: "אישה לאישה - שיבוץ מלווה" }),

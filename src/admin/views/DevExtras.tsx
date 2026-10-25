@@ -179,6 +179,50 @@ export function DevExtras() {
           </button>
         )}
       </section>
+      <AiKey />
     </>
+  );
+}
+
+/** מפתח בינה מלאכותית לניקוי שיתופים (Anthropic) */
+function AiKey() {
+  const [st, setSt] = useState<{ set: boolean; fromEnv: boolean; model: string } | null>(null);
+  const [key, setKey] = useState("");
+  const [msg, setMsg] = useState<string | null>(null);
+  const load = useCallback(() => api<{ set: boolean; fromEnv: boolean; model: string }>("/api/shares/ai-key").then(setSt).catch(() => setSt(null)), []);
+  useEffect(() => {
+    load();
+  }, [load]);
+  const save = async (clear = false) => {
+    try {
+      await post("/api/shares/ai-key", clear ? { clear: true } : { key: key.trim() });
+      setKey("");
+      setMsg(clear ? "הוסר" : "נשמר ✓");
+      load();
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "שגיאה");
+    }
+  };
+  return (
+    <section className="adm-panel">
+      <h2>
+        <Icon name="sparkle" width={20} height={20} style={{ verticalAlign: "-4px" }} /> בינה מלאכותית - ניקוי שיתופים
+      </h2>
+      <p className="muted" style={{ marginTop: -6 }}>
+        {st?.set ? `מחובר ✓${st.fromEnv ? " (ממשתנה סביבה)" : ""}. במסך השיתופים יופיע כפתור "ניקוי AI".` : "לא מחובר. מדביקים מפתח API של Anthropic."}
+      </p>
+      <div className="adm-toolbar" style={{ marginBottom: 0 }}>
+        <input className="input" type="password" dir="ltr" placeholder="sk-ant-..." value={key} onChange={(e) => setKey(e.target.value)} aria-label="מפתח" style={{ flex: 1 }} />
+        <button type="button" className="btn btn--sm" disabled={!key.trim()} onClick={() => save()}>
+          <Icon name="check" /> שמירה
+        </button>
+        {st?.set && !st.fromEnv ? (
+          <button type="button" className="btn btn--ghost btn--sm" onClick={() => save(true)}>
+            הסרה
+          </button>
+        ) : null}
+      </div>
+      {msg ? <p className="muted">{msg}</p> : null}
+    </section>
   );
 }

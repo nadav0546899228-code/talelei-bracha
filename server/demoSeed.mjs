@@ -177,6 +177,7 @@ export async function seedDemo(store) {
       nextFollowUp: i % 3 === 0 ? dateAgo(1) : null, source: ["חבר", "שיעור בבית כנסת", "שכן", "פעילות בשכונה"][i % 4], notes: "",
       startDate: dateAgo(30 + i * 9), lastContact: dateAgo(i + 2),
       log: [{ id: "l" + i, date: dateAgo(i + 2), type: "שיעור", note: "למדו גמרא, מסכת ברכות", by: "מנהל סניף (דמה)" }],
+      ...(i === 0 ? { token: "demoKollelToken000001" } : {}),
     });
   }
   // מתחזקות (בנות צילה) אחרי הפרשת חלה
@@ -189,6 +190,7 @@ export async function seedDemo(store) {
       nextFollowUp: i % 3 === 1 ? dateAgo(2) : dateAgo(-5), source: "הפרשת חלה", notes: "",
       startDate: dateAgo(20 + i * 6), lastContact: dateAgo(i + 1),
       log: [{ id: "w" + i, date: dateAgo(i + 1), type: "שיחה", note: "שיחת המשך אחרי האירוע", by: "רכזת עיר (דמה)" }],
+      ...(i === 0 ? { token: "demoBnotToken0000001" } : {}),
     });
   }
   // אירועי הפרשת חלה
@@ -201,6 +203,11 @@ export async function seedDemo(store) {
     title: "הפרשת חלה לקראת שבת", date: dateAgo(10), time: "19:30", place: "בית משפחת כהן", branchId: bBranches[1], capacity: 0, notes: "", summary: "השתתפו 9 נשים, אווירה מרוממת. 3 ביקשו להמשיך בקשר.", open: false, reminderSent: true,
     registrations: ws.slice(3, 10).map((w, i) => ({ id: "s" + i, name: w + " (דמה)", phone: "055000" + String(i + 4).padStart(4, "0"), arrived: i < 5, at: new Date().toISOString(), mitchId: i < 3 ? P + "mb-" + (i + 4) : null })),
   });
+
+  // שיתופים ממתינים לאישור
+  await put("mitchShares", "sh-1", { mitchId: P + "mk-1", name: men[0] + " (דמה)", domain: "kollel", branchId: kBranches[0], text: "היום סיימנו את הפרק הראשון בברכות. לא האמנתי שאני יכול ללמוד גמרא, תודה לישראל שמלווה אותי כל שבוע", images: [], status: "pending", createdAt: new Date(Date.now() - 3 * 3600_000).toISOString() });
+  await put("mitchShares", "sh-2", { mitchId: P + "mb-1", name: ws[0] + " (דמה)", domain: "bnot", branchId: bBranches[0], text: "הפרשתי חלה בבית בפעם הראשונה לבד! הבנות שלי עזרו לי לקלוע. מרגש מאוד", images: [], status: "pending", createdAt: new Date(Date.now() - 5 * 3600_000).toISOString() });
+  await put("mitchShares", "sh-3", { mitchId: P + "mb-2", name: ws[1] + " (דמה)", domain: "bnot", branchId: bBranches[1], text: "הדלקתי נרות שבת עם כל המשפחה, הרגשתי שהבית אחר", images: [], status: "approved", decidedBy: "רכזת עיר (דמה)", decidedAt: new Date().toISOString(), createdAt: new Date(Date.now() - 2 * day).toISOString() });
 
   // אנשי צוות לדוגמה - כניסה בטלפון וקוד 1234
   const staff = [

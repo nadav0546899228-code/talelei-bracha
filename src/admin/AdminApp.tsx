@@ -393,7 +393,7 @@ export default function AdminApp() {
 
   const newCount = (forms: string[]) => (subs ?? []).filter((x) => forms.includes(x.form) && x.status === "new").length;
   const unreadMsgs = dash.alerts.find((x) => x.id === "msgs")?.count ?? 0;
-  const leafBadge = (l: NavLeaf) => (l.badgeMessages ? unreadMsgs : 0) + (l.badgeForms ? newCount(l.badgeForms) : 0);
+  const leafBadge = (l: NavLeaf) => (l.badgeMessages ? unreadMsgs : 0) + (l.badgeForms ? newCount(l.badgeForms) : 0) + (l.badgeAlert ? (dash.alerts.find((x) => x.id === l.badgeAlert)?.count ?? 0) : 0);
   const entryBadge = (e: NavEntry) => (e.leaf ? leafBadge(e.leaf) : (e.hub?.items ?? []).reduce((t, l) => t + leafBadge(l), 0));
 
   const initial = (me.user.name || me.user.email || "?").trim().charAt(0).toUpperCase();

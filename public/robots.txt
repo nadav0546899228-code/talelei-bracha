@@ -1,6 +1,7 @@
 User-agent: *
 Allow: /
 Disallow: /admin
+Disallow: /me
 Disallow: /api/
 
 # TODO: לעדכן לכתובת הסופית של האתר לאחר רכישת דומיין

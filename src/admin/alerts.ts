@@ -47,6 +47,18 @@ export function useAlerts(me: Me | null, mode: Mode, subs: Submission[] | null) 
     loadDue();
   }, [loadDue]);
   useLive(["mitchazkim"], loadDue);
+  // שיתופים ממתינים לאישור
+  const [pend, setPend] = useState(0);
+  const loadPend = useCallback(() => {
+    if (!me?.user.views.includes(mDomain)) return setPend(0);
+    api<{ shares: { status: string }[] }>(`/api/shares?domain=${mDomain}`)
+      .then((r) => setPend(r.shares.filter((s) => s.status === "pending").length))
+      .catch(() => setPend(0));
+  }, [me, mDomain]);
+  useEffect(() => {
+    loadPend();
+  }, [loadPend]);
+  useLive(["mitchShares"], loadPend);
 
   useEffect(() => {
     load();
@@ -56,6 +68,7 @@ export function useAlerts(me: Me | null, mode: Mode, subs: Submission[] | null) 
   const alerts: Alert[] = [];
   alerts.push({ id: "msgs", icon: "chat", label: "הודעות שלא נקראו", count: unread, tone: "red", view: "messages" });
   alerts.push({ id: "due", icon: "heart", label: mode === "boys" ? "מתחזקים לחזור אליהם" : "מתחזקות לחזור אליהן", count: due, tone: "red", view: mode === "boys" ? "kollel" : "bnot", tab: "mitch" });
+  alerts.push({ id: "shares", icon: "share", label: "שיתופים לאישור", count: pend, tone: "red", view: mode === "boys" ? "kollel" : "bnot", tab: "shares" });
   const list = subs ?? [];
   const newOf = (forms: string[]) => list.filter((s) => forms.includes(s.form) && s.status === "new").length;
 
