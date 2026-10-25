@@ -29,7 +29,8 @@ export default function App() {
   const { path } = useRouter();
   const isAdmin = path === "/admin" || path.startsWith("/admin/");
   const isShare = path === "/share";
-  const route = matchRoute(path);
+  const hiddenDonationRoute = path === "/donate" && !runtime.featureFlags.donations;
+  const route = matchRoute(hiddenDonationRoute ? "/__hidden_donation__" : path);
   const Page = route.component;
 
   // SEO בסיסי לכל עמוד
@@ -47,8 +48,8 @@ export default function App() {
       document.head.appendChild(canonical);
     }
     canonical.href = window.location.origin + path;
-    setMeta('meta[name="robots"]', "name", "robots", isDevSite || isShare ? "noindex, nofollow" : "index, follow");
-  }, [route, path, isAdmin, isShare]);
+    setMeta('meta[name="robots"]', "name", "robots", isDevSite || isShare || hiddenDonationRoute ? "noindex, nofollow" : "index, follow");
+  }, [route, path, isAdmin, isShare, hiddenDonationRoute]);
 
   if (isAdmin)
     return (
