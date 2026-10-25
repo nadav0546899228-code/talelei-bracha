@@ -3223,3 +3223,129 @@
   .adm-appmenu__item{min-height:70px}
   .adm-appmenu__item-copy small{display:none}
 }
+
+
+/* ===== Reliable swipe/reorder bottom navigation ===== */
+@media(max-width:959px){
+  .adm-tabs{
+    touch-action:none;
+    overscroll-behavior-x:contain;
+    scroll-behavior:auto;
+    -webkit-overflow-scrolling:auto;
+    box-shadow:
+      inset 22px 0 18px -22px rgba(18,58,62,.32),
+      inset -22px 0 18px -22px rgba(18,58,62,.32),
+      0 -8px 28px rgba(18,58,62,.07);
+  }
+  .adm-tabs nav.adm-bar{
+    width:max-content!important;
+    min-width:100%!important;
+    user-select:none;
+    -webkit-user-select:none;
+  }
+  .adm-tabs .adm-bar .adm-tab{
+    touch-action:none;
+    user-select:none;
+    -webkit-user-select:none;
+    -webkit-touch-callout:none;
+    flex:0 0 76px!important;
+    min-width:76px!important;
+  }
+  .adm-tabs .adm-bar.is-sorting .adm-tab{
+    transition:transform .12s ease,background .12s ease,box-shadow .12s ease;
+  }
+  .adm-tabs .adm-bar .adm-tab.is-dragging{
+    transform:translateY(-7px) scale(1.05);
+    z-index:5;
+    background:#fff;
+    box-shadow:0 10px 22px rgba(18,58,62,.18);
+  }
+  .adm[data-mode="girls"] .adm-tabs .adm-bar .adm-tab.is-dragging{background:#fff5f8}
+}
+
+/* ===== Cleaner Israel activity map ===== */
+.adm-israel-map{
+  height:500px;
+  max-width:360px;
+  border-radius:24px;
+  background:
+    radial-gradient(circle at 48% 28%,rgba(49,137,141,.10),transparent 34%),
+    linear-gradient(180deg,#f8fcfc,#eef7f6);
+  border:1px solid #dce9e8;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.8),0 10px 28px rgba(20,67,70,.06);
+}
+.adm-israel-map:before{
+  background:
+    linear-gradient(rgba(31,111,115,.035) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(31,111,115,.035) 1px,transparent 1px);
+  background-size:28px 28px;
+  opacity:.7;
+}
+.adm-israel-map__caption{
+  position:absolute;
+  z-index:4;
+  top:13px;
+  inset-inline:14px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  padding:8px 10px;
+  border:1px solid rgba(214,229,228,.85);
+  border-radius:12px;
+  background:rgba(255,255,255,.86);
+  backdrop-filter:blur(8px);
+}
+.adm-israel-map__caption strong{font-size:.74rem;color:#28585b}
+.adm-israel-map__caption span{font-size:.62rem;color:#839293}
+.adm-israel-map svg{
+  inset:56px 34px 24px;
+  width:calc(100% - 68px);
+  height:calc(100% - 80px);
+  color:#1e7c80;
+}
+.adm-israel-shape{
+  fill:url(#israelFill);
+  stroke:#4d9699;
+  stroke-width:3;
+  stroke-linejoin:round;
+}
+.adm-israel-coast{fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round;opacity:.95}
+.adm-israel-water,.adm-israel-deadsea{fill:#bfe0e2;stroke:#7fb8bb;stroke-width:1.5}
+.adm-map-pin{
+  border:2px solid #fff;
+  background:#237b80;
+  box-shadow:0 4px 10px rgba(18,72,76,.22);
+}
+.adm-map-pin>span{font-size:.61rem}
+.adm-map-pin>small{
+  top:calc(100% + 5px);
+  font-size:.58rem;
+  padding:3px 6px;
+  box-shadow:0 4px 12px rgba(18,58,62,.15);
+}
+.adm-map-pin.is-active{
+  background:#aa426a;
+  box-shadow:0 0 0 5px rgba(170,66,106,.13),0 7px 16px rgba(87,34,54,.24);
+}
+.adm-map-pin.is-active>small{opacity:1}
+.adm-city-ranking{max-height:500px;overflow:auto;padding-inline-end:3px}
+.adm-city-ranking__head{
+  position:sticky;top:0;z-index:2;padding:8px 4px 10px;background:#fff;
+  display:flex;align-items:center;justify-content:space-between;gap:8px;
+}
+.adm-city-ranking__head strong{font-size:.82rem;color:#31585b}
+.adm-city-ranking__head span{font-size:.66rem;color:#8a9899}
+.adm-city-ranking button{border-radius:12px;padding:10px 11px}
+.adm-city-ranking button.is-active{border-color:#b75479;background:#fff4f7}
+@media(max-width:700px){
+  .adm-israel-map{height:440px;max-width:330px}
+  .adm-israel-map__caption{display:grid;gap:1px}
+  .adm-israel-map svg{inset:62px 28px 20px;width:calc(100% - 56px);height:calc(100% - 82px)}
+  .adm-city-ranking{max-height:none}
+}
+@media(max-width:430px){
+  .adm-israel-map{height:405px;max-width:300px}
+  .adm-map-pin>small{display:none}
+  .adm-map-pin.is-active>small{display:block}
+}
