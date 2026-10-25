@@ -99,7 +99,7 @@ export const site: SiteConfig = {
     /** אפשרות הקדשה בתרומה (לעילוי נשמת/לרפואה/להצלחה) - רק אם המוסדות רוצים */
     donationDedication: false,
     /** הצגת תגיות "טיוטה/דוגמה" על תוכן זמני. לכבות לפני פרסום סופי. */
-    showContentFlags: true,
+    showContentFlags: false,
   },
 };
 
