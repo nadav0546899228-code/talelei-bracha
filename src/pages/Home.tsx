@@ -232,7 +232,10 @@ export default function Home() {
               ))}
             </div>
           ) : (
-            <Placeholder title="אין כרגע אירועים מתוכננים">אירועים חדשים יפורסמו כאן.</Placeholder>
+            <div className="home-empty-state">
+              <Icon name="calendar" />
+              <div><strong>אין כרגע אירועים מתוכננים</strong><span>אירועים חדשים יפורסמו כאן.</span></div>
+            </div>
           )}
           <p style={{ marginTop: 22 }}>
             <Link to="/events" className="btn btn--ghost">
