@@ -123,13 +123,23 @@ export function entriesFor(hubs: NavHub[]): NavEntry[] {
   return out;
 }
 
-/** הסרגל התחתון מכיל תמיד את כל הכפתורים הראשיים. הסדר ניתן לשינוי בגרירה. */
-export const defaultBar = (entries: NavEntry[]) => entries.filter((e) => !e.id.startsWith("leaf:")).map((e) => e.id);
+/**
+ * הסרגל התחתון מיועד לפעולות יומיומיות בלבד.
+ * בקרן טללי ברכה נשארים 4 כפתורים מרכזיים; כל שאר האפשרויות זמינות בתפריט 3 הקווים.
+ */
+export const defaultBar = (entries: NavEntry[], mode: Mode) => {
+  const mains = entries.filter((e) => !e.id.startsWith("leaf:"));
+  if (mode === "boys") {
+    const preferred = ["home", "kollel", "activity-center", "comm"];
+    return preferred.filter((id) => mains.some((e) => e.id === id));
+  }
+  return mains.map((e) => e.id);
+};
 
 /** שמירת השורה התחתונה לכל משתמש ולכל מצב בנפרד (במכשיר) */
-const key = (me: Me, mode: Mode) => `tb-bar:${me.user.impersonatedBy ? "as:" : ""}${me.user.id}:${mode}`;
+const key = (me: Me, mode: Mode) => `tb-bar-v2:${me.user.impersonatedBy ? "as:" : ""}${me.user.id}:${mode}`;
 export function loadBar(me: Me, mode: Mode, entries: NavEntry[]): string[] {
-  const mains = defaultBar(entries);
+  const mains = defaultBar(entries, mode);
   try {
     const raw = localStorage.getItem(key(me, mode));
     if (raw) {
