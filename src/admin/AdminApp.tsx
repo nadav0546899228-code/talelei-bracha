@@ -13,7 +13,7 @@ import { api, ApiError, post, type Me, type Submission, type View } from "./api"
 import { ImpersonateModal } from "./Impersonate";
 import { FirstRunGuide, guideKey } from "./FirstRunGuide";
 import { entriesFor, entryActive, hubsFor, loadBar, loadMode, MODE_LABELS, modesFor, saveBar, saveMode, type Mode, type NavEntry, type NavLeaf, type Screen } from "./nav";
-import { BarEditor, HubView } from "./NavParts";
+import { HubView } from "./NavParts";
 import { useAlerts } from "./alerts";
 import { disablePush, enablePush, pushState } from "./push";
 import { OrgView } from "./views/OrgView";
@@ -211,12 +211,17 @@ export default function AdminApp() {
   }, []);
   const [mode, setModeState] = useState<Mode>("boys");
   const [bar, setBar] = useState<string[]>([]);
-  const [barEdit, setBarEdit] = useState(false);
   const [asOpen, setAsOpen] = useState(false);
   const [subs, setSubs] = useState<Submission[] | null>(null);
   const [codeOpen, setCodeOpen] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
   const [displayMode, setDisplayMode] = useState<DisplayMode>("auto");
+  const [barSorting, setBarSorting] = useState(false);
+  const [draggingBarId, setDraggingBarId] = useState<string | null>(null);
+  const barPressTimer = useRef<number | null>(null);
+  const barPress = useRef<{ id: string; x: number; y: number; pointerId: number; el: HTMLElement } | null>(null);
+  const suppressBarClick = useRef(false);
+  const barScrollRef = useRef<HTMLDivElement>(null);
 
   const loadMe = useCallback(async () => {
     try {
@@ -276,7 +281,6 @@ export default function AdminApp() {
   const dash = useAlerts(state === "ready" ? me : null, mode, subs);
   const [bellOpen, setBellOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
-  const [navOpen, setNavOpen] = useState(false);
   useEffect(() => {
     if (me) setBar(loadBar(me, mode, entries));
   }, [me, mode, entries]);
@@ -373,24 +377,95 @@ export default function AdminApp() {
   const curTab = "hub" in current ? undefined : current.tab;
   const title = "hub" in current ? hubs.find((h) => h.id === current.hub)?.label ?? "" : leaves.find((l) => l.view === current.view && (!l.tab || l.tab === curTab))?.label ?? me.viewLabels[current.view];
 
-  const mobileBarEntries = barEntries.slice(0, 4);
-  const mobileMoreActive = !mobileBarEntries.some((e) => entryActive(e, current));
+  const clearBarTimer = () => {
+    if (barPressTimer.current !== null) {
+      window.clearTimeout(barPressTimer.current);
+      barPressTimer.current = null;
+    }
+  };
+  const barPointerDown = (ev: React.PointerEvent<HTMLButtonElement>, id: string) => {
+    if (ev.pointerType === "mouse" && ev.button !== 0) return;
+    clearBarTimer();
+    suppressBarClick.current = false;
+    barPress.current = { id, x: ev.clientX, y: ev.clientY, pointerId: ev.pointerId, el: ev.currentTarget };
+    barPressTimer.current = window.setTimeout(() => {
+      const p = barPress.current;
+      if (!p || p.id !== id) return;
+      suppressBarClick.current = true;
+      setBarSorting(true);
+      setDraggingBarId(id);
+      try { p.el.setPointerCapture(p.pointerId); } catch { /* לא קריטי */ }
+      try { navigator.vibrate?.(18); } catch { /* לא קריטי */ }
+    }, 420);
+  };
+  const barPointerMove = (ev: React.PointerEvent<HTMLButtonElement>) => {
+    const p = barPress.current;
+    if (!p) return;
+    const distance = Math.hypot(ev.clientX - p.x, ev.clientY - p.y);
+    if (!draggingBarId) {
+      if (distance > 9) clearBarTimer();
+      return;
+    }
+    ev.preventDefault();
+    const tabs = barScrollRef.current;
+    if (tabs) {
+      const rect = tabs.getBoundingClientRect();
+      if (ev.clientX < rect.left + 42) tabs.scrollBy({ left: -18 });
+      else if (ev.clientX > rect.right - 42) tabs.scrollBy({ left: 18 });
+    }
+    const hit = document.elementFromPoint(ev.clientX, ev.clientY)?.closest<HTMLElement>("[data-bar-id]");
+    const overId = hit?.dataset.barId;
+    if (!overId || overId === draggingBarId) return;
+    setBar((prev) => {
+      const from = prev.indexOf(draggingBarId);
+      const to = prev.indexOf(overId);
+      if (from < 0 || to < 0 || from === to) return prev;
+      const next = [...prev];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      saveBar(me, mode, next);
+      return next;
+    });
+  };
+  const finishBarPress = () => {
+    clearBarTimer();
+    barPress.current = null;
+    setDraggingBarId(null);
+    setBarSorting(false);
+  };
   const barNav = (
-    <nav aria-label="ניווט ראשי" className="adm-bar">
-      {mobileBarEntries.map((e) => {
+    <nav aria-label="ניווט ראשי" className={`adm-bar${barSorting ? " is-sorting" : ""}`}>
+      {barEntries.map((e) => {
         const b = entryBadge(e);
+        const dragging = draggingBarId === e.id;
         return (
-          <button key={e.id} type="button" className="adm-tab" aria-current={entryActive(e, current) ? "page" : undefined} onClick={() => openEntry(e)}>
+          <button
+            key={e.id}
+            type="button"
+            data-bar-id={e.id}
+            className={`adm-tab${dragging ? " is-dragging" : ""}`}
+            aria-current={entryActive(e, current) ? "page" : undefined}
+            aria-label={barSorting ? `${e.label}, גרירה לשינוי מיקום` : e.label}
+            onPointerDown={(ev) => barPointerDown(ev, e.id)}
+            onPointerMove={barPointerMove}
+            onPointerUp={finishBarPress}
+            onPointerCancel={finishBarPress}
+            onContextMenu={(ev) => ev.preventDefault()}
+            onClick={(ev) => {
+              if (suppressBarClick.current) {
+                suppressBarClick.current = false;
+                ev.preventDefault();
+                return;
+              }
+              openEntry(e);
+            }}
+          >
             <Icon name={e.icon} />
             <span>{e.label}</span>
             {b ? <span className="adm-badge" aria-label={`${b} חדשות`}>{b}</span> : null}
           </button>
         );
       })}
-      <button type="button" className="adm-tab adm-tab--more" aria-current={navOpen || mobileMoreActive ? "page" : undefined} onClick={() => setNavOpen(true)} aria-label="כל האפשרויות">
-        <Icon name="menu" />
-        <span>עוד</span>
-      </button>
     </nav>
   );
 
@@ -526,59 +601,7 @@ export default function AdminApp() {
           )}
         </main>
       </div>
-      <div className="adm-tabs">{barNav}</div>
-      {navOpen ? (
-        <>
-          <button type="button" className="adm-sheet-back" aria-label="סגירה" onClick={() => setNavOpen(false)} />
-          <section className="adm-mobile-sheet" role="dialog" aria-modal="true" aria-label="כל האפשרויות">
-            <div className="adm-mobile-sheet__head">
-              <div><strong>כל האפשרויות</strong><small>{MODE_LABELS[mode]}</small></div>
-              <button type="button" className="adm-icon-btn" aria-label="סגירה" onClick={() => setNavOpen(false)}><Icon name="close" /></button>
-            </div>
-            <div className="adm-mobile-sheet__scroll">
-              {hubs.map((h) => (
-                <section className="adm-mobile-sheet__group" key={h.id}>
-                  <h3><Icon name={h.icon} /> {h.label}</h3>
-                  <div>
-                    {h.items.map((l) => {
-                      const b = leafBadge(l);
-                      return (
-                        <button key={l.id} type="button" className="adm-mobile-sheet__item" aria-current={curView === l.view && (!l.tab || !curTab || l.tab === curTab) ? "page" : undefined} onClick={() => { setNavOpen(false); openLeaf(l); }}>
-                          <span className="adm-mobile-sheet__itemicon"><Icon name={l.icon} /></span>
-                          <strong>{l.label}</strong>
-                          {b ? <span className="adm-badge">{b}</span> : null}
-                          <Icon name="arrowLeft" className="adm-mobile-sheet__arrow" />
-                        </button>
-                      );
-                    })}
-                  </div>
-                </section>
-              ))}
-            </div>
-            <div className="adm-mobile-sheet__foot">
-              <button type="button" onClick={() => { setNavOpen(false); setProfileOpen(true); }}><Icon name="users" /> האזור האישי</button>
-              <button type="button" onClick={() => { setNavOpen(false); setBarEdit(true); }}><Icon name="edit" /> התאמת הסרגל</button>
-            </div>
-          </section>
-        </>
-      ) : null}
-      {barEdit ? (
-        <BarEditor
-          entries={entries}
-          value={bar}
-          onClose={() => setBarEdit(false)}
-          onSave={(ids) => {
-            setBar(ids);
-            saveBar(me, mode, ids);
-            setBarEdit(false);
-          }}
-          onReset={() => {
-            saveBar(me, mode, null);
-            setBar(loadBar(me, mode, entries));
-            setBarEdit(false);
-          }}
-        />
-      ) : null}
+      <div className="adm-tabs" ref={barScrollRef}>{barNav}</div>
       {bellOpen ? (
         <>
           <div className="adm-pop-back" onClick={() => setBellOpen(false)} />
@@ -628,10 +651,6 @@ export default function AdminApp() {
             setProfileOpen(false);
             setAsOpen(true);
           } : undefined}
-          onNavEdit={() => {
-            setProfileOpen(false);
-            setBarEdit(true);
-          }}
           onSaved={() => {
             setProfileOpen(false);
             loadMe();
@@ -667,7 +686,6 @@ function Profile({
   onLogout,
   onGuide,
   onViews,
-  onNavEdit,
   displayMode,
   onDisplayMode,
 }: {
@@ -678,7 +696,6 @@ function Profile({
   onLogout: () => void;
   onGuide: () => void;
   onViews?: () => void;
-  onNavEdit: () => void;
   displayMode: DisplayMode;
   onDisplayMode: (mode: DisplayMode) => void;
 }) {
@@ -787,12 +804,6 @@ function Profile({
               <Icon name="arrowLeft" className="adm-personal__arrow" />
             </button>
           ) : null}
-
-          <button type="button" className="adm-personal__row" onClick={onNavEdit}>
-            <span className="adm-personal__rowicon"><Icon name="edit" /></span>
-            <span><strong>התאמת ניווט</strong><small>בחירת הקיצורים שיופיעו בתחתית</small></span>
-            <Icon name="arrowLeft" className="adm-personal__arrow" />
-          </button>
 
           <button type="button" className="adm-personal__row" onClick={onGuide}>
             <span className="adm-personal__rowicon"><Icon name="info" /></span>
