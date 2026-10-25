@@ -54,8 +54,12 @@ function monthCells(cursor: Date) {
 }
 
 function pinPos(lat:number,lng:number){
-  const left=Math.max(5,Math.min(95,((lng-34.25)/(35.7-34.25))*100));
-  const top=Math.max(4,Math.min(96,((33.35-lat)/(33.35-29.45))*100));
+  // ההקרנה מותאמת לצללית הצרה של ישראל בתוך כרטיס המפה,
+  // ולא לכל רוחב הכרטיס - כך שהנעיצות נשארות על גבי הארץ.
+  const lon=Math.max(0,Math.min(1,(lng-34.25)/(35.7-34.25)));
+  const latNorm=Math.max(0,Math.min(1,(33.35-lat)/(33.35-29.45)));
+  const left=34 + lon*31;
+  const top=14 + latNorm*75;
   return {left:`${left}%`,top:`${top}%`};
 }
 
