@@ -27,7 +27,7 @@ export const VIEW_LABELS = {
 
 export const ROLES = {
   developer: { label: "מתכנת", views: VIEWS },
-  ceo: { label: "מנכ״ל", views: VIEWS.filter((v) => v !== "developer") },
+  ceo: { label: "מנכ״ל", views: VIEWS.filter((v) => v !== "developer" && v !== "audit") },
   chief_coordinator: { label: "רכז ראשי", views: ["dashboard", "messages", "kollel", "payroll", "reports", "isha", "bnot", "org", "broadcast"] },
   kollel_city: { label: "רכז עיר - כולל ערב", views: ["dashboard", "messages", "kollel", "org", "broadcast"] },
   kollel_branch: { label: "מנהל סניף - כולל ערב", views: ["dashboard", "messages", "kollel", "broadcast"] },
