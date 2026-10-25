@@ -59,6 +59,19 @@ export type Me = {
     bootstrap: boolean;
     impersonatedBy?: { id: string; name: string; email: string; phone: string };
   };
+  account?: {
+    id: string;
+    kind: "google" | "phone" | "virtual";
+    email: string;
+    phone?: string;
+    subId?: string;
+    name: string;
+    picture: string;
+    roles: Role[];
+    scope?: Scope;
+    views: View[];
+    bootstrap: boolean;
+  };
   roleLabels: Record<Role, string>;
   viewLabels: Record<View, string>;
   assignableRoles: Role[];
