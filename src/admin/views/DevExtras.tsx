@@ -125,19 +125,39 @@ export function DevExtras() {
             <h2>
               <Icon name="sparkle" width={20} height={20} style={{ verticalAlign: "-4px" }} /> נתוני דמה
             </h2>
-            <button
-              type="button"
-              className="btn btn--ghost btn--sm"
-              disabled={busy}
-              onClick={async () => {
-                if (!window.confirm("לאפס את כל נתוני הדמה למצב ההתחלתי?")) return;
-                setBusy(true);
-                await post("/api/admin/demo/reset", {}).catch((e) => setMsg({ ok: false, text: e.message }));
-                window.location.reload();
-              }}
-            >
-              <Icon name="refresh" /> איפוס
-            </button>
+            <span className="adm-item__actions">
+              <button
+                type="button"
+                className="btn btn--ghost btn--sm"
+                disabled={busy}
+                onClick={async () => {
+                  if (!window.confirm("לאפס את כל נתוני הדמה למצב ההתחלתי?")) return;
+                  setBusy(true);
+                  await post("/api/admin/demo/reset", {}).catch((e) => setMsg({ ok: false, text: e.message }));
+                  window.location.reload();
+                }}
+              >
+                <Icon name="refresh" /> איפוס
+              </button>
+              <button
+                type="button"
+                className="btn btn--ghost btn--sm"
+                disabled={busy}
+                onClick={async () => {
+                  if (!window.confirm("למחוק עכשיו את כל נתוני הדמה?")) return;
+                  setBusy(true);
+                  try {
+                    const r = await post<{ removed: number }>("/api/admin/demo/clear", {});
+                    setMsg({ ok: true, text: `נמחקו ${r.removed} רשומות דמה` });
+                  } catch (e) {
+                    setMsg({ ok: false, text: e instanceof Error ? e.message : "שגיאה" });
+                  }
+                  setBusy(false);
+                }}
+              >
+                <Icon name="trash" /> מחיקת כל הדמה
+              </button>
+            </span>
           </div>
           <p className="muted" style={{ margin: 0 }}>
             אתר הפיתוח עובד על נתוני דמה בלבד. האתר המפורסם לא מושפע. רכזים לדוגמה נכנסים בטלפון 0500000100 עד 0500000104, קוד 1234.
