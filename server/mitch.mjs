@@ -3,7 +3,7 @@
  * בנים: כל מתחזק משויך לאברך (חברותא בכולל הערב). הנוכחות שלו נרשמת במפגש הערב יחד עם האברך.
  * בנות: הפרשת חלה עם הרשמה ← משתתפת הופכת למתחזקת ← קשר מתמשך (יומן קשר + מעקב הבא).
  */
-import { randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { isPrivileged } from "./roles.mjs";
 import { branchScope, loadOrg } from "./org.mjs";
 import { normalizePhone, validPhone } from "./phoneAuth.mjs";
@@ -14,6 +14,8 @@ export const STAGES = {
 };
 const CONTACT_TYPES = ["שיחה", "פגישה", "הודעה", "שיעור", "אירוע"];
 const today = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+const tokenHash = (token) => createHash("sha256").update(String(token || "")).digest("hex");
+const imageDataOk = (value) => /^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/i.test(String(value || ""));
 
 export async function handleMitch(req, res, url, ctx) {
   const { pathname } = url;
@@ -38,6 +40,75 @@ export async function handleMitch(req, res, url, ctx) {
     let avrechim = [];
     if (domain === "kollel") avrechim = (await store.list("avrechim", 20000)).filter((a) => a.active !== false && inScope("kollel", a.branchId)).map((a) => ({ id: a.id, name: a.name, branchId: a.branchId }));
     return send(200, { mitch: rows.sort((a, b) => String(a.name).localeCompare(String(b.name), "he")), branches, cities, avrechim, stages: STAGES[domain], contactTypes: CONTACT_TYPES, today: today() }), true;
+  }
+
+  // קישור אישי לכתיבת עדכונים: יצירת קישור חדש מבטלת קישורים קודמים לאותו מתחזק/ת.
+  const accessMatch = pathname.match(/^\/api\/mitch\/([\w-]+)\/access-link$/);
+  if (accessMatch && method === "POST") {
+    const m = await store.get("mitchazkim", accessMatch[1]);
+    if (!m || !can(m.domain) || !inScope(m.domain, m.branchId)) return send(404, { error: "לא נמצא" }), true;
+    const token = randomBytes(32).toString("base64url");
+    const hash = tokenHash(token);
+    for (const old of await store.list("mitchAccess", 20000)) {
+      if (old.mitchId === m.id) await store.del("mitchAccess", old.id);
+    }
+    await store.put("mitchAccess", hash, {
+      mitchId: m.id,
+      domain: m.domain,
+      branchId: m.branchId,
+      active: true,
+      expiresAt: new Date(Date.now() + 365 * 86400_000).toISOString(),
+    });
+    await audit(user, "יצירת קישור אישי למתחזק", m.name);
+    return send(200, { ok: true, token }), true;
+  }
+  if (accessMatch && method === "DELETE") {
+    const m = await store.get("mitchazkim", accessMatch[1]);
+    if (!m || !can(m.domain) || !inScope(m.domain, m.branchId)) return send(404, { error: "לא נמצא" }), true;
+    for (const old of await store.list("mitchAccess", 20000)) {
+      if (old.mitchId === m.id) await store.del("mitchAccess", old.id);
+    }
+    await audit(user, "ביטול קישור אישי למתחזק", m.name);
+    return send(200, { ok: true }), true;
+  }
+
+  // עדכונים שנשלחו מהקישור האישי - מוצגים רק למי שרואה את הסניף.
+  const updatesMatch = pathname.match(/^\/api\/mitch\/([\w-]+)\/updates$/);
+  if (updatesMatch && method === "GET") {
+    const m = await store.get("mitchazkim", updatesMatch[1]);
+    if (!m || !can(m.domain) || !inScope(m.domain, m.branchId)) return send(404, { error: "לא נמצא" }), true;
+    const updates = (await store.list("mitchUpdates", 5000))
+      .filter((u) => u.mitchId === m.id)
+      .sort((a, b) => String(b.submittedAt || b.createdAt || "").localeCompare(String(a.submittedAt || a.createdAt || "")));
+    return send(200, { updates }), true;
+  }
+
+  const reviewMatch = pathname.match(/^\/api\/mitch\/updates\/([\w-]+)\/(approve|reject)$/);
+  if (reviewMatch && method === "POST") {
+    const update = await store.get("mitchUpdates", reviewMatch[1]);
+    if (!update || !can(update.domain) || !inScope(update.domain, update.branchId)) return send(404, { error: "לא נמצא" }), true;
+    if (update.status !== "pending") return send(400, { error: "העדכון כבר טופל" }), true;
+    const reviewer = user.name || user.email || user.phone || "רכז/ת";
+    const reviewedAt = new Date().toISOString();
+    if (reviewMatch[2] === "approve") {
+      const m = await store.get("mitchazkim", update.mitchId);
+      if (!m) return send(404, { error: "המתחזק/ת לא נמצא/ה" }), true;
+      const entry = {
+        id: randomUUID().slice(0, 8),
+        date: String(update.submittedAt || reviewedAt).slice(0, 10),
+        type: "דיווח עצמי",
+        note: update.text || (update.photos?.length ? `צורפו ${update.photos.length} תמונות` : ""),
+        by: `אושר ע״י ${reviewer}`,
+        updateId: update.id,
+      };
+      await store.put("mitchazkim", m.id, { ...m, log: [entry, ...(m.log || [])].slice(0, 300), lastContact: entry.date });
+      await store.put("mitchUpdates", update.id, { ...update, status: "approved", reviewedAt, reviewedBy: reviewer });
+      await audit(user, "אישור עדכון מתחזק", m.name);
+    } else {
+      await store.put("mitchUpdates", update.id, { ...update, status: "rejected", reviewedAt, reviewedBy: reviewer });
+      await audit(user, "דחיית עדכון מתחזק", update.mitchName || update.mitchId);
+    }
+    return send(200, { ok: true }), true;
   }
 
   if (pathname === "/api/mitch" && method === "POST") {
@@ -215,6 +286,84 @@ export async function publicChallah(req, res, url, { store, json, readBody, clea
     return json(res, 200, { ok: true }), true;
   }
   return false;
+}
+
+/** עדכון אישי של מתחזק/ת דרך קישור אישי מוואטסאפ. אין כניסה למערכת ואין הקלטות - רק טקסט ותמונות. */
+export async function publicMitchShare(req, res, url, { store, json, readBody, clean, rateLimited, clientIp, notify }) {
+  if (url.pathname !== "/api/public/mitch-share") return false;
+  const method = req.method || "GET";
+  let token = url.searchParams.get("t") || "";
+  let body = null;
+  if (method === "POST") {
+    body = await readBody(req, 6 * 1024 * 1024);
+    token = String(body?.token || "");
+  }
+  if (token.length < 30 || token.length > 100) return json(res, 404, { error: "הקישור אינו תקין" }), true;
+  const hash = tokenHash(token);
+  const access = await store.get("mitchAccess", hash);
+  if (!access || access.active === false || (access.expiresAt && Date.now() > new Date(access.expiresAt).getTime())) {
+    return json(res, 404, { error: "הקישור אינו פעיל. יש לבקש קישור חדש מהרכז/ת." }), true;
+  }
+  const m = await store.get("mitchazkim", access.mitchId);
+  if (!m || m.status === "left") return json(res, 404, { error: "הקישור אינו פעיל" }), true;
+  const org = await loadOrg(store);
+  const branch = org.branches.find((b) => b.id === m.branchId);
+  const city = org.cities.find((c) => c.id === branch?.parentId);
+
+  if (method === "GET") {
+    const pending = (await store.list("mitchUpdates", 2000)).filter((u) => u.mitchId === m.id && u.status === "pending").length;
+    return json(res, 200, {
+      name: m.name,
+      domain: m.domain,
+      branch: branch?.name || "",
+      city: city?.name || "",
+      pending,
+    }), true;
+  }
+
+  if (method === "POST") {
+    if (rateLimited(`mshare:${hash}:${clientIp(req)}`, 8, 30 * 60_000)) return json(res, 429, { error: "נשלחו יותר מדי עדכונים. נסו שוב מאוחר יותר." }), true;
+    const text = clean(body?.text, 4000).trim();
+    const rawPhotos = Array.isArray(body?.photos) ? body.photos.slice(0, 4) : [];
+    const photos = [];
+    let total = 0;
+    for (const p of rawPhotos) {
+      const value = String(p || "");
+      if (!imageDataOk(value)) return json(res, 400, { error: "ניתן לצרף תמונות JPG, PNG או WebP בלבד" }), true;
+      const approx = Math.ceil(value.length * 0.75);
+      if (approx > 1_100_000) return json(res, 400, { error: "אחת התמונות גדולה מדי" }), true;
+      total += approx;
+      photos.push(value);
+    }
+    if (total > 4_000_000) return json(res, 400, { error: "סך התמונות גדול מדי" }), true;
+    if (!text && !photos.length) return json(res, 400, { error: "יש לכתוב עדכון או לצרף תמונה" }), true;
+
+    const id = randomUUID();
+    const submittedAt = new Date().toISOString();
+    await store.put("mitchUpdates", id, {
+      mitchId: m.id,
+      mitchName: m.name,
+      domain: m.domain,
+      branchId: m.branchId,
+      text,
+      photos,
+      status: "pending",
+      submittedAt,
+    });
+
+    notify?.((u) => {
+      if (!u.views.includes(m.domain === "kollel" ? "kollel" : "bnot")) return false;
+      const scope = branchScope(u, org, m.domain);
+      return scope === null || scope.has(m.branchId);
+    }, {
+      title: `עדכון חדש מ${m.name}`,
+      body: text ? text.slice(0, 90) : `${photos.length} תמונות ממתינות לאישור`,
+      url: m.domain === "bnot" ? `/admin?v=bnot&t=mitch:q:${encodeURIComponent(m.name)}` : `/admin?v=kollel&t=mitch:q:${encodeURIComponent(m.name)}`,
+    });
+    return json(res, 201, { ok: true, message: "העדכון נשלח לרכז/ת לאישור" }), true;
+  }
+
+  return json(res, 405, { error: "פעולה לא נתמכת" }), true;
 }
 
 /** תזכורת יום לפני לנרשמות (נקרא מהשרת כל דקה; שולח פעם אחת בשעה 18:00) */
