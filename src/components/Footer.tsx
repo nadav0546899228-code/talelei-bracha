@@ -1,4 +1,5 @@
 import { legalNav, publicSiteMode, site } from "../config/site";
+import { runtime } from "../config/contentModel";
 import { Link, useRouter } from "../router/Router";
 import { Logo } from "./Logo";
 
@@ -50,9 +51,7 @@ export function Footer() {
             <li>
               <Link to="/isha-le-isha">מיזם אישה לאישה</Link>
             </li>
-            <li>
-              <Link to="/donate">תרומה</Link>
-            </li>
+            {runtime.featureFlags.donations ? <li><Link to="/donate">תרומה</Link></li> : null}
           </ul>
         </nav>
 
