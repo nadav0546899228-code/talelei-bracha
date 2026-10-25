@@ -2633,3 +2633,69 @@
   border-radius: 14px;
   padding: 10px;
 }
+
+
+/* ===== Usability fixes: permissions, content editor, mitch self-updates ===== */
+.adm-role-option{
+  min-width:0;
+  align-items:flex-start;
+  padding:12px 13px;
+  border:1px solid #e3e8e8;
+  border-radius:14px;
+  background:#fff;
+}
+.adm-role-option>span{min-width:0;white-space:normal;overflow-wrap:anywhere;line-height:1.35}
+.adm-role-option .field__hint{white-space:normal!important;overflow:visible!important;text-overflow:clip!important;line-height:1.4;margin-top:3px}
+.adm-roles--wrap{display:flex;flex-wrap:wrap;gap:5px;max-width:100%}
+.adm-roles--wrap .adm-role{white-space:normal;text-align:center}
+.adm-table td,.adm-table th{overflow-wrap:anywhere}
+.adm-content-head{align-items:flex-start}
+.adm-content-actions{display:flex;flex-wrap:wrap;gap:7px;justify-content:flex-end}
+.adm-content-state{display:block;margin-top:4px;font-size:.78rem;color:#738386;font-weight:650}
+.adm-content-state.is-dirty{color:#a45117}
+.adm-item{min-width:0;overflow:hidden}
+.adm-item__head>button.text-link{min-width:0;max-width:100%;text-align:start}
+.adm-item__head>button.text-link strong{display:inline-block;max-width:100%;white-space:normal;overflow-wrap:anywhere}
+.adm-item .field,.adm-item .input,.adm-item .select,.adm-item .textarea{min-width:0;max-width:100%;width:100%}
+.adm-item input[type="datetime-local"]{min-width:0}
+
+/* Personal update link and coordinator review */
+.adm-mitch-share-tools{
+  margin:0 0 12px;padding:12px 13px;border:1px solid #dce8e8;border-radius:15px;background:#f8fbfb;
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+}
+.adm-mitch-share-tools>div{min-width:0;display:grid;gap:2px}
+.adm-mitch-share-tools strong{color:#24494c;font-size:.9rem}
+.adm-mitch-share-tools small{color:#7a898b;font-size:.76rem;line-height:1.35}
+.adm-mitch-pending{margin:0 0 14px;padding:12px;border:1px solid #edd6aa;border-radius:16px;background:#fffaf0}
+.adm-mitch-pending__head{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px;color:#805a18}
+.adm-mitch-pending__head span{min-width:25px;height:25px;border-radius:999px;display:grid;place-items:center;background:#f2dfb5;font-weight:800;font-size:.8rem}
+.adm-mitch-update{padding:12px;border-radius:13px;background:#fff;border:1px solid #eee4cf}
+.adm-mitch-update+.adm-mitch-update{margin-top:8px}
+.adm-mitch-update p{white-space:pre-wrap;overflow-wrap:anywhere;margin:8px 0 10px}
+.adm-mitch-update__meta{display:flex;align-items:center;gap:5px;color:#7c8586;font-size:.76rem}
+.adm-mitch-update__meta svg{width:15px;height:15px}
+.adm-mitch-update__photos{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin:8px 0 10px}
+.adm-mitch-update__photos img{display:block;width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:10px;border:1px solid #e4e8e8}
+.adm-mitch-update__photos--history{max-width:420px}
+.adm-hist__ent{min-width:0;overflow-wrap:anywhere}
+
+@media(max-width:719px){
+  .adm-content-head{gap:10px}
+  .adm-content-actions{width:100%;justify-content:stretch}
+  .adm-content-actions .btn{flex:1 1 auto;justify-content:center}
+  .adm-item__head{align-items:flex-start;flex-wrap:wrap}
+  .adm-item__head .adm-item__actions{width:100%;justify-content:flex-end}
+  .adm-fields--2{grid-template-columns:minmax(0,1fr)!important}
+  .adm-fields .span-2{grid-column:auto!important}
+  .adm-role-option{width:100%}
+  .adm-table-wrap{max-width:100vw}
+  .adm-mitch-share-tools{align-items:stretch;flex-direction:column}
+  .adm-mitch-share-tools .btn{width:100%;justify-content:center}
+  .adm-mitch-update__photos{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+
+/* Legacy sticky save bar should never cover content on mobile. */
+@media(max-width:959px){
+  .adm-savebar{position:static!important;bottom:auto!important}
+}
