@@ -170,9 +170,10 @@ export function monthStats(rows, today = israelToday()) {
   let stageChanges = 0;
   let contacts = 0;
   for (const m of rows) {
-    if (String(m.stageChangedAt || "").startsWith(month)) stageChanges++;
     for (const e of m.log || []) {
-      if (String(e.date || "").startsWith(month) && e.type !== "שינוי שלב") contacts++;
+      if (!String(e.date || "").startsWith(month)) continue;
+      if (e.type === "שינוי שלב") stageChanges++;
+      else contacts++;
     }
   }
   return {
