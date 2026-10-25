@@ -14,6 +14,19 @@ export const DEFAULT_ATTENTION = {
   missedMeetings: 3,
 };
 
+export const DEFAULT_WHATSAPP_TEMPLATES = {
+  kollel: [
+    "שלום {שם}, מה שלומך? רציתי לשמוע איך אתה מתקדם.",
+    "שלום {שם}, נשמח לראות אותך במפגש הקרוב.",
+    "שלום {שם}, רק מזכיר שנדבר היום בעזרת ה׳.",
+  ],
+  bnot: [
+    "שלום {שם}, מה שלומך? רציתי לשמוע איך את מרגישה.",
+    "שלום {שם}, נשמח לראות אותך בפעילות הקרובה.",
+    "שלום {שם}, רק מזכירה שנדבר היום בעזרת ה׳.",
+  ],
+};
+
 const isoDay = (value) => String(value || "").slice(0, 10);
 const israelToday = () =>
   new Intl.DateTimeFormat("en-CA", {
@@ -35,6 +48,12 @@ const intIn = (value, fallback, min, max) => {
   return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback;
 };
 
+function cleanTemplates(value, fallback) {
+  if (!Array.isArray(value)) return fallback;
+  const rows = value.map((x) => String(x || "").trim().slice(0, 400)).filter(Boolean);
+  return rows.length ? [...new Set(rows)].slice(0, 12) : fallback;
+}
+
 function cleanStages(value, fallback) {
   if (!Array.isArray(value)) return fallback;
   const rows = value
@@ -53,6 +72,7 @@ export async function loadMitchConfig(store, domain) {
       stageDays: intIn(saved.attention?.stageDays, DEFAULT_ATTENTION.stageDays, 1, 730),
       missedMeetings: intIn(saved.attention?.missedMeetings, DEFAULT_ATTENTION.missedMeetings, 1, 12),
     },
+    whatsappTemplates: cleanTemplates(saved.whatsappTemplates, DEFAULT_WHATSAPP_TEMPLATES[domain]),
   };
 }
 
@@ -64,6 +84,7 @@ export function normalizeMitchConfig(domain, raw = {}) {
       stageDays: intIn(raw.attention?.stageDays, DEFAULT_ATTENTION.stageDays, 1, 730),
       missedMeetings: intIn(raw.attention?.missedMeetings, DEFAULT_ATTENTION.missedMeetings, 1, 12),
     },
+    whatsappTemplates: cleanTemplates(raw.whatsappTemplates, DEFAULT_WHATSAPP_TEMPLATES[domain]),
   };
 }
 
