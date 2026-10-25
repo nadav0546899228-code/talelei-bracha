@@ -4685,3 +4685,15 @@
 .adm-hub__text strong { font-size: 0.96rem !important; }
 .adm-hub__text small { font-size: 0.76rem !important; }
 .adm-hub__go { width: 15px !important; height: 15px !important; opacity: 0.4; }
+
+/* כפתורי וואטסאפ/חיוג בשורות - מתחת לטקסט, קטנים, בלי לכסות */
+.adm-swipe { position: relative; }
+.adm-row.adm-row--acts { padding-inline-end: 12px !important; padding-bottom: 46px !important; }
+.adm-swipe .adm-row__acts { position: absolute !important; top: auto !important; bottom: 8px !important; left: 12px !important; right: auto !important; transform: none !important; display: flex !important; gap: 6px !important; z-index: 2; }
+.adm-swipe .adm-row__acts .adm-ia, .adm-swipe .adm-row__acts .adm-icon-btn { width: 32px !important; height: 32px !important; min-width: 32px !important; }
+.adm-swipe .adm-row__acts .adm-ia svg, .adm-swipe .adm-row__acts .adm-icon-btn svg { width: 16px !important; height: 16px !important; }
+/* סיכום אישה לאישה - שורת מספרים דקה */
+.adm-isha-command { display: flex !important; flex-wrap: wrap !important; gap: 6px !important; margin-bottom: 10px !important; }
+.adm-isha-command > * { flex: 1 1 0 !important; min-width: 70px !important; min-height: 0 !important; padding: 6px 8px !important; border-radius: 12px !important; display: flex !important; flex-direction: column-reverse !important; align-items: center !important; gap: 0 !important; box-shadow: none !important; }
+.adm-isha-command > * strong { font-size: 1.1rem !important; line-height: 1.1; }
+.adm-isha-command > * span { font-size: 0.7rem !important; white-space: nowrap; }
