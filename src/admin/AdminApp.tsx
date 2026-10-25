@@ -265,7 +265,7 @@ export default function AdminApp() {
   const [barSorting, setBarSorting] = useState(false);
   const [draggingBarId, setDraggingBarId] = useState<string | null>(null);
   const barPressTimer = useRef<number | null>(null);
-  const barPress = useRef<{ id: string; x: number; y: number; pointerId: number; el: HTMLElement } | null>(null);
+  const barPress = useRef<{ id: string; x: number; y: number; lastX: number; lastY: number; pointerId: number; el: HTMLElement; panning: boolean } | null>(null);
   const suppressBarClick = useRef(false);
   const barScrollRef = useRef<HTMLDivElement>(null);
 
@@ -450,48 +450,72 @@ export default function AdminApp() {
     if (ev.pointerType === "mouse" && ev.button !== 0) return;
     clearBarTimer();
     suppressBarClick.current = false;
-    barPress.current = { id, x: ev.clientX, y: ev.clientY, pointerId: ev.pointerId, el: ev.currentTarget };
+    barPress.current = { id, x: ev.clientX, y: ev.clientY, lastX: ev.clientX, lastY: ev.clientY, pointerId: ev.pointerId, el: ev.currentTarget, panning: false };
+    try { ev.currentTarget.setPointerCapture(ev.pointerId); } catch { /* לא קריטי */ }
     barPressTimer.current = window.setTimeout(() => {
       const p = barPress.current;
-      if (!p || p.id !== id) return;
+      if (!p || p.id !== id || p.panning) return;
       suppressBarClick.current = true;
       setBarSorting(true);
       setDraggingBarId(id);
-      try { p.el.setPointerCapture(p.pointerId); } catch { /* לא קריטי */ }
       try { navigator.vibrate?.(18); } catch { /* לא קריטי */ }
     }, 420);
   };
   const barPointerMove = (ev: ReactPointerEvent<HTMLButtonElement>) => {
     const p = barPress.current;
     if (!p) return;
-    const distance = Math.hypot(ev.clientX - p.x, ev.clientY - p.y);
+    const dx = ev.clientX - p.lastX;
+    const totalX = ev.clientX - p.x;
+    const totalY = ev.clientY - p.y;
+    const distance = Math.hypot(totalX, totalY);
+    const tabs = barScrollRef.current;
+
     if (!draggingBarId) {
-      if (distance > 9) clearBarTimer();
+      // גרירה רגילה = הזזת הסרגל עצמו. מתחילים אחרי תנועה קטנה,
+      // ומבטלים את הלחיצה הארוכה כדי שלא תופעל בטעות בזמן גלילה.
+      if (distance > 6) {
+        p.panning = true;
+        clearBarTimer();
+        suppressBarClick.current = true;
+      }
+      if (p.panning && tabs) {
+        ev.preventDefault();
+        tabs.scrollBy({ left: -dx, behavior: "auto" });
+      }
+      p.lastX = ev.clientX;
+      p.lastY = ev.clientY;
       return;
     }
+
     ev.preventDefault();
-    const tabs = barScrollRef.current;
     if (tabs) {
       const rect = tabs.getBoundingClientRect();
-      if (ev.clientX < rect.left + 42) tabs.scrollBy({ left: -18 });
-      else if (ev.clientX > rect.right - 42) tabs.scrollBy({ left: 18 });
+      if (ev.clientX < rect.left + 54) tabs.scrollBy({ left: -26, behavior: "auto" });
+      else if (ev.clientX > rect.right - 54) tabs.scrollBy({ left: 26, behavior: "auto" });
     }
     const hit = document.elementFromPoint(ev.clientX, ev.clientY)?.closest<HTMLElement>("[data-bar-id]");
     const overId = hit?.dataset.barId;
-    if (!overId || overId === draggingBarId) return;
-    setBar((prev) => {
-      const from = prev.indexOf(draggingBarId);
-      const to = prev.indexOf(overId);
-      if (from < 0 || to < 0 || from === to) return prev;
-      const next = [...prev];
-      const [moved] = next.splice(from, 1);
-      next.splice(to, 0, moved);
-      saveBar(me, mode, next);
-      return next;
-    });
+    if (overId && overId !== draggingBarId) {
+      setBar((prev) => {
+        const from = prev.indexOf(draggingBarId);
+        const to = prev.indexOf(overId);
+        if (from < 0 || to < 0 || from === to) return prev;
+        const next = [...prev];
+        const [moved] = next.splice(from, 1);
+        next.splice(to, 0, moved);
+        saveBar(me, mode, next);
+        return next;
+      });
+    }
+    p.lastX = ev.clientX;
+    p.lastY = ev.clientY;
   };
-  const finishBarPress = () => {
+  const finishBarPress = (ev?: ReactPointerEvent<HTMLButtonElement>) => {
     clearBarTimer();
+    const p = barPress.current;
+    if (p && ev) {
+      try { ev.currentTarget.releasePointerCapture(p.pointerId); } catch { /* לא קריטי */ }
+    }
     barPress.current = null;
     setDraggingBarId(null);
     setBarSorting(false);
@@ -511,8 +535,8 @@ export default function AdminApp() {
             aria-label={barSorting ? `${e.label}, גרירה לשינוי מיקום` : e.label}
             onPointerDown={(ev) => barPointerDown(ev, e.id)}
             onPointerMove={barPointerMove}
-            onPointerUp={finishBarPress}
-            onPointerCancel={finishBarPress}
+            onPointerUp={(ev) => finishBarPress(ev)}
+            onPointerCancel={(ev) => finishBarPress(ev)}
             onContextMenu={(ev) => ev.preventDefault()}
             onClick={(ev) => {
               if (suppressBarClick.current) {
