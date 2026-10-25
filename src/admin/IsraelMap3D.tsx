@@ -22,12 +22,12 @@ const DEAD_SEA: [number, number][] = [[31.77, 35.48], [31.75, 35.56], [31.55, 35
 
 const K = 150; // פיקסלים למעלה
 const TILT = 0.84; // "השכבה" של המפה - כמו מבט מלמעלה בזווית
-const PAD_X = 24;
+const PAD_X = 64; // רווח בצדדים לשמות הערים
 const PAD_TOP = 64; // מקום לעמודות הגבוהות בצפון
 const proj = (lat: number, lng: number) => ({ x: PAD_X + (lng - 34.15) * 0.853 * K, y: PAD_TOP + (33.45 - lat) * K * TILT });
 const pathOf = (pts: [number, number][]) => pts.map(([la, ln], i) => { const p = proj(la, ln); return `${i ? "L" : "M"}${p.x.toFixed(1)} ${p.y.toFixed(1)}`; }).join(" ") + " Z";
 
-const W = PAD_X * 2 + 1.8 * 0.853 * K;
+const W = PAD_X * 2 + 1.8 * 0.853 * K - 20;
 const H = PAD_TOP + 4.1 * K * TILT + 40;
 const DEPTH = 14;
 
@@ -38,6 +38,23 @@ export function IsraelMap3D({ pins, active, onPick }: { pins: Pin[]; active: str
   const max = Math.max(1, ...pins.map((p) => p.count));
   // מציירים מהרחוק (צפון) לקרוב (דרום) כדי שעמודות יכסו נכון
   const sorted = [...pins].sort((a, b) => b.lat - a.lat);
+
+  // שמות הערים בשני טורים בצדדים (ים / מזרח), מסודרים לפי גובה, עם קו חיבור לעמודה
+  const labels = useMemo(() => {
+    const pts = pins.map((p) => ({ p, ...proj(p.lat, p.lng) })).sort((a, b) => a.x - b.x);
+    const mid = pts.length ? pts[Math.floor(pts.length / 2)].x : 0;
+    const place = (arr: typeof pts, side: "w" | "e") => {
+      const sorted = [...arr].sort((a, b) => a.y - b.y);
+      const GAP = 15;
+      let last = -1e9;
+      return sorted.map((o) => {
+        const ly = Math.max(o.y, last + GAP);
+        last = ly;
+        return { ...o, ly, side };
+      });
+    };
+    return [...place(pts.filter((o) => o.x < mid), "w"), ...place(pts.filter((o) => o.x >= mid), "e")];
+  }, [pins]);
 
   return (
     <svg className="adm-map3d" viewBox={`0 0 ${W.toFixed(0)} ${H.toFixed(0)}`} role="img" aria-label="מפת ישראל - פעילות לפי עיר">
@@ -76,7 +93,7 @@ export function IsraelMap3D({ pins, active, onPick }: { pins: Pin[]; active: str
 
       {/* הים */}
       <rect x="0" y="0" width={W * 0.55} height={H} fill="url(#m3dSea)" />
-      <text x={PAD_X + 34} y={PAD_TOP + 2.3 * K * TILT} textAnchor="middle" className="adm-map3d__sea">הים התיכון</text>
+      <text x={PAD_X - 6} y={H - 90} textAnchor="middle" className="adm-map3d__sea">הים התיכון</text>
 
       {/* צל על "השולחן" */}
       <ellipse cx={W * 0.5} cy={H - 26} rx={W * 0.32} ry={18} fill="url(#m3dShadow)" />
@@ -90,6 +107,20 @@ export function IsraelMap3D({ pins, active, onPick }: { pins: Pin[]; active: str
       <path d={land} fill="none" stroke="#8fbdb6" strokeWidth="0.8" strokeLinejoin="round" />
       <path d={kin} fill="#9fd3e3" stroke="#6fb3c9" strokeWidth="0.8" />
       <path d={dead} fill="#a9d7e6" stroke="#79b8cc" strokeWidth="0.8" />
+
+      {/* שמות הערים בצדדים */}
+      <g className="adm-map3d__labels">
+        {labels.map(({ p, x, y, ly, side }) => {
+          const lx = side === "w" ? 6 : W - 6;
+          const ax = side === "w" ? lx + Math.min(46, p.city.length * 5.4 + 4) : lx - Math.min(46, p.city.length * 5.4 + 4);
+          return (
+            <g key={`l-${p.city}`} className={active === p.city ? "is-on" : ""} onClick={() => onPick(p.city)} role="button" aria-label={p.city}>
+              <polyline points={`${ax},${ly - 3} ${side === "w" ? ax + 6 : ax - 6},${ly - 3} ${x},${y - 3}`} className="adm-map3d__lead" />
+              <text x={lx} y={ly} textAnchor={side === "w" ? "end" : "start"} className="adm-map3d__lbl">{p.city}</text>
+            </g>
+          );
+        })}
+      </g>
 
       {/* עמודות פעילות */}
       {sorted.map((p) => {
@@ -112,7 +143,6 @@ export function IsraelMap3D({ pins, active, onPick }: { pins: Pin[]; active: str
               <ellipse cx={x} cy={y} rx={w / 2} ry={w * 0.22} fill={p.boys ? "#0a5a5d" : "#7a0f37"} />
               <text x={x} y={y - h - 4} className="adm-map3d__num">{p.count}</text>
             </g>
-            {on || p.count === max ? <text x={x} y={y + 13} className="adm-map3d__city">{p.city}</text> : null}
             <rect x={x - 10} y={y - h - 14} width="20" height={h + 20} fill="transparent" />
           </g>
         );
