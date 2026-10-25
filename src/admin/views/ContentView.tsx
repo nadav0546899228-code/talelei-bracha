@@ -326,7 +326,6 @@ export function ContentView() {
       <div className="adm-head">
         <div>
           <h1>תוכן האתר</h1>
-          <p>כל מה שמופיע באתר הציבורי ואפשר לעדכן בלי מתכנת. אין להזין מידע שלא אושר.</p>
         </div>
         <a className="btn btn--ghost btn--sm" href="/" target="_blank" rel="noopener noreferrer">
           <Icon name="eye" />
