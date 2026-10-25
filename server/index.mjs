@@ -1152,7 +1152,39 @@ async function isFile(p) {
   }
 }
 
+/** אפליקציית הניהול: אייקון ושם לפי ההרשאות של מי שמחובר (משולב / טללי ברכה / בנות צילה) */
+async function appBrand(req) {
+  try {
+    const s = readSession(req);
+    const u = s ? await resolveUser(s.email) : null;
+    if (!u) return "combined";
+    const k = u.views.includes("kollel") || u.views.includes("payroll");
+    const b = u.views.includes("bnot") || u.views.includes("isha");
+    return k && b ? "combined" : b ? "bnot" : k ? "kollel" : "combined";
+  } catch {
+    return "combined";
+  }
+}
+const APP_NAMES = {
+  combined: { name: "טללי ברכה · בנות צילה", short: "טללי ברכה" },
+  kollel: { name: "קרן טללי ברכה", short: "טללי ברכה" },
+  bnot: { name: "בנות צילה", short: "בנות צילה" },
+};
+
 async function serveStatic(req, res, url) {
+  if (url.pathname === "/admin.webmanifest") {
+    const brand = await appBrand(req);
+    const m = JSON.parse(await readFile(join(ROOT, "admin.webmanifest"), "utf8"));
+    m.name = APP_NAMES[brand].name + (IS_PROD ? "" : " - פיתוח");
+    m.short_name = APP_NAMES[brand].short + (IS_PROD ? "" : " - פיתוח");
+    m.theme_color = brand === "bnot" ? "#7a1f4a" : "#0E5A60";
+    m.icons = [
+      { src: `/brand/app-${brand}-192.png`, sizes: "192x192", type: "image/png", purpose: "any" },
+      { src: `/brand/app-${brand}-512.png`, sizes: "512x512", type: "image/png", purpose: "any" },
+    ];
+    res.writeHead(200, { "Content-Type": TYPES[".webmanifest"], "Cache-Control": "no-cache", ...SECURITY });
+    return res.end(JSON.stringify(m));
+  }
   const safe = normalize(decodeURIComponent(url.pathname)).replace(/^(\.\.[/\\])+/, "");
   let file = join(ROOT, safe);
   if (!file.startsWith(ROOT) || !(await isFile(file))) {
@@ -1163,7 +1195,7 @@ async function serveStatic(req, res, url) {
     file = join(ROOT, "index.html"); // ניתוב SPA
   }
   // באתר הפיתוח: שם נפרד לאפליקציה המותקנת
-  if (!IS_PROD && (url.pathname === "/manifest.webmanifest" || url.pathname === "/admin.webmanifest")) {
+  if (!IS_PROD && url.pathname === "/manifest.webmanifest") {
     try {
       const m = JSON.parse(await readFile(join(ROOT, url.pathname.slice(1)), "utf8"));
       m.name = `${m.name} - אתר פיתוח`;
@@ -1182,7 +1214,10 @@ async function serveStatic(req, res, url) {
   }
   // מערכת הניהול: מניפסט משלה, כדי שהאפליקציה המותקנת תיפתח ישר למערכת
   if (file === join(ROOT, "index.html") && (url.pathname === "/admin" || url.pathname.startsWith("/admin/"))) {
-    const html = (await readFile(file, "utf8")).replace('href="/manifest.webmanifest"', 'href="/admin.webmanifest"');
+    const brand = await appBrand(req);
+    const html = (await readFile(file, "utf8"))
+      .replace('href="/manifest.webmanifest"', 'href="/admin.webmanifest"')
+      .replace('href="/brand/icon-180.png"', `href="/brand/app-${brand}-180.png"`);
     res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache", "X-Robots-Tag": "noindex, nofollow", ...SECURITY });
     return res.end(html);
   }

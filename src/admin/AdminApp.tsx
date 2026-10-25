@@ -214,6 +214,14 @@ function screenFromUrl(): Screen {
 
 type DisplayMode = "auto" | "desktop" | "mobile";
 
+/** איזה אייקון אפליקציה מתאים להרשאות (כמו בשרת) */
+function appBrandOf(me: Me | null): "combined" | "kollel" | "bnot" {
+  const v = (me?.account ?? me?.user)?.views ?? [];
+  const k = v.includes("kollel") || v.includes("payroll");
+  const b = v.includes("bnot") || v.includes("isha");
+  return k && b ? "combined" : b ? "bnot" : k ? "kollel" : "combined";
+}
+
 function loadDisplayMode(userId: string): DisplayMode {
   try {
     const value = localStorage.getItem(`tb-display-mode:${userId}`);
@@ -270,13 +278,21 @@ export default function AdminApp() {
   const appInst = useInstall();
   const [instHide, setInstHide] = useState(() => {
     try {
-      return localStorage.getItem("tb-inst-hide") === "1";
+      return localStorage.getItem("tb-inst-sheet") === "1";
     } catch {
       return false;
     }
   });
   const [instHelp, setInstHelp] = useState<string | null>(null);
-  const shownDisplay: DisplayMode = narrow && displayMode === "desktop" ? "auto" : displayMode;
+  const hideInstall = () => {
+    setInstHide(true);
+    try {
+      localStorage.setItem("tb-inst-sheet", "1");
+    } catch {
+      /* לא נשמר */
+    }
+  };
+  const shownDisplay: DisplayMode = displayMode;
 
   const [barSorting, setBarSorting] = useState(false);
   const [draggingBarId, setDraggingBarId] = useState<string | null>(null);
@@ -284,7 +300,25 @@ export default function AdminApp() {
   const barPress = useRef<{ id: string; x: number; y: number; lastX: number; lastY: number; pointerId: number; el: HTMLElement; panning: boolean } | null>(null);
   const suppressBarClick = useRef(false);
   const barScrollRef = useRef<HTMLDivElement>(null);
-  const barGrip = useRef<{ pointerId: number; lastX: number; el: HTMLElement } | null>(null);
+  const barGrip = useRef<{ pointerId: number; x: number; y: number; moved: boolean } | null>(null);
+  // הצמדת הסרגל: למטה / לצד ימין / לצד שמאל (נשמר במכשיר)
+  const [dock, setDock] = useState<"bottom" | "right" | "left">(() => {
+    try {
+      const v = localStorage.getItem("tb-dock");
+      return v === "right" || v === "left" ? v : "bottom";
+    } catch {
+      return "bottom";
+    }
+  });
+  const [dockPreview, setDockPreview] = useState<"bottom" | "right" | "left" | null>(null);
+  const saveDock = (d: "bottom" | "right" | "left") => {
+    setDock(d);
+    try {
+      localStorage.setItem("tb-dock", d);
+    } catch {
+      /* לא נשמר */
+    }
+  };
 
   const loadMe = useCallback(async () => {
     try {
@@ -497,7 +531,8 @@ export default function AdminApp() {
       }
       if (p.panning && tabs) {
         ev.preventDefault();
-        tabs.scrollBy({ left: -dx, behavior: "auto" });
+        if (dock === "bottom") tabs.scrollBy({ left: -dx, behavior: "auto" });
+        else tabs.scrollBy({ top: -(ev.clientY - p.lastY), behavior: "auto" });
       }
       p.lastX = ev.clientX;
       p.lastY = ev.clientY;
@@ -537,26 +572,36 @@ export default function AdminApp() {
     setDraggingBarId(null);
     setBarSorting(false);
   };
+  // גרירת שש הנקודות: הסרגל זז עם האצבע ונצמד לצד הקרוב (ימין / שמאל / למטה). לחיצה בלי גרירה מחליפה צד.
+  const dockFor = (x: number, y: number): "bottom" | "right" | "left" => {
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    if (y > h * 0.78 && x > w * 0.22 && x < w * 0.78) return "bottom";
+    if (x < w * 0.35) return "left";
+    if (x > w * 0.65) return "right";
+    return "bottom";
+  };
   const gripPointerDown = (ev: ReactPointerEvent<HTMLButtonElement>) => {
     if (ev.pointerType === "mouse" && ev.button !== 0) return;
-    barGrip.current = { pointerId: ev.pointerId, lastX: ev.clientX, el: ev.currentTarget };
+    barGrip.current = { pointerId: ev.pointerId, x: ev.clientX, y: ev.clientY, moved: false };
     try { ev.currentTarget.setPointerCapture(ev.pointerId); } catch { /* לא קריטי */ }
   };
   const gripPointerMove = (ev: ReactPointerEvent<HTMLButtonElement>) => {
     const g = barGrip.current;
-    const tabs = barScrollRef.current;
-    if (!g || !tabs) return;
+    if (!g) return;
     ev.preventDefault();
-    const dx = ev.clientX - g.lastX;
-    tabs.scrollBy({ left: -dx * 1.35, behavior: "auto" });
-    g.lastX = ev.clientX;
+    if (!g.moved && Math.hypot(ev.clientX - g.x, ev.clientY - g.y) > 10) g.moved = true;
+    if (g.moved) setDockPreview(dockFor(ev.clientX, ev.clientY));
   };
   const gripPointerEnd = (ev: ReactPointerEvent<HTMLButtonElement>) => {
     const g = barGrip.current;
     if (g) {
       try { ev.currentTarget.releasePointerCapture(g.pointerId); } catch { /* לא קריטי */ }
+      if (g.moved) saveDock(dockFor(ev.clientX, ev.clientY));
+      else saveDock(dock === "bottom" ? "right" : dock === "right" ? "left" : "bottom");
     }
     barGrip.current = null;
+    setDockPreview(null);
   };
 
   const barNav = (
@@ -630,6 +675,7 @@ export default function AdminApp() {
 
   const openImpersonate = () => setAsOpen(true);
   const stopImpersonate = async () => {
+    try { localStorage.removeItem("tb-active-org-scope"); } catch { /* לא זמין */ }
     await post("/api/auth/stop-impersonate", {}).catch(() => undefined);
     setSubs(null);
     await loadMe();
@@ -662,7 +708,7 @@ export default function AdminApp() {
   const unreadMessages = dash.active.find((a) => a.id === "msgs")?.count ?? 0;
 
   return (
-    <div className="adm" data-mode={mode} data-display={shownDisplay}>
+    <div className="adm" data-mode={mode} data-display={shownDisplay} data-dock={dock}>
       <header className="adm-top">
         <button type="button" className="adm-icon-btn adm-top-menu-btn" onClick={() => setAppMenuOpen(true)} aria-label="פתיחת תפריט המערכת" title="תפריט המערכת">
           <Icon name="menu" />
@@ -685,13 +731,15 @@ export default function AdminApp() {
           {me.canImpersonate ? (
             <button
               type="button"
-              className={`adm-viewbtn${by ? " is-as" : ""}`}
+              className="adm-viewbtn"
               onClick={() => setAsOpen(true)}
-              aria-label={`מצב תצוגה: ${viewName}. מעבר תצוגה`}
+              aria-label={`תצוגה: ${viewName}. מעבר תצוגה`}
               title="מעבר תצוגה"
             >
-              <Icon name="eye" />
-              <span>{viewName}</span>
+              <span className="adm-viewbtn__txt">
+                <small>תצוגה</small>
+                <b>{viewName}</b>
+              </span>
               <Icon name="chevronDown" />
             </button>
           ) : null}
@@ -835,37 +883,38 @@ export default function AdminApp() {
           </div>
         </aside>
         <main className="adm-main" id="main" tabIndex={-1}>
-          {narrow && !appInst.installed && !instHide ? (
-            <div className="adm-install">
-              <Icon name="smartphone" />
-              <span>{instHelp || "להתקין כאפליקציה?"}</span>
-              {!instHelp ? (
-                <button
-                  type="button"
-                  className="adm-install__go"
-                  onClick={async () => {
-                    const r = await appInst.install();
-                    if (r === "manual") setInstHelp(appInst.manualText);
-                  }}
-                >
-                  התקנה
-                </button>
-              ) : null}
-              <button
-                type="button"
-                className="adm-install__x"
-                aria-label="סגירה"
-                onClick={() => {
-                  setInstHide(true);
-                  try {
-                    localStorage.setItem("tb-inst-hide", "1");
-                  } catch {
-                    /* לא נשמר */
-                  }
-                }}
-              >
-                <Icon name="close" width={16} height={16} />
-              </button>
+          {narrow && !guideOpen && !appInst.installed && !instHide ? (
+            <div className="adm-instsheet" role="dialog" aria-label="התקנת האפליקציה">
+              <div className="adm-instsheet__card">
+                <img className="adm-instsheet__icon" src={`/brand/app-${appBrandOf(me)}-192.png`} alt="" />
+                <h2>התקנת האפליקציה</h2>
+                <p>אייקון במסך הבית, נפתח ישר למערכת - בלי לחפש בדפדפן.</p>
+                {instHelp ? (
+                  <ol className="adm-instsheet__steps">
+                    {instHelp.split("←").map((x, i) => (
+                      <li key={i}>{x.trim()}</li>
+                    ))}
+                  </ol>
+                ) : null}
+                <div className="adm-instsheet__btns">
+                  {!instHelp ? (
+                    <button
+                      type="button"
+                      className="adm-instsheet__go"
+                      onClick={async () => {
+                        const r = await appInst.install();
+                        if (r === "manual") setInstHelp(appInst.manualText);
+                        else hideInstall();
+                      }}
+                    >
+                      <Icon name="download" /> התקנה
+                    </button>
+                  ) : null}
+                  <button type="button" className="adm-instsheet__later" onClick={hideInstall}>
+                    {instHelp ? "הבנתי" : "לא עכשיו"}
+                  </button>
+                </div>
+              </div>
             </div>
           ) : null}
           {"hub" in current ? (
@@ -900,8 +949,8 @@ export default function AdminApp() {
         <button
           type="button"
           className="adm-bar-grip"
-          aria-label="גרירת סרגל הניווט לצדדים"
-          title="גרירה לצדדים"
+          aria-label="הצמדת הסרגל לצד המסך - גרירה או לחיצה"
+          title="גרירה לצד המסך"
           onPointerDown={gripPointerDown}
           onPointerMove={gripPointerMove}
           onPointerUp={gripPointerEnd}
@@ -912,6 +961,7 @@ export default function AdminApp() {
           </span>
         </button>
       </div>
+      {dockPreview ? <div className={`adm-dock-ghost adm-dock-ghost--${dockPreview}`} aria-hidden="true" /> : null}
       {searchOpen ? <SearchModal initialQuery={searchSeed} onClose={() => { setSearchOpen(false); setSearchSeed(""); }} onGo={go} /> : null}
       {profileOpen ? (
         <Profile
@@ -928,7 +978,6 @@ export default function AdminApp() {
             setCodeOpen(true);
           }}
           displayMode={shownDisplay}
-          narrow={narrow}
           onDisplayMode={setPreferredDisplay}
           onGuide={() => {
             setProfileOpen(false);
@@ -978,7 +1027,6 @@ function Profile({
   onViews,
   displayMode,
   onDisplayMode,
-  narrow,
 }: {
   me: Me;
   alerts: Alert[];
@@ -991,7 +1039,6 @@ function Profile({
   onViews?: () => void;
   displayMode: DisplayMode;
   onDisplayMode: (mode: DisplayMode) => void;
-  narrow: boolean;
 }) {
   const inst = useInstall();
   const [instMsg, setInstMsg] = useState<string | null>(null);
@@ -1084,11 +1131,9 @@ function Profile({
             <button type="button" role="radio" aria-checked={displayMode === "auto"} className={displayMode === "auto" ? "is-active" : ""} onClick={() => onDisplayMode("auto")}>
               <Icon name="refresh" /><span>אוטומטי</span>
             </button>
-            {!narrow ? (
-              <button type="button" role="radio" aria-checked={displayMode === "desktop"} className={displayMode === "desktop" ? "is-active" : ""} onClick={() => onDisplayMode("desktop")}>
-                <Icon name="monitor" /><span>מחשב</span>
-              </button>
-            ) : null}
+            <button type="button" role="radio" aria-checked={displayMode === "desktop"} className={displayMode === "desktop" ? "is-active" : ""} onClick={() => onDisplayMode("desktop")}>
+              <Icon name="monitor" /><span>מחשב</span>
+            </button>
             <button type="button" role="radio" aria-checked={displayMode === "mobile"} className={displayMode === "mobile" ? "is-active" : ""} onClick={() => onDisplayMode("mobile")}>
               <Icon name="smartphone" /><span>פלאפון</span>
             </button>

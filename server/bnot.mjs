@@ -19,9 +19,15 @@ export async function handleBnot(req, res, url, ctx) {
   const ids = new Set(branches.map((b) => b.id));
   const cities = org.cities.filter((c) => c.domain === "bnot" && (scope === null || branches.some((b) => b.parentId === c.id)));
   const inScope = (x) => ids.has(x.branchId);
+  // טלפנית: רואה גם משתתפות שהוקצו אליה, גם אם הן מסניף או מעיר אחרים
+  const assigned = new Set();
+  if (user.roles.includes("bnot_caller") && user.subId) {
+    for (const a of await store.list("callerAssignments", 30000)) if (a.active !== false && a.callerId === user.subId) assigned.add(a.memberId);
+  }
+  const memberInScope = (m) => inScope(m) || assigned.has(m.id);
 
   if (pathname === "/api/bnot/overview" && method === "GET") {
-    const members = (await store.list("bnotMembers", 20000)).filter(inScope).sort((a, b) => String(a.name).localeCompare(String(b.name), "he"));
+    const members = (await store.list("bnotMembers", 20000)).filter(memberInScope).sort((a, b) => String(a.name).localeCompare(String(b.name), "he"));
     const activities = (await store.list("bnotActivities", 2000)).filter(inScope).sort((a, b) => String(b.date).localeCompare(String(a.date)));
     return send(200, { cities, branches, members, activities }), true;
   }
@@ -31,10 +37,11 @@ export async function handleBnot(req, res, url, ctx) {
     const name = clean(b.name, 80).trim();
     if (!name) return send(400, { error: "חסר שם" }), true;
     const branchId = String(b.branchId || "");
-    if (!ids.has(branchId)) return send(400, { error: "יש לבחור סניף" }), true;
     const id = b.id ? String(b.id) : randomUUID();
     const prev = await store.get("bnotMembers", id);
-    if (prev && !inScope(prev)) return send(403, { error: "אין הרשאה" }), true;
+    if (prev && !memberInScope(prev)) return send(403, { error: "אין הרשאה" }), true;
+    const keepsOwnBranch = prev && assigned.has(prev.id) && prev.branchId === branchId;
+    if (!ids.has(branchId) && !keepsOwnBranch) return send(400, { error: "יש לבחור סניף" }), true;
     await store.put("bnotMembers", id, { name, phone: normalizePhone(b.phone), branchId, active: b.active !== false, notes: clean(b.notes, 500) });
     await audit(user, prev ? "עדכון משתתפת" : "הוספת משתתפת", name);
     return send(200, { ok: true, id }), true;

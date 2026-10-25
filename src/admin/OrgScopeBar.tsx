@@ -34,12 +34,48 @@ export function OrgScopeBar({me,mode}:{me:Me;mode:Mode}){
   const selectedBranchId=current?.level==="branch"?current.id:"";
 
   const canNational=me.user.roles.some((r)=>["developer","ceo","chief_coordinator"].includes(r));
+  // מאיזו רמה מותר לבחור: רק מהרמה של המשתמש ומטה (רכז עיר - רק סניפים בעיר שלו וכו׳)
+  const myScope=me.user.scope?.[domain]||{};
+  const roleLevel=canNational?"national":
+    me.user.roles.includes(`${domain}_region` as never)&&myScope.regionId?"region":
+    me.user.roles.includes(`${domain}_city` as never)&&myScope.cityId?"city":"none";
   const set=(next:Active[Domain]|undefined)=>{
     const all={...active};
     if(next) all[domain]=next; else delete all[domain];
     setActive(all);saveActive(all);
   };
   if(!org||(!regions.length&&!cities.length&&!branches.length)) return null;
+  // מנהל/ת סניף, טלפנית ושאר התפקידים בלי רמה מעל - אין מה לבחור
+  if(roleLevel==="none") return null;
+
+  if(roleLevel!=="national"){
+    const fixedRegionId=roleLevel==="region"?String(myScope.regionId):"";
+    const fixedCityId=roleLevel==="city"?String(myScope.cityId):"";
+    const topName=roleLevel==="region"?regions.find((x)=>x.id===fixedRegionId)?.name||"האזור שלי":cities.find((x)=>x.id===fixedCityId)?.name||"העיר שלי";
+    const cityVal=roleLevel==="city"?fixedCityId:selectedCityId;
+    return <div className="adm-orgscope" aria-label="רמת הצפייה במערכת">
+      <span className="adm-orgscope__label"><Icon name="grid"/><span>רמת צפייה</span></span>
+      <div className="adm-orgscope__crumbs">
+        <button type="button" className={!current?"is-active":""} onClick={()=>set(undefined)}>
+          <Icon name="pin"/>{topName}
+        </button>
+        {roleLevel==="region"?<>
+          <Icon name="arrowLeft" className="adm-orgscope__sep"/>
+          <select className={selectedCityId?"is-active":""} aria-label="עיר" value={selectedCityId}
+            onChange={(e)=>set(e.target.value?{level:"city",id:e.target.value}:undefined)}>
+            <option value="">עיר</option>
+            {cities.filter((x)=>x.parentId===fixedRegionId).map((x)=><option key={x.id} value={x.id}>{x.name}</option>)}
+          </select>
+        </>:null}
+        <Icon name="arrowLeft" className="adm-orgscope__sep"/>
+        <select className={selectedBranchId?"is-active":""} aria-label="סניף" value={selectedBranchId} disabled={!cityVal}
+          onChange={(e)=>set(e.target.value?{level:"branch",id:e.target.value}:roleLevel==="region"&&cityVal?{level:"city",id:cityVal}:undefined)}>
+          <option value="">סניף</option>
+          {branches.filter((x)=>x.parentId===cityVal).map((x)=><option key={x.id} value={x.id}>{x.name}</option>)}
+        </select>
+      </div>
+    </div>;
+  }
 
   return <div className="adm-orgscope" aria-label="רמת הצפייה במערכת">
     <span className="adm-orgscope__label"><Icon name="grid"/><span>רמת צפייה</span></span>

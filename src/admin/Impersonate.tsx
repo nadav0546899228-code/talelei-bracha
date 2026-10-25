@@ -12,6 +12,7 @@ const ORDER: Role[] = ["ceo", "chief_coordinator", "kollel_city", "kollel_branch
 
 /** כניסה בשם משתמש/תפקיד ורענון */
 export async function enterAs(id: string) {
+  try { localStorage.removeItem("tb-active-org-scope"); } catch { /* לא זמין */ }
   await post("/api/auth/impersonate", { id });
   window.location.href = "/admin";
 }
@@ -29,7 +30,8 @@ export function ImpersonateModal({ onClose, onSwitched, current, onBack, backLab
 
   const go = async (id: string) => {
     try {
-      await post("/api/auth/impersonate", { id });
+      try { localStorage.removeItem("tb-active-org-scope"); } catch { /* לא זמין */ }
+  await post("/api/auth/impersonate", { id });
       onSwitched();
     } catch (e) {
       setErr(e instanceof Error ? e.message : "שגיאה");
