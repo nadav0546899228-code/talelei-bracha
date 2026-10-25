@@ -72,7 +72,7 @@ if (DEMO && !(await store.list("avrechim", 1)).length) {
 
 /* ---- עדכונים בזמן אמת (Server-Sent Events): כל שינוי נתונים מודיע לכל המחוברים איזה אוסף השתנה */
 const liveClients = new Set();
-const QUIET = new Set(["audit"]); // לא מודיעים על רישומי יומן
+const QUIET = new Set(["audit", "mitchTransfers"]); // לא מודיעים על רישומי יומן
 function notifyChange(collection) {
   if (QUIET.has(collection)) return;
   const msg = `data: ${JSON.stringify({ c: collection })}\n\n`;
@@ -257,7 +257,7 @@ const BACKUP_COLLECTIONS = [
   "users", "phoneUsers", "submissions", "content", "avrechim", "kollelEntries", "kollelMonths", "kollelSettings", "kollelAttendance",
   "orgUnits", "contacts", "broadcasts", "settings", "messages", "bnotMembers", "bnotActivities", "pushSubs",
   "kollelMonthStatus", "bcTemplates", "bcScheduled", "donations", "avrechFiles", "mitchazkim", "challahEvents", "mitchAccess", "mitchUpdates",
-  "smartTasks", "callerAssignments",
+  "smartTasks", "callerAssignments", "mitchTransfers",
 ];
 async function makeBackup(reason, byName = "מערכת") {
   const data = {};
