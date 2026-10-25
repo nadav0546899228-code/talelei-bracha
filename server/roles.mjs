@@ -5,10 +5,11 @@
  *   מנכ״ל ← רכז ראשי (מעל כל הרכזים) ← רכז עיר ← מנהל סניף ← אברכים
  */
 
-export const VIEWS = ["dashboard", "messages", "isha", "bnot", "inquiries", "kollel", "payroll", "reports", "org", "broadcast", "donations", "content", "users", "audit", "developer"];
+export const VIEWS = ["dashboard", "activity", "messages", "isha", "bnot", "inquiries", "kollel", "payroll", "reports", "org", "broadcast", "donations", "content", "users", "audit", "developer"];
 
 export const VIEW_LABELS = {
   dashboard: "לוח בקרה",
+  activity: "לוח פעילות ארצי",
   messages: "הודעות",
   bnot: "סניפי בנות צילה",
   reports: "דוחות",
@@ -28,14 +29,14 @@ export const VIEW_LABELS = {
 export const ROLES = {
   developer: { label: "מתכנת", views: VIEWS },
   ceo: { label: "מנכ״ל", views: VIEWS.filter((v) => v !== "developer" && v !== "audit") },
-  chief_coordinator: { label: "רכז ראשי", views: ["dashboard", "messages", "kollel", "payroll", "reports", "isha", "bnot", "org", "broadcast"] },
-  kollel_city: { label: "רכז עיר - כולל ערב", views: ["dashboard", "messages", "kollel", "org", "broadcast"] },
-  kollel_branch: { label: "מנהל סניף - כולל ערב", views: ["dashboard", "messages", "kollel", "broadcast"] },
-  bnot_city: { label: "רכזת עיר - בנות צילה", views: ["dashboard", "messages", "isha", "bnot", "org", "broadcast"] },
-  bnot_branch: { label: "מנהלת סניף - בנות צילה", views: ["dashboard", "messages", "bnot", "broadcast"] },
-  isha_coordinator: { label: "רכזת אישה לאישה", views: ["dashboard", "messages", "isha", "broadcast"] },
-  office: { label: "משרד ופניות", views: ["dashboard", "messages", "inquiries", "broadcast", "donations"] },
-  content_editor: { label: "עריכת תוכן", views: ["dashboard", "messages", "content"] },
+  chief_coordinator: { label: "רכז ראשי", views: ["dashboard", "activity", "messages", "kollel", "payroll", "reports", "isha", "bnot", "org", "broadcast"] },
+  kollel_city: { label: "רכז עיר - כולל ערב", views: ["dashboard", "activity", "messages", "kollel", "org", "broadcast"] },
+  kollel_branch: { label: "מנהל סניף - כולל ערב", views: ["dashboard", "activity", "messages", "kollel", "broadcast"] },
+  bnot_city: { label: "רכזת עיר - בנות צילה", views: ["dashboard", "activity", "messages", "isha", "bnot", "org", "broadcast"] },
+  bnot_branch: { label: "מנהלת סניף - בנות צילה", views: ["dashboard", "activity", "messages", "bnot", "broadcast"] },
+  isha_coordinator: { label: "רכזת אישה לאישה", views: ["dashboard", "activity", "messages", "isha", "broadcast"] },
+  office: { label: "משרד ופניות", views: ["dashboard", "activity", "messages", "inquiries", "broadcast", "donations"] },
+  content_editor: { label: "עריכת תוכן", views: ["dashboard", "activity", "messages", "content"] },
 };
 
 /** תפקידים שמשויכים לעיר או לסניף */
