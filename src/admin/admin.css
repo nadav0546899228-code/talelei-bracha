@@ -4203,3 +4203,21 @@
   .adm-field-wall__grid { grid-template-columns: 1fr; }
   .adm-field-wall__cover { height: 190px; }
 }
+
+
+.adm-mitch-wa-tools {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) minmax(220px, 2fr) auto;
+  align-items: end;
+  gap: 10px;
+  padding: 12px;
+  margin: 10px 0;
+  border: 1px solid #cae8dc;
+  background: #f3fbf7;
+  border-radius: 14px;
+}
+.adm-mitch-wa-tools > div { display: grid; gap: 2px; }
+.adm-mitch-wa-tools small { color: var(--adm-muted, #69736f); }
+@media (max-width: 720px) {
+  .adm-mitch-wa-tools { grid-template-columns: 1fr; align-items: stretch; }
+}
