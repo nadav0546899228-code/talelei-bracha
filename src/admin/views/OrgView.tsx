@@ -1,210 +1,156 @@
-/** ערים, סניפים ורכזים - בשני התחומים: כולל ערב ובנות צילה */
+/** מבנה ארגוני: ארצי -> אזור -> עיר -> סניף */
 import { useEffect, useMemo, useState } from "react";
 import { Icon } from "../../components/Icon";
-import { api, del, DOMAIN_LABELS, post, type Domain, type Me, type OrgRegion, type OrgUnit } from "../api";
+import { api, del, DOMAIN_LABELS, post, type Domain, type Me, type OrgUnit } from "../api";
 import type { Avrech } from "../kollelCalc";
 import { useOrg, type OrgPerson } from "../org";
 import { PhoneUsersPanel } from "./PhoneUsersPanel";
-import { Fab, IconActions } from "../components";
+import { ContactActions, Fab, IconActions } from "../components";
 import { useLive } from "../live";
+
+type EditUnit={id?:string;type:"region"|"city"|"branch";name:string;parentId:string|null};
 
 export function OrgView({ me, domain }: { me: Me; domain: Domain }) {
   const { org, reload } = useOrg();
   useLive(["orgUnits", "users", "phoneUsers"], reload);
   const roles = me.user.roles;
   const seesAll = roles.includes("developer") || roles.includes("ceo") || roles.includes("chief_coordinator");
+  const canRegion = seesAll || roles.includes(`${domain}_region` as never);
   const [avrechim, setAvrechim] = useState<Avrech[]>([]);
-  const [edit, setEdit] = useState<{ id?: string; type: "city" | "branch"; name: string; parentId: string | null; region?: OrgRegion | "" } | null>(null);
+  const [edit, setEdit] = useState<EditUnit | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   useEffect(() => {
-    if (me.user.views.includes("kollel")) api<{ avrechim: Avrech[] }>("/api/kollel/overview").then((r) => setAvrechim(r.avrechim)).catch(() => undefined);
-  }, [me.user.views]);
+    if (domain==="kollel" && me.user.views.includes("kollel")) api<{ avrechim: Avrech[] }>("/api/kollel/overview").then((r) => setAvrechim(r.avrechim)).catch(() => undefined);
+  }, [me.user.views,domain]);
 
-  const cities = useMemo(() => (org?.cities ?? []).filter((c) => c.domain === domain), [org, domain]);
-  const branches = useMemo(() => (org?.branches ?? []).filter((b) => b.domain === domain), [org, domain]);
-  const people = org?.people ?? [];
-  const cityPeople = (id: string) => people.filter((p) => p.roles.includes(`${domain}_city` as never) && p.scope?.[domain]?.cityId === id);
-  const branchPeople = (id: string) => people.filter((p) => p.roles.includes(`${domain}_branch` as never) && p.scope?.[domain]?.branchId === id);
-  const chiefs = people.filter((p) => p.roles.includes("chief_coordinator"));
+  const regions=useMemo(()=>(org?.regions??[]).filter((x)=>x.domain===domain),[org,domain]);
+  const cities=useMemo(()=>(org?.cities??[]).filter((x)=>x.domain===domain),[org,domain]);
+  const branches=useMemo(()=>(org?.branches??[]).filter((x)=>x.domain===domain),[org,domain]);
+  const people=org?.people??[];
+  const regionPeople=(id:string)=>people.filter((p)=>p.roles.includes(`${domain}_region` as never)&&p.scope?.[domain]?.regionId===id);
+  const cityPeople=(id:string)=>people.filter((p)=>p.roles.includes(`${domain}_city` as never)&&p.scope?.[domain]?.cityId===id);
+  const branchPeople=(id:string)=>people.filter((p)=>p.roles.includes(`${domain}_branch` as never)&&p.scope?.[domain]?.branchId===id);
+  const chiefs=people.filter((p)=>p.roles.includes("chief_coordinator"));
 
-  const save = async () => {
-    if (!edit) return;
+  const activate=(level:"region"|"city"|"branch",id:string)=>{
+    try{
+      const all=JSON.parse(localStorage.getItem("tb-active-org-scope")||"{}");
+      all[domain]={level,id};
+      localStorage.setItem("tb-active-org-scope",JSON.stringify(all));
+    }catch{/* מקומי בלבד */}
+    window.location.reload();
+  };
+
+  const save=async()=>{
+    if(!edit)return;
     setMsg(null);
-    try {
-      await post("/api/org/units", { ...edit, domain });
-      setEdit(null);
-      await reload();
-    } catch (e) {
-      setMsg({ ok: false, text: e instanceof Error ? e.message : "שגיאה" });
-    }
+    try{
+      await post("/api/org/units",{...edit,domain});
+      setEdit(null);await reload();
+    }catch(e){setMsg({ok:false,text:e instanceof Error?e.message:"שגיאה"});}
   };
-  const remove = async (u: OrgUnit) => {
-    if (!window.confirm(`למחוק את ${u.type === "city" ? "העיר" : "הסניף"} ${u.name}?`)) return;
-    try {
-      await del(`/api/org/units/${u.id}`);
-      await reload();
-    } catch (e) {
-      setMsg({ ok: false, text: e instanceof Error ? e.message : "שגיאה" });
-    }
+  const remove=async(u:OrgUnit)=>{
+    const label=u.type==="region"?"האזור":u.type==="city"?"העיר":"הסניף";
+    if(!window.confirm(`למחוק את ${label} ${u.name}?`))return;
+    try{await del(`/api/org/units/${u.id}`);await reload();}
+    catch(e){setMsg({ok:false,text:e instanceof Error?e.message:"שגיאה"});}
   };
+  const who=(list:OrgPerson[],empty:string)=>list.length?(
+    <div className="adm-org-people">{list.map((p)=><div key={p.id} className="adm-org-person">
+      <span><strong>{p.name||p.email}</strong><small>{p.email||p.phone}</small></span>
+      <IconActions phone={p.phone||undefined} email={p.email||undefined} waText={`שלום ${p.name}, `}/>
+    </div>)}</div>
+  ):<span className="adm-missing">{empty}</span>;
 
-  const who = (list: OrgPerson[], empty: string) =>
-    list.length ? (
-      list.map((p) => (
-        <span key={p.id} className="adm-person">
-          {p.name || p.email}
-          {p.phone ? (
-            <a href={`tel:${p.phone}`} dir="ltr" className="muted">
-              {" "}
-              {p.phone}
-            </a>
-          ) : null}
-        </span>
-      ))
-    ) : (
-      <span className="adm-missing">{empty}</span>
-    );
+  if(!org)return <p className="muted">טוען…</p>;
 
-  if (!org) return <p className="muted">טוען…</p>;
+  const editTitle=edit?.type==="region"?"אזור":edit?.type==="city"?"עיר":"סניף";
+  return <>
+    <div className="adm-head">
+      <div><span className="adm-eyebrow">{DOMAIN_LABELS[domain]}</span><h1>המבנה הארגוני</h1><p>רכז ארצי → אזור → עיר → סניף. לחיצה על “כניסה לתצוגה” מצמצמת את כל המערכת לאותה רמה.</p></div>
+    </div>
 
-  return (
-    <>
-      <div className="adm-head">
-        <div>
-          <h1>{domain === "bnot" ? "ערים, סניפים ורכזות" : "ערים, סניפים ורכזים"}</h1>
-          <span className="adm-scope-chip">{DOMAIN_LABELS[domain]}</span>
-        </div>
+    {seesAll?<section className="adm-panel adm-org-national">
+      <div className="adm-panel__head"><div><span className="adm-org-level">ארצי</span><h2>{domain==="bnot"?"רכזת ארצית":"רכז ארצי"}</h2></div><span className="adm-scope-chip">כל הארץ</span></div>
+      {who(chiefs,"עדיין לא הוגדר רכז ארצי")}
+    </section>:null}
+
+    <div className="adm-toolbar">
+      {seesAll?<button type="button" className="btn btn--sm" onClick={()=>setEdit({type:"region",name:"",parentId:null})}><Icon name="plus"/> אזור</button>:null}
+      {canRegion&&regions.length?<button type="button" className="btn btn--ghost btn--sm" onClick={()=>setEdit({type:"city",name:"",parentId:regions[0].id})}><Icon name="plus"/> עיר</button>:null}
+    </div>
+
+    {edit?<section className="adm-panel adm-org-editor">
+      <h2>{edit.id?`עריכת ${editTitle}`:`${editTitle} חדש`}</h2>
+      <div className="adm-fields adm-fields--2">
+        <label className="field"><span className="field__label">שם {editTitle}</span><input className="input" autoFocus value={edit.name} onChange={(e)=>setEdit({...edit,name:e.target.value})}/></label>
+        {edit.type==="city"?<label className="field"><span className="field__label">אזור</span><select className="select" value={edit.parentId||""} onChange={(e)=>setEdit({...edit,parentId:e.target.value})}>{regions.map((x)=><option key={x.id} value={x.id}>{x.name}</option>)}</select></label>:null}
+        {edit.type==="branch"?<label className="field"><span className="field__label">עיר</span><select className="select" value={edit.parentId||""} onChange={(e)=>setEdit({...edit,parentId:e.target.value})}>{regions.map((reg)=><optgroup key={reg.id} label={reg.name}>{cities.filter((c)=>c.parentId===reg.id).map((c)=><option key={c.id} value={c.id}>{c.name}</option>)}</optgroup>)}</select></label>:null}
       </div>
+      <div className="btn-row"><button type="button" className="btn btn--sm" disabled={!edit.name.trim()||((edit.type==="city"||edit.type==="branch")&&!edit.parentId)} onClick={save}><Icon name="check"/> שמירה</button><button type="button" className="btn btn--ghost btn--sm" onClick={()=>setEdit(null)}>ביטול</button></div>
+    </section>:null}
+    {msg?<div className={`adm-alert ${msg.ok?"adm-alert--ok":"adm-alert--error"}`}>{msg.text}</div>:null}
 
-
-      {seesAll ? (
-        <section className="adm-panel">
-          <h2 style={{ marginBottom: 6 }}>רכז ראשי</h2>
-          <div className="adm-people">{who(chiefs, "עדיין לא הוגדר רכז ראשי")}</div>
-        </section>
-      ) : null}
-
-      <div className="adm-toolbar">
-        {seesAll ? (
-          <button type="button" className="btn btn--sm" onClick={() => setEdit({ type: "city", name: "", parentId: null, region: "" })}>
-            <Icon name="plus" /> עיר
-          </button>
-        ) : null}
-      </div>
-
-      {edit ? (
-        <section className="adm-panel">
-          <h2>{edit.id ? "עריכה" : edit.type === "city" ? `עיר חדשה - ${DOMAIN_LABELS[domain]}` : `סניף חדש - ${DOMAIN_LABELS[domain]}`}</h2>
-          <div className="adm-fields adm-fields--2">
-            <label className="field">
-              <span className="field__label">{edit.type === "city" ? "שם העיר" : "שם הסניף"}</span>
-              <input className="input" value={edit.name} autoFocus onChange={(e) => setEdit({ ...edit, name: e.target.value })} />
-            </label>
-            {edit.type === "branch" ? (
-              <>
-                <label className="field">
-                  <span className="field__label">עיר</span>
-                  <select className="select" value={edit.parentId ?? ""} onChange={(e) => setEdit({ ...edit, parentId: e.target.value })}>
-                    {cities.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="field">
-                  <span className="field__label">אזור בארץ</span>
-                  <select className="select" value={edit.region ?? ""} onChange={(e) => setEdit({ ...edit, region: e.target.value as OrgRegion | "" })}>
-                    <option value="">לא הוגדר</option>
-                    <option value="north">צפון</option>
-                    <option value="center">מרכז</option>
-                    <option value="south">דרום</option>
-                  </select>
-                  <span className="field__hint">זהו סיווג ארגוני/גאוגרפי נפרד משם הסניף.</span>
-                </label>
-              </>
-            ) : null}
-          </div>
-          <div className="btn-row" style={{ marginTop: 12 }}>
-            <button type="button" className="btn btn--sm" disabled={!edit.name.trim()} onClick={save}>
-              שמירה
-            </button>
-            <button type="button" className="btn btn--ghost btn--sm" onClick={() => setEdit(null)}>
-              ביטול
-            </button>
-          </div>
-        </section>
-      ) : null}
-      {msg ? <div className={`adm-alert ${msg.ok ? "adm-alert--ok" : "adm-alert--error"}`} style={{ marginBottom: 12 }}>{msg.text}</div> : null}
-
-      {cities.map((c) => {
-        const bs = branches.filter((b) => b.parentId === c.id);
-        return (
-          <section key={c.id} className="adm-panel adm-city">
-            <div className="adm-panel__head">
-              <h2>
-                {c.name} <span className="muted">({bs.length} סניפים)</span>
-              </h2>
-              {seesAll ? (
-                <span className="adm-item__actions">
-                  <button type="button" className="adm-icon-btn" aria-label={`עריכת ${c.name}`} onClick={() => setEdit({ id: c.id, type: "city", name: c.name, parentId: null, region: "" })}>
-                    <Icon name="edit" />
-                  </button>
-                  <button type="button" className="adm-icon-btn adm-icon-btn--danger" aria-label={`מחיקת ${c.name}`} onClick={() => remove(c)}>
-                    <Icon name="trash" />
-                  </button>
-                </span>
-              ) : null}
+    <div className="adm-org-tree">
+      {regions.map((reg)=>{
+        const regCities=cities.filter((c)=>c.parentId===reg.id);
+        const rp=regionPeople(reg.id);
+        return <section key={reg.id} className="adm-panel adm-org-region">
+          <div className="adm-org-node adm-org-node--region">
+            <span className="adm-org-node__icon"><Icon name="globe"/></span>
+            <div><span className="adm-org-level">אזור</span><h2>{reg.name}</h2><small>{regCities.length} ערים · {regCities.reduce((n,c)=>n+branches.filter((b)=>b.parentId===c.id).length,0)} סניפים</small></div>
+            <div className="adm-org-node__actions">
+              <button type="button" className="btn btn--ghost btn--sm" onClick={()=>activate("region",reg.id)}><Icon name="eye"/> כניסה לתצוגה</button>
+              {seesAll?<button type="button" className="adm-icon-btn" onClick={()=>setEdit({id:reg.id,type:"region",name:reg.name,parentId:null})}><Icon name="edit"/></button>:null}
+              {seesAll?<button type="button" className="adm-icon-btn adm-icon-btn--danger" onClick={()=>remove(reg)}><Icon name="trash"/></button>:null}
             </div>
-            <div className="adm-people">
-              <strong>{domain === "bnot" ? "רכזת העיר:" : "רכז העיר:"}</strong> {who(cityPeople(c.id), "לא הוגדר")}
-            </div>
-            <div className="adm-list" style={{ marginTop: 10 }}>
-              {bs.map((b) => {
-                const mgrs = branchPeople(b.id);
-                const count = avrechim.filter((a) => a.active && a.branchId === b.id).length;
-                return (
-                  <div key={b.id} className={`adm-row adm-row--tone-${mgrs.length ? "green" : "yellow"}`} style={{ cursor: "default" }}>
-                    <span className="adm-row__title">
-                      סניף {b.name}
-                      {b.region ? <span className="adm-scope-chip" style={{ marginInlineStart: 7 }}>אזור: {b.region === "north" ? "צפון" : b.region === "south" ? "דרום" : "מרכז"}</span> : null}
-                    </span>
-                    <span className="adm-item__actions">
-                      {mgrs[0]?.phone ? <IconActions phone={mgrs[0].phone} waText={`שלום ${mgrs[0].name}, `} /> : null}
-                      <button type="button" className="adm-icon-btn" aria-label={`עריכת ${b.name}`} onClick={() => setEdit({ id: b.id, type: "branch", name: b.name, parentId: b.parentId, region: b.region ?? "" })}>
-                        <Icon name="edit" />
-                      </button>
-                      {seesAll ? (
-                        <button type="button" className="adm-icon-btn adm-icon-btn--danger" aria-label={`מחיקת ${b.name}`} onClick={() => remove(b)}>
-                          <Icon name="trash" />
-                        </button>
-                      ) : null}
-                    </span>
-                    <span className="adm-row__sub">
-                      {domain === "bnot" ? "מנהלת: " : "מנהל: "}
-                      {mgrs.length ? mgrs.map((p) => p.name).join(", ") : "לא הוגדר"}
-                      {domain === "kollel" ? ` · ${count} אברכים` : ""}
-                    </span>
+          </div>
+          <div className="adm-org-manager"><strong>{domain==="bnot"?"רכזת האזור":"רכז האזור"}:</strong>{who(rp,"לא הוגדר")}</div>
+
+          <div className="adm-org-cities">
+            {regCities.map((city)=>{
+              const bs=branches.filter((b)=>b.parentId===city.id);
+              return <section key={city.id} className="adm-org-city">
+                <div className="adm-org-node adm-org-node--city">
+                  <span className="adm-org-node__icon"><Icon name="pin"/></span>
+                  <div><span className="adm-org-level">עיר</span><h3>{city.name}</h3><small>{bs.length} סניפים</small></div>
+                  <div className="adm-org-node__actions">
+                    <button type="button" className="btn btn--ghost btn--sm" onClick={()=>activate("city",city.id)}><Icon name="eye"/> כניסה</button>
+                    {canRegion?<button type="button" className="adm-icon-btn" onClick={()=>setEdit({id:city.id,type:"city",name:city.name,parentId:city.parentId})}><Icon name="edit"/></button>:null}
+                    {seesAll?<button type="button" className="adm-icon-btn adm-icon-btn--danger" onClick={()=>remove(city)}><Icon name="trash"/></button>:null}
                   </div>
-                );
-              })}
-              {!bs.length ? <p className="muted">אין עדיין סניפים בעיר.</p> : null}
-            </div>
-          </section>
-        );
+                </div>
+                <div className="adm-org-manager"><strong>{domain==="bnot"?"רכזת העיר":"רכז העיר"}:</strong>{who(cityPeople(city.id),"לא הוגדר")}</div>
+
+                <div className="adm-org-branches">
+                  {bs.map((b)=>{
+                    const mgrs=branchPeople(b.id);
+                    const count=avrechim.filter((a)=>a.active&&a.branchId===b.id).length;
+                    return <div key={b.id} className={`adm-org-branch ${mgrs.length?"has-manager":"no-manager"}`}>
+                      <span className="adm-org-node__icon"><Icon name="home"/></span>
+                      <div><span className="adm-org-level">סניף</span><strong>{b.name}</strong><small>{domain==="bnot"?(mgrs.length?`מנהלת: ${mgrs.map((x)=>x.name).join(", ")}`:"ללא מנהלת"):`${count} אברכים · ${mgrs.length?`מנהל: ${mgrs.map((x)=>x.name).join(", ")}`:"ללא מנהל"}`}</small></div>
+                      <div className="adm-org-node__actions">
+                        {mgrs[0]?<IconActions phone={mgrs[0].phone||undefined} email={mgrs[0].email||undefined} waText={`שלום ${mgrs[0].name}, `}/>:null}
+                        <button type="button" className="btn btn--ghost btn--sm" onClick={()=>activate("branch",b.id)}><Icon name="eye"/> כניסה</button>
+                        <button type="button" className="adm-icon-btn" onClick={()=>setEdit({id:b.id,type:"branch",name:b.name,parentId:b.parentId})}><Icon name="edit"/></button>
+                        {seesAll?<button type="button" className="adm-icon-btn adm-icon-btn--danger" onClick={()=>remove(b)}><Icon name="trash"/></button>:null}
+                      </div>
+                    </div>;
+                  })}
+                  {!bs.length?<p className="muted">אין עדיין סניפים בעיר.</p>:null}
+                </div>
+                <button type="button" className="adm-org-add-child" onClick={()=>setEdit({type:"branch",name:"",parentId:city.id})}><Icon name="plus"/> הוספת סניף בעיר {city.name}</button>
+              </section>;
+            })}
+            {!regCities.length?<p className="muted">אין עדיין ערים באזור.</p>:null}
+          </div>
+        </section>;
       })}
-      {!cities.length ? (
-        <div className="adm-panel adm-empty">
-          {seesAll ? `אין עדיין ערים ב${DOMAIN_LABELS[domain]}. מתחילים בהוספת עיר, ואז סניפים.` : "לא שויכה לך עיר. יש לפנות לרכז הראשי."}
-        </div>
-      ) : null}
+      {!regions.length?<div className="adm-panel adm-empty">{seesAll?"מתחילים בהוספת אזור. לאחר מכן מוסיפים ערים וסניפים.":"לא הוגדר לך מבנה ארגוני. יש לפנות לרכז הארצי."}</div>:null}
+    </div>
 
-      {cities.length && !edit ? <Fab label="הוספת סניף" onClick={() => setEdit({ type: "branch", name: "", parentId: cities[0]?.id ?? null, region: "" })} /> : null}
-      <div style={{ marginTop: 20 }}>
-        <PhoneUsersPanel me={me} org={org} onChange={reload} title="רכזים ומנהלי סניפים (כניסה בטלפון וקוד)" />
-      </div>
-
-    </>
-  );
+    {!edit&&canRegion&&regions.length?<Fab label="הוספת עיר" onClick={()=>setEdit({type:"city",name:"",parentId:regions[0].id})}/>:null}
+    <div style={{marginTop:20}}><PhoneUsersPanel me={me} org={org} onChange={reload} title="רכזים, מנהלי סניפים וטלפניות"/></div>
+  </>;
 }
