@@ -12,6 +12,7 @@ export type Alert = { id: string; icon: IconName; label: string; count: number; 
 export function useAlerts(me: Me | null, mode: Mode, subs: Submission[] | null) {
   const [kollel, setKollel] = useState<Overview | null>(null);
   const [org, setOrg] = useState<OrgData | null>(null);
+  const [unread, setUnread] = useState(0);
   const views = me?.user.views ?? [];
   const canKollel = mode === "boys" && views.includes("kollel");
   const canOrg = views.includes("org");
@@ -23,6 +24,16 @@ export function useAlerts(me: Me | null, mode: Mode, subs: Submission[] | null) 
     if (canOrg) api<OrgData>("/api/org").then(setOrg).catch(() => setOrg(null));
     else setOrg(null);
   }, [me, canKollel, canOrg]);
+  const loadMsgs = useCallback(() => {
+    if (!me?.user.views.includes("messages")) return;
+    api<{ messages: { read: boolean; mine: boolean }[] }>("/api/messages")
+      .then((r) => setUnread(r.messages.filter((m) => !m.mine && !m.read).length))
+      .catch(() => undefined);
+  }, [me]);
+  useEffect(() => {
+    loadMsgs();
+  }, [loadMsgs]);
+  useLive(["messages"], loadMsgs);
 
   useEffect(() => {
     load();
@@ -30,6 +41,7 @@ export function useAlerts(me: Me | null, mode: Mode, subs: Submission[] | null) 
   useLive(["avrechim", "kollelMonths", "orgUnits", "phoneUsers", "users"], load);
 
   const alerts: Alert[] = [];
+  alerts.push({ id: "msgs", icon: "chat", label: "הודעות שלא נקראו", count: unread, tone: "red", view: "messages" });
   const list = subs ?? [];
   const newOf = (forms: string[]) => list.filter((s) => forms.includes(s.form) && s.status === "new").length;
 

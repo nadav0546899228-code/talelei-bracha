@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Icon } from "../../components/Icon";
 import { api, del, post, put, type Me, type OrgUnit } from "../api";
 import { Chips, Combo, ContactActions, ExportBtn, Fab, IconActions, money, SwipeRow, ToneLegend } from "../components";
-import { ENTRY_LABELS, type Avrech, type Entry, type EntryType, type KollelSettings } from "../kollelCalc";
+import { computePayroll, ENTRY_LABELS, type Avrech, type Entry, type EntryType, type KollelSettings } from "../kollelCalc";
 import { buildXlsx, downloadBlob, parsePasted } from "../xlsx";
 import { useLive } from "../live";
 
@@ -281,6 +281,7 @@ function AvrechimTab({ ov, reload, initialFilter }: { ov: Overview; reload: () =
                 <dd>{money(sel.monthlyTravel)}</dd>
               </dl>
             )}
+            {sel.id ? <AvrechHistory key={sel.id} ov={ov} av={sel} /> : null}
           </section>
         ) : (
           <div className="adm-panel adm-empty adm-detail-empty">
@@ -677,5 +678,69 @@ function AttendanceTab({ ov }: { ov: Overview }) {
         </div>
       </section>
     </>
+  );
+}
+
+/* ------------------------------------------------------------------ כרטיס אברך: היסטוריה */
+
+type History = {
+  months: { id: string; label: string; locked: boolean; order: number; doc?: import("../kollelCalc").MonthDoc }[];
+  entries: Entry[];
+  sessions: (Session & { month: string })[];
+};
+
+function AvrechHistory({ ov, av }: { ov: Overview; av: Avrech }) {
+  const [h, setH] = useState<History | null>(null);
+  const [open, setOpen] = useState<string | null>(null);
+  useEffect(() => {
+    api<History>(`/api/kollel/avrechim/${av.id}/history`).then(setH).catch(() => setH(null));
+  }, [av.id]);
+  if (!h) return null;
+  const rows = h.months.map((m) => {
+    const ent = h.entries.filter((e) => e.month === m.id);
+    const ss = h.sessions.filter((x) => x.month === m.id);
+    const came = ss.filter((x) => x.present.length).length;
+    const line = m.doc ? computePayroll([av, ...ov.avrechim.filter((x) => x.id !== av.id)], m.doc, ent, ov.settings, ss).find((l) => l.avrech.id === av.id) : undefined;
+    const simchas = (m.doc?.simchas ?? []).filter((x) => x.celebrantId === av.id);
+    return { m, ent, ss, came, line, simchas };
+  });
+  return (
+    <div className="adm-hist">
+      <h3 className="adm-subhead">
+        <Icon name="clock" width={18} height={18} style={{ verticalAlign: "-3px" }} /> היסטוריה
+      </h3>
+      {rows.map(({ m, ent, ss, came, line, simchas }) => (
+        <div key={m.id} className="adm-hist__row">
+          <button type="button" className="adm-hist__head" onClick={() => setOpen(open === m.id ? null : m.id)} aria-expanded={open === m.id}>
+            <strong>
+              {m.locked ? <Icon name="lock" width={13} height={13} /> : null} {m.label}
+            </strong>
+            {ss.length ? (
+              <span className={`adm-attpill${came < ss.length ? " is-miss" : ""}`}>
+                <Icon name="calendar" width={13} height={13} /> {came}/{ss.length}
+              </span>
+            ) : null}
+            {simchas.length ? <Icon name="gift" width={16} height={16} style={{ color: "var(--flame)" }} /> : null}
+            <span className="adm-hist__sum">{line ? money(line.total) : ent.length ? `${ent.length} דיווחים` : ""}</span>
+          </button>
+          {open === m.id ? (
+            <div className="adm-hist__body">
+              {line?.detail ? <p>{line.detail}</p> : null}
+              {ent.map((e) => (
+                <div key={e.id} className="adm-hist__ent">
+                  <span>
+                    {ENTRY_LABELS[e.type]}
+                    {e.description ? ` · ${e.description}` : ""}
+                  </span>
+                  <strong style={{ color: e.amount < 0 ? "#b3261e" : undefined }}>{money(e.amount)}</strong>
+                </div>
+              ))}
+              {!ent.length && !line?.detail ? <p className="muted">אין דיווחים בחודש הזה.</p> : null}
+            </div>
+          ) : null}
+        </div>
+      ))}
+      {!rows.length ? <p className="muted">עדיין אין חודשים.</p> : null}
+    </div>
   );
 }

@@ -15,7 +15,11 @@ import { ImpersonateModal } from "./Impersonate";
 import { entriesFor, entryActive, hubsFor, loadBar, loadMode, MODE_LABELS, modesFor, saveBar, saveMode, type Mode, type NavEntry, type NavLeaf, type Screen } from "./nav";
 import { BarEditor, HubView } from "./NavParts";
 import { useAlerts } from "./alerts";
+import { disablePush, enablePush, pushState } from "./push";
 import { OrgView } from "./views/OrgView";
+import { MessagesView } from "./views/MessagesView";
+import { BnotView } from "./views/BnotView";
+import { ReportsView } from "./views/ReportsView";
 import "./admin.css";
 import { AuditView } from "./views/AuditView";
 import { ContentView } from "./views/ContentView";
@@ -196,15 +200,25 @@ function LoginScreen({ onLoggedIn }: { onLoggedIn: () => void }) {
 
 /* ------------------------------------------------------------------ מעטפת */
 
+function screenFromUrl(): Screen {
+  const p = new URLSearchParams(window.location.search);
+  const v = p.get("v") || "dashboard";
+  return v.startsWith("hub-") ? { hub: v.slice(4) } : { view: v as View, tab: p.get("t") || undefined };
+}
+
 export default function AdminApp() {
   const [me, setMe] = useState<Me | null>(null);
   const [state, setState] = useState<"loading" | "login" | "ready" | "error">("loading");
   const [errorMsg, setErrorMsg] = useState("");
-  const [screen, setScreen] = useState<Screen>(() => {
-    const p = new URLSearchParams(window.location.search);
-    const v = p.get("v") || "dashboard";
-    return v.startsWith("hub-") ? { hub: v.slice(4) } : { view: v as View, tab: p.get("t") || undefined };
-  });
+  const [screen, setScreen] = useState<Screen>(screenFromUrl);
+  // כפתור "חזרה" של הטלפון/הדפדפן - צעד אחד אחורה בתוך המערכת
+  useEffect(() => {
+    const onPop = () => {
+      if (window.location.pathname.startsWith("/admin")) setScreen(screenFromUrl());
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
   const [mode, setModeState] = useState<Mode>("boys");
   const [bar, setBar] = useState<string[]>([]);
   const [barEdit, setBarEdit] = useState(false);
@@ -283,7 +297,10 @@ export default function AdminApp() {
     url.searchParams.set("v", "hub" in s ? `hub-${s.hub}` : s.view);
     if (!("hub" in s) && s.tab) url.searchParams.set("t", s.tab);
     else url.searchParams.delete("t");
-    window.history.replaceState({}, "", url.pathname + url.search);
+    const next = url.pathname + url.search;
+    if (next === window.location.pathname + window.location.search) return;
+    // לוח הבקרה הוא נקודת הבסיס - שאר המסכים נכנסים להיסטוריה
+    window.history.pushState({ tb: 1 }, "", next);
   };
   const show = (s: Screen) => {
     setScreen(s);
@@ -481,6 +498,9 @@ export default function AdminApp() {
               {curView === "inquiries" ? <SubmissionsView key="inq" {...ctx} forms={["contact", "volunteer", "updates", "assistance"]} title="פניות" /> : null}
               {curView === "kollel" ? <KollelView key={`k-${curTab ?? ""}`} me={me} go={go} initialTab={curTab} /> : null}
               {curView === "payroll" ? <PayrollView me={me} /> : null}
+              {curView === "messages" ? <MessagesView me={me} /> : null}
+              {curView === "bnot" ? <BnotView key={`bn-${curTab ?? ""}`} me={me} initialTab={curTab} /> : null}
+              {curView === "reports" ? <ReportsView /> : null}
               {curView === "org" ? <OrgView key={mode} me={me} domain={mode === "boys" ? "kollel" : "bnot"} /> : null}
               {curView === "broadcast" ? <BroadcastView key={`bc-${mode}-${curTab ?? ""}`} me={me} mode={mode} initialTab={curTab} /> : null}
               {curView === "content" ? <ContentView /> : null}
@@ -578,6 +598,26 @@ function Profile({ me, onClose, onCode, onSaved, onLogout }: { me: Me; onClose: 
   const [name, setName] = useState(me.user.name || "");
   const [phone, setPhone] = useState(me.user.phone || "");
   const [err, setErr] = useState<string | null>(null);
+  const [push, setPush] = useState<"on" | "off" | "blocked" | "unsupported" | "busy">("busy");
+  useEffect(() => {
+    pushState().then(setPush).catch(() => setPush("unsupported"));
+  }, []);
+  const togglePush = async () => {
+    setErr(null);
+    const prev = push;
+    setPush("busy");
+    try {
+      if (prev === "on") await disablePush();
+      else {
+        await enablePush();
+        await post("/api/push/test", {}).catch(() => undefined);
+      }
+      setPush(await pushState());
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "שגיאה");
+      setPush(await pushState());
+    }
+  };
   const save = async () => {
     try {
       await post("/api/auth/profile", { name, phone });
@@ -609,6 +649,24 @@ function Profile({ me, onClose, onCode, onSaved, onLogout }: { me: Me; onClose: 
             <input className="input" type="tel" dir="ltr" style={{ textAlign: "right" }} value={phone} onChange={(e) => setPhone(e.target.value)} />
           </label>
         </div>
+        {!me.user.impersonatedBy ? (
+          <button type="button" className={`adm-pushrow${push === "on" ? " is-on" : ""}`} onClick={togglePush} disabled={push === "busy" || push === "unsupported" || push === "blocked"}>
+            <Icon name="bell" />
+            <span>
+              התראות לטלפון
+              <small>
+                {push === "on"
+                  ? "פעיל במכשיר הזה"
+                  : push === "blocked"
+                    ? "חסום בהגדרות הדפדפן"
+                    : push === "unsupported"
+                      ? "במכשיר הזה צריך להתקין את האפליקציה קודם"
+                      : "לחיצה להפעלה"}
+              </small>
+            </span>
+            <span className="adm-switch" aria-hidden="true" />
+          </button>
+        ) : null}
         {err ? <div className="adm-alert adm-alert--error">{err}</div> : null}
         <div className="btn-row" style={{ marginTop: 14 }}>
           <button type="button" className="btn btn--sm" onClick={save}>

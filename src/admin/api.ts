@@ -28,7 +28,7 @@ export const del = <T = unknown>(path: string) => api<T>(path, { method: "DELETE
 
 /* ---------- טיפוסים ---------- */
 
-export type View = "dashboard" | "isha" | "inquiries" | "kollel" | "payroll" | "org" | "broadcast" | "content" | "users" | "audit" | "developer";
+export type View = "dashboard" | "messages" | "isha" | "bnot" | "inquiries" | "kollel" | "payroll" | "reports" | "org" | "broadcast" | "content" | "users" | "audit" | "developer";
 export type Role =
   | "developer"
   | "ceo"

@@ -1863,3 +1863,221 @@
   background: #fdf1c7;
   color: #8a6100;
 }
+
+/* ---------- הודעות ---------- */
+.adm-selbar {
+  position: sticky;
+  top: 70px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--ink);
+  color: #fff;
+  border-radius: 14px;
+  padding: 8px 12px;
+  margin-bottom: 10px;
+}
+.adm-selbar strong {
+  flex: 1;
+}
+.adm-msg {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  background: #fff;
+  border: 1px solid #e3e8e8;
+  border-radius: 14px;
+  padding: 4px 10px;
+}
+.adm-msg.is-open {
+  border-color: var(--teal);
+}
+.adm-msg.is-unread {
+  border-inline-start: 4px solid var(--rose);
+  background: #fffafc;
+}
+.adm-msg__pick {
+  width: 20px;
+  height: 20px;
+  align-self: center;
+  flex: none;
+}
+.adm-msg__body {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 8px;
+  border: 0;
+  background: none;
+  font: inherit;
+  text-align: start;
+  padding: 8px 0;
+  cursor: pointer;
+  color: inherit;
+}
+.adm-msg__who {
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.adm-msg.is-unread .adm-msg__who {
+  font-weight: 900;
+}
+.adm-msg__time {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+.adm-msg__text {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 0.9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.adm-msg__full {
+  white-space: pre-wrap;
+  line-height: 1.7;
+  font-size: 1.02rem;
+}
+/* ---------- גרפים ---------- */
+.adm-bars {
+  display: grid;
+  gap: 8px;
+}
+.adm-bars__row {
+  display: grid;
+  grid-template-columns: minmax(70px, 28%) 1fr auto;
+  align-items: center;
+  gap: 8px;
+}
+.adm-bars__label {
+  font-weight: 700;
+  font-size: 0.88rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.adm-bars__track {
+  height: 22px;
+  background: #eef2f2;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.adm-bars__fill {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--teal-strong), #39a2a4);
+  border-radius: 6px;
+  transition: width 0.4s;
+}
+.adm-bars__val {
+  font-weight: 800;
+  font-size: 0.88rem;
+  white-space: nowrap;
+  display: grid;
+  justify-items: end;
+}
+.adm-bars__val small {
+  font-weight: 500;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+.adm-hist {
+  margin-top: 14px;
+  border-top: 1px solid #eef1f1;
+  padding-top: 4px;
+}
+.adm-hist__row {
+  border-bottom: 1px solid #f0f3f3;
+}
+.adm-hist__head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  background: none;
+  font: inherit;
+  padding: 10px 2px;
+  cursor: pointer;
+  text-align: start;
+  color: inherit;
+}
+.adm-hist__sum {
+  margin-inline-start: auto;
+  font-weight: 800;
+}
+.adm-hist__body {
+  padding: 0 4px 10px;
+  font-size: 0.9rem;
+}
+.adm-hist__ent {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 0;
+}
+.adm-pushrow {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+  border: 1px solid #e3e8e8;
+  background: #fff;
+  border-radius: 14px;
+  padding: 12px 14px;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  color: var(--ink);
+}
+.adm-pushrow > svg {
+  width: 24px;
+  height: 24px;
+  flex: none;
+  color: var(--teal-strong);
+}
+.adm-pushrow span:not(.adm-switch) {
+  flex: 1;
+  display: grid;
+  font-weight: 800;
+}
+.adm-pushrow small {
+  font-weight: 500;
+  color: var(--muted);
+}
+.adm-pushrow:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.adm-switch {
+  width: 46px;
+  height: 26px;
+  border-radius: 999px;
+  background: #d6dddd;
+  position: relative;
+  flex: none;
+  transition: background 0.2s;
+}
+.adm-switch::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  inset-inline-start: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  transition: inset-inline-start 0.2s;
+}
+.adm-pushrow.is-on .adm-switch {
+  background: #1e7a3c;
+}
+.adm-pushrow.is-on .adm-switch::after {
+  inset-inline-start: 23px;
+}

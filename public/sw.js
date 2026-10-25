@@ -14,3 +14,38 @@ self.addEventListener("fetch", (e) => {
     ),
   );
 });
+
+// התראות לטלפון
+self.addEventListener("push", (e) => {
+  let d = {};
+  try {
+    d = e.data ? e.data.json() : {};
+  } catch {
+    d = { body: e.data ? e.data.text() : "" };
+  }
+  e.waitUntil(
+    self.registration.showNotification(d.title || "קרן טללי ברכה", {
+      body: d.body || "",
+      icon: "/brand/icon-192.png",
+      badge: "/brand/icon-192.png",
+      dir: "rtl",
+      lang: "he",
+      data: { url: d.url || "/admin" },
+    }),
+  );
+});
+self.addEventListener("notificationclick", (e) => {
+  e.notification.close();
+  const url = (e.notification.data && e.notification.data.url) || "/admin";
+  e.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
+      for (const c of list) {
+        if ("focus" in c) {
+          c.navigate(url);
+          return c.focus();
+        }
+      }
+      return self.clients.openWindow(url);
+    }),
+  );
+});

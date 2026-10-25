@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Icon } from "../../components/Icon";
 import { api, type Role } from "../api";
+import { DevExtras } from "./DevExtras";
 import type { AdminCtx } from "../AdminApp";
 
 type System = {
@@ -79,6 +80,8 @@ export function DeveloperView({ me, openImpersonate }: AdminCtx) {
           </div>
         ))}
       </section>
+
+      <DevExtras />
 
       <section className="adm-panel">
         <h2>כניסה כ...</h2>

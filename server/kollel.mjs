@@ -26,7 +26,7 @@ const num = (v, d = 0) => {
 export async function handleKollel(req, res, url, ctx) {
   const { pathname } = url;
   if (!pathname.startsWith("/api/kollel/")) return false;
-  const { user, send, store, readBody, audit, clean } = ctx;
+  const { user, send, store, readBody, audit, clean, notify } = ctx;
   const method = req.method || "GET";
 
   if (!user.views.includes("kollel") && !user.views.includes("payroll")) return send(403, { error: "אין הרשאה" }), true;
@@ -128,6 +128,24 @@ export async function handleKollel(req, res, url, ctx) {
     }
     await audit(user, "ייבוא אברכים", `${added} חדשים, ${updated} עודכנו`);
     return send(200, { ok: true, added, updated }), true;
+  }
+
+  // ---- כרטיס אברך: היסטוריה לפי חודשים
+  const hiMatch = pathname.match(/^\/api\/kollel\/avrechim\/([\w-]+)\/history$/);
+  if (hiMatch && method === "GET") {
+    const av = await store.get("avrechim", hiMatch[1]);
+    if (!av || !inScope(av)) return send(404, { error: "לא נמצא" }), true;
+    const monthsAll = (await store.list("kollelMonths")).sort((a, b) => (b.order || 0) - (a.order || 0));
+    const entries = (await store.list("kollelEntries", 50000)).filter((e) => e.avrechId === av.id);
+    const sessions = av.branchId ? (await store.list("kollelAttendance", 50000)).filter((x) => x.branchId === av.branchId) : [];
+    return (
+      send(200, {
+        months: monthsAll.map((m) => ({ id: m.id, label: m.label, locked: Boolean(m.locked), order: m.order || 0, ...(manager ? { doc: m } : {}) })),
+        entries,
+        sessions: sessions.map((x) => ({ branchId: x.branchId, date: x.date, month: x.month, present: x.present.includes(av.id) ? [av.id] : [] })),
+      }),
+      true
+    );
   }
 
   const avMatch = pathname.match(/^\/api\/kollel\/avrechim\/([\w-]+)$/);
@@ -264,6 +282,7 @@ export async function handleKollel(req, res, url, ctx) {
         notes: clean(b.notes, 1000),
       };
       await store.put("kollelMonths", key, doc);
+      if (!prev && notify) notify((u) => u.views.includes("kollel"), { title: `נפתח חודש ${doc.label}`, body: "אפשר לדווח נסיעות, הוצאות ונוכחות", url: "/admin?v=kollel&t=entries" });
       await audit(user, prev ? (doc.locked && !prev.locked ? "סגירת חודש לתשלום" : !doc.locked && prev.locked ? "פתיחת חודש סגור" : "עדכון חודש משכורת") : "פתיחת חודש משכורת", doc.label);
       return send(200, { ok: true }), true;
     }

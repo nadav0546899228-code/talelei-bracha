@@ -51,6 +51,13 @@ async function availableGroups(user, store) {
         groups.push({ id: `avrechim:branch:${b.id}`, label: `אברכי סניף ${b.name} (${cityName(b.parentId)})`, members: avrechim.filter((a) => a.branchId === b.id) });
       }
     }
+    if (domain === "bnot") {
+      const members = (await store.list("bnotMembers", 20000)).filter((m) => m.active !== false);
+      if (scope === null) groups.push({ id: "bnotMembers", label: "כל משתתפות בנות צילה", members });
+      for (const b of branchesHere) {
+        groups.push({ id: `bnotMembers:branch:${b.id}`, label: `משתתפות סניף ${b.name} (${cityName(b.parentId)})`, members: members.filter((m) => m.branchId === b.id) });
+      }
+    }
     // רכזים ומנהלי סניפים
     const branchMgrs = people.filter((p) => p.roles.includes(`${domain}_branch`) && inScope(p.scope?.[domain]?.branchId));
     if (branchMgrs.length) groups.push({ id: `staff:${domain}:branch`, label: `מנהלי הסניפים - ${dLabel}`, members: branchMgrs });

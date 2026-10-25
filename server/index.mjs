@@ -30,6 +30,9 @@ import * as phone from "./phoneAuth.mjs";
 import { handleKollel } from "./kollel.mjs";
 import { handleBroadcast } from "./broadcast.mjs";
 import { yemotConfigured } from "./yemot.mjs";
+import { handleMessages } from "./messages.mjs";
+import { handleBnot } from "./bnot.mjs";
+import * as push from "./webpush.mjs";
 
 const ROOT = join(fileURLToPath(new URL(".", import.meta.url)), "..", "dist");
 const PORT = Number(process.env.PORT) || 5000;
@@ -220,6 +223,45 @@ async function audit(user, action, target = "", details = {}) {
   await store.put("audit", id, { at: new Date().toISOString(), email: who, action, target, details });
 }
 
+/** שליחת התראת Push לכל מי שעומד בתנאי (ברקע, לא מעכב את הבקשה) */
+const notify = (filter, data) => {
+  push.notify(store, resolveUser, filter, data);
+};
+const BOOT_EMAILS = [...BOOTSTRAP.developer, ...BOOTSTRAP.ceo];
+const ROLE_LABELS = Object.fromEntries(Object.entries(ROLES).map(([k, v]) => [k, v.label]));
+
+/* ---- גיבוי יומי אוטומטי (נשמרים 14 אחרונים) */
+const BACKUP_COLLECTIONS = [
+  "users", "phoneUsers", "submissions", "content", "avrechim", "kollelEntries", "kollelMonths", "kollelSettings", "kollelAttendance",
+  "orgUnits", "contacts", "broadcasts", "settings", "messages", "bnotMembers", "bnotActivities", "pushSubs",
+];
+async function makeBackup(reason, byName = "מערכת") {
+  const data = {};
+  let count = 0;
+  for (const c of BACKUP_COLLECTIONS) {
+    data[c] = await store.list(c, 100000);
+    count += data[c].length;
+  }
+  const id = `${new Date().toISOString().replace(/[:.]/g, "-")}`;
+  await store.put("backups", id, { at: new Date().toISOString(), reason, byName, count, data });
+  const all = await store.list("backups", 1000);
+  for (const old of all.slice(14)) await store.del("backups", old.id);
+  return id;
+}
+async function backupIfDue() {
+  try {
+    const last = (await store.list("backups", 1))[0];
+    if (!last || Date.now() - new Date(last.at || last.createdAt).getTime() > 23.5 * 3600 * 1000) await makeBackup("גיבוי יומי אוטומטי");
+  } catch (e) {
+    console.error("backup", e?.message);
+  }
+}
+setTimeout(backupIfDue, 60_000).unref();
+setInterval(backupIfDue, 60 * 60_000).unref();
+
+/** תאריך היום לפי שעון ישראל YYYY-MM-DD */
+const israelDate = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+
 /* ------------------------------------------------------------------ תוכן */
 
 async function getContent() {
@@ -242,6 +284,37 @@ async function api(req, res, url) {
       devLogin: DEV_LOGIN,
       content: await getContent(),
     });
+  }
+
+  // ימות המשיח: אברך מתקשר מהטלפון והנוכחות נרשמת לפי מספר המתקשר (שלוחת API בימות)
+  if (pathname === "/api/yemot/attendance") {
+    const say = (t) => {
+      res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" });
+      res.end(`id_list_message=t-${String(t).replace(/[.,&=]/g, " ")}&go_to_folder=hangup`);
+    };
+    const hook = await store.get("settings", "yemotHook");
+    if (!hook?.key || url.searchParams.get("key") !== hook.key) return say("אין הרשאה");
+    if (rateLimited(`yemot:${clientIp(req)}`, 300, 60_000)) return say("נסו שוב בעוד דקה");
+    const caller = phone.normalizePhone(url.searchParams.get("ApiPhone") || "");
+    if (url.searchParams.get("hangup") === "yes") return say("");
+    const av = (await store.list("avrechim", 20000)).find((a) => a.active !== false && a.phone && a.phone === caller);
+    if (!av) return say("המספר שממנו התקשרת אינו רשום בכולל");
+    if (!av.branchId) return say(`שלום ${av.name} לא הוגדר לך סניף`);
+    const month = (await store.list("kollelMonths")).filter((m) => !m.locked).sort((a, b) => (b.order || 0) - (a.order || 0))[0];
+    if (!month) return say("אין כרגע חודש פתוח לדיווח");
+    const date = israelDate();
+    const id = `${av.branchId}_${date}`;
+    const prev = await store.get("kollelAttendance", id);
+    if (prev?.present?.includes(av.id)) return say(`שלום ${av.name} הנוכחות שלך היום כבר רשומה`);
+    await store.put("kollelAttendance", id, {
+      branchId: av.branchId,
+      date,
+      month: prev?.month || month.id,
+      present: [...(prev?.present || []), av.id],
+      by: prev?.by || "yemot",
+      byName: prev?.byName || "ימות המשיח",
+    });
+    return say(`שלום ${av.name} הנוכחות שלך נרשמה תודה`);
   }
 
   // גרסת האתר הבנוי - לפי שם קובץ הסקריפט הראשי (משתנה בכל בנייה). משמש להודעת "יש גרסה חדשה"
@@ -282,6 +355,8 @@ async function api(req, res, url) {
       notes: [],
       assignedMentorId: null,
     });
+    const FORM_TITLES = { ishaRequest: "בקשת שיחה חדשה", ishaMentor: "מלווה חדשה נרשמה", contact: "פנייה חדשה מהאתר", volunteer: "התנדבות חדשה", updates: "הרשמה לעדכונים", assistance: "בקשת סיוע חדשה" };
+    notify((u) => u.views.includes(FORM_VIEW[formId]), { title: FORM_TITLES[formId] || "פנייה חדשה", body: String(cleanData.fullName || cleanData.name || ""), url: `/admin?v=${FORM_VIEW[formId]}` });
     return json(res, 201, { ok: true });
   }
 
@@ -522,8 +597,82 @@ async function api(req, res, url) {
   }
 
   // ---- מודולים
-  const ctx = { user, send, store, readBody, audit, clean };
+  const ctx = { user, send, store, readBody, audit, clean, resolveUser, bootstrapEmails: BOOT_EMAILS, notify, roleLabels: ROLE_LABELS };
   if (await handleOrg(req, res, url, ctx)) return;
+  if (await handleMessages(req, res, url, ctx)) return;
+  if (await handleBnot(req, res, url, ctx)) return;
+
+  // ---- התראות לטלפון
+  if (pathname === "/api/push/key" && method === "GET") {
+    return send(200, { key: (await push.vapidKeys(store)).publicKey });
+  }
+  if (pathname === "/api/push/subscribe" && method === "POST") {
+    if (user.impersonatedBy) return send(400, { error: "בתצוגה של משתמש אחר אי אפשר" });
+    const { subscription } = await readBody(req);
+    if (!subscription?.endpoint || !subscription?.keys?.p256dh || !subscription?.keys?.auth) return send(400, { error: "מנוי לא תקין" });
+    const sub = { endpoint: String(subscription.endpoint).slice(0, 1000), keys: { p256dh: String(subscription.keys.p256dh).slice(0, 200), auth: String(subscription.keys.auth).slice(0, 100) } };
+    await store.put("pushSubs", push.subId(sub.endpoint), { userId: user.id, sub, ua: clean(req.headers["user-agent"], 200) });
+    return send(200, { ok: true });
+  }
+  if (pathname === "/api/push/unsubscribe" && method === "POST") {
+    const { endpoint } = await readBody(req);
+    await store.del("pushSubs", push.subId(endpoint));
+    return send(200, { ok: true });
+  }
+  if (pathname === "/api/push/test" && method === "POST") {
+    const keys = await push.vapidKeys(store);
+    const mine = (await store.list("pushSubs")).filter((x) => x.userId === user.id);
+    if (!mine.length) return send(400, { error: "המכשיר עוד לא נרשם להתראות" });
+    const results = await Promise.all(mine.map((x) => push.sendPush(x.sub, { title: "קרן טללי ברכה", body: "ההתראות פועלות ✓", url: "/admin" }, keys).catch((e) => e.message)));
+    return send(200, { ok: true, results });
+  }
+
+  // ---- גיבויים (מתכנת)
+  if (pathname === "/api/admin/backups" && (method === "GET" || method === "POST")) {
+    if (!can("developer")) return send(403, { error: "אין הרשאה" });
+    if (method === "POST") {
+      const id = await makeBackup("גיבוי ידני", user.name || user.email);
+      await audit(user, "גיבוי ידני");
+      return send(200, { ok: true, id });
+    }
+    const rows = (await store.list("backups", 100)).map(({ data: _d, ...b }) => b);
+    return send(200, { backups: rows });
+  }
+  const bkMatch = pathname.match(/^\/api\/admin\/backups\/([\w-]+)(\/restore)?$/);
+  if (bkMatch) {
+    if (!can("developer")) return send(403, { error: "אין הרשאה" });
+    const bk = await store.get("backups", bkMatch[1]);
+    if (!bk) return send(404, { error: "לא נמצא" });
+    if (!bkMatch[2] && method === "GET") {
+      const data = { ...bk.data, phoneUsers: (bk.data.phoneUsers || []).map(({ codeHash: _h, ...u }) => u), settings: (bk.data.settings || []).filter((x) => x.id !== "vapid") };
+      return json(res, 200, { exportedAt: bk.at, reason: bk.reason, ...data }, { "Content-Disposition": `attachment; filename="backup-${bk.id}.json"` });
+    }
+    if (bkMatch[2] && method === "POST") {
+      const { confirm } = await readBody(req);
+      if (confirm !== "שחזור") return send(400, { error: "יש לאשר את השחזור" });
+      await makeBackup("לפני שחזור", user.name || user.email);
+      for (const c of BACKUP_COLLECTIONS) {
+        if (!bk.data[c]) continue;
+        const keep = new Set(bk.data[c].map((d) => d.id));
+        for (const d of await store.list(c, 100000)) if (!keep.has(d.id)) await store.del(c, d.id);
+        for (const d of bk.data[c]) await store.put(c, d.id, d);
+      }
+      await audit(user, "שחזור מגיבוי", bk.reason + " · " + bk.at);
+      return send(200, { ok: true });
+    }
+  }
+
+  // ---- כתובת לשלוחת ימות המשיח (מתכנת)
+  if (pathname === "/api/admin/yemot-hook" && method === "GET") {
+    if (!can("developer")) return send(403, { error: "אין הרשאה" });
+    let hook = await store.get("settings", "yemotHook");
+    if (!hook?.key) {
+      hook = { key: randomUUID().replace(/-/g, "") };
+      await store.put("settings", "yemotHook", hook);
+    }
+    const origin = `${isSecure(req) ? "https" : "http"}://${req.headers.host}`;
+    return send(200, { url: `${origin}/api/yemot/attendance?key=${hook.key}` });
+  }
   if (await handleKollel(req, res, url, ctx)) return;
   if (await handleBroadcast(req, res, url, ctx)) return;
 
@@ -673,8 +822,9 @@ async function api(req, res, url) {
   if (pathname === "/api/admin/export" && method === "GET") {
     if (!can("developer")) return send(403, { error: "אין הרשאה" });
     const out = {};
-    for (const c of ["users", "phoneUsers", "submissions", "content", "avrechim", "kollelEntries", "kollelMonths", "kollelSettings", "contacts", "broadcasts", "settings", "audit"]) out[c] = await store.list(c, 100000);
+    for (const c of [...BACKUP_COLLECTIONS.filter((x) => x !== "pushSubs"), "audit"]) out[c] = await store.list(c, 100000);
     out.phoneUsers = out.phoneUsers.map(({ codeHash: _h, ...u }) => u);
+    out.settings = out.settings.filter((x) => x.id !== "vapid");
     await audit(user, "ייצוא גיבוי מלא");
     return json(res, 200, { exportedAt: new Date().toISOString(), ...out }, {
       "Content-Disposition": `attachment; filename="backup-${new Date().toISOString().slice(0, 10)}.json"`,
