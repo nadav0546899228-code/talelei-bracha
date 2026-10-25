@@ -4,6 +4,7 @@ import { Icon } from "../components/Icon";
 import { Logo } from "../components/Logo";
 import { DonateLink, Flag, PageHero, Placeholder, SectionHead } from "../components/ui";
 import { donation } from "../config/integrations";
+import { runtime } from "../config/contentModel";
 import { site } from "../config/site";
 import { galleryAlbums, lessons, projects } from "../data/content";
 import { Link } from "../router/Router";
@@ -113,9 +114,7 @@ export default function TaleiBracha() {
 
       <section className="section section--sand" id="projects">
         <div className="container">
-          <SectionHead eyebrow="פרויקטים" title="פרויקטים קבועים ועונתיים">
-            <p>אפשר לתרום לפרויקט מסוים, אם ספק הסליקה תומך בכך.</p>
-          </SectionHead>
+          <SectionHead eyebrow="פרויקטים" title="פרויקטים קבועים ועונתיים" />
           {projects.length ? (
             <div className="grid grid--3">
               {projects.map((p) => (
@@ -123,7 +122,7 @@ export default function TaleiBracha() {
                   {p.demo ? <Flag kind="demo" /> : null}
                   <h3>{p.title}</h3>
                   <p className="muted">{p.description}</p>
-                  <DonateLink url={p.donationUrl ?? donation.generalUrl} label="לתרומה לפרויקט" className="btn btn--flame btn--sm" />
+                  {runtime.featureFlags.donations ? <DonateLink url={p.donationUrl ?? donation.generalUrl} label="לתרומה לפרויקט" className="btn btn--flame btn--sm" /> : null}
                 </article>
               ))}
             </div>
