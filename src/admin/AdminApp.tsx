@@ -246,13 +246,7 @@ export default function AdminApp() {
     const k = account.views.includes("kollel");
     const b = account.views.includes("bnot");
     const brand = k && b ? "combined" : b ? "bnot" : "kollel";
-    let manifest = document.head.querySelector<HTMLLinkElement>('link[rel="manifest"]');
-    if (!manifest) {
-      manifest = document.createElement("link");
-      manifest.rel = "manifest";
-      document.head.appendChild(manifest);
-    }
-    manifest.href = `/manifest-${brand}.webmanifest`;
+    // המניפסט של האפליקציה נקבע בשרת (admin.webmanifest) - החלפה אחרי הטעינה שוברת את ההתקנה בכרום
     let icon = document.head.querySelector<HTMLLinkElement>('link[rel~="icon"]');
     if (!icon) {
       icon = document.createElement("link");
