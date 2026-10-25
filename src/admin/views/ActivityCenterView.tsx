@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Icon } from "../../components/Icon";
+import { Icon, type IconName } from "../../components/Icon";
 import { api } from "../api";
 import { useLive } from "../live";
 
@@ -41,7 +41,7 @@ const addDays = (iso:string,n:number) => {
 };
 const heDay = (iso:string) => new Intl.DateTimeFormat("he-IL",{weekday:"long",day:"numeric",month:"long"}).format(new Date(`${iso}T12:00:00`));
 const monthTitle = (d:Date) => new Intl.DateTimeFormat("he-IL",{month:"long",year:"numeric"}).format(d);
-const sourceIcon = (s:ActivityItem["source"]) => s==="challah" ? "wheat" : s==="kollelStudy" ? "book" : s==="siteEvent" ? "globe" : "users";
+const sourceIcon = (s:ActivityItem["source"]): IconName => s==="challah" ? "wheat" : s==="kollelStudy" ? "book" : s==="siteEvent" ? "globe" : "users";
 const sourceClass = (s:ActivityItem["source"]) => s==="challah" ? "challah" : s==="kollelStudy" ? "kollel" : s==="siteEvent" ? "site" : "bnot";
 
 function monthCells(cursor: Date) {
