@@ -161,7 +161,7 @@ function SendTab({ setup, me, reload }: { setup: Setup; me: Me; reload: () => vo
   return (
     <>
       <section className="adm-panel">
-        <h2>1. איך שולחים?</h2>
+        <h2>ערוץ שליחה</h2>
         <div className="adm-channel" role="radiogroup" aria-label="ערוץ">
           {(Object.keys(CHANNEL_INFO) as Channel[]).map((c) => {
             const off = CHANNEL_INFO[c].yemot && !setup.yemotConfigured;
@@ -179,7 +179,7 @@ function SendTab({ setup, me, reload }: { setup: Setup; me: Me; reload: () => vo
       </section>
 
       <section className="adm-panel">
-        <h2>2. למי?</h2>
+        <h2>נמענים</h2>
         <div className="adm-fields adm-fields--2">
           {setup.groups.map((g) => (
             <label key={g.id} className="adm-toggle">
@@ -204,7 +204,7 @@ function SendTab({ setup, me, reload }: { setup: Setup; me: Me; reload: () => vo
       </section>
 
       <section className="adm-panel">
-        <h2>3. מה?</h2>
+        <h2>תוכן ההודעה</h2>
         {channel === "voice_template" ? (
           <label className="field">
             <span className="field__label">מזהה תבנית בימות המשיח (שבה הוקלטה ההודעה)</span>
@@ -226,7 +226,7 @@ function SendTab({ setup, me, reload }: { setup: Setup; me: Me; reload: () => vo
       </section>
 
       <section className="adm-panel">
-        <h2>4. שליחה</h2>
+        <h2>שליחה</h2>
         {info.yemot ? (
           <div className="adm-toolbar">
             <input className="input" type="tel" dir="ltr" style={{ textAlign: "right" }} placeholder="הטלפון שלי לבדיקה" value={testPhone} onChange={(e) => setTestPhone(e.target.value)} aria-label="טלפון לבדיקה" />
