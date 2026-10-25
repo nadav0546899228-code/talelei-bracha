@@ -87,6 +87,7 @@ export type Me = {
   assignableRoles: Role[];
   mustChangeCode: boolean;
   canImpersonate: boolean;
+  featureFlags?: { donations: boolean };
 };
 
 /** תפקידים שמשויכים לעיר או לסניף (זהה לשרת) */
