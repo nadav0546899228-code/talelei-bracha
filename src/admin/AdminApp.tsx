@@ -728,6 +728,8 @@ export default function AdminApp() {
   const ownViewLabel = me.roleLabels[ownRole] || "החשבון שלי";
   const menuQuery = appMenuQuery.trim().toLocaleLowerCase("he");
   const menuGroups = hubs
+    // "קשרי לקוחות" נגיש מהסרגל - בתפריט רק כשמחפשים
+    .filter((h) => h.id !== "crm" || menuQuery)
     .flatMap((h) => (h.items.some((l) => l.group) ? [...new Set(h.items.map((l) => l.group || ""))].map((g) => ({ ...h, id: `${h.id}:${g}`, label: g ? `${h.label} · ${g}` : h.label, items: h.items.filter((l) => (l.group || "") === g) })) : [h]))
     .map((h) => ({
       ...h,
@@ -942,7 +944,7 @@ export default function AdminApp() {
             <>
               {curView === "dashboard" ? <DashboardView {...ctx} views={me.user.views} dash={dash} /> : null}
               {curView === "smart" ? <SmartCenterView go={go} initialTab={curTab} /> : null}
-              {curView === "activity" ? <ActivityCenterView go={go} /> : null}
+              {curView === "activity" ? <ActivityCenterView key={`act-${mode}`} go={go} mode={mode} /> : null}
               {curView === "isha" ? (
                 <SubmissionsView key={`isha-${curTab ?? ""}`} {...ctx} forms={["ishaRequest", "ishaMentor"]} initialForm={curTab as never} title="אישה לאישה" />
               ) : null}

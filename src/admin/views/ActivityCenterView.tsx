@@ -114,12 +114,13 @@ function monthCells(cursor: Date, system: CalendarSystem) {
 }
 
 
-export function ActivityCenterView({ go }: { go: (view: View, tab?: string) => void }) {
+export function ActivityCenterView({ go, mode }: { go: (view: View, tab?: string) => void; mode: "boys" | "girls" }) {
   const [data,setData]=useState<Data|null>(null);
   const [err,setErr]=useState("");
   const [selectedDate,setSelectedDate]=useState(todayIso());
   const [cursor,setCursor]=useState(()=>new Date());
-  const [domain,setDomain]=useState<"all"|"kollel"|"bnot">("all");
+  // הארגון נקבע לפי המצב שממנו נכנסו (טללי ברכה / בנות צילה) - בלי ערבוב
+  const domain: "kollel" | "bnot" = mode === "girls" ? "bnot" : "kollel";
   const [source,setSource]=useState("all");
   const [city,setCity]=useState("all");
   const [calendarSystem,setCalendarSystem]=useState<CalendarSystem>(()=>(localStorage.getItem("tb-calendar-system")==="gregorian"?"gregorian":"hebrew"));
@@ -127,7 +128,7 @@ export function ActivityCenterView({ go }: { go: (view: View, tab?: string) => v
   const [wall,setWall]=useState<WallData|null>(null);
   const [wallOpen,setWallOpen]=useState(false);
   const [wallErr,setWallErr]=useState("");
-  const [wallForm,setWallForm]=useState({ domain:"kollel" as "kollel"|"bnot", branchId:"", date:todayIso(), title:"", note:"", photos:[] as string[], shareApproved:false });
+  const [wallForm,setWallForm]=useState({ domain:(mode === "girls" ? "bnot" : "kollel") as "kollel"|"bnot", branchId:"", date:todayIso(), title:"", note:"", photos:[] as string[], shareApproved:false });
 
   const loadWall=useCallback(() =>
     apiCached<WallData>("/api/activity-wall", setWall).catch((e)=>setWallErr(e instanceof Error ? e.message : "שגיאה בטעינת התיעוד")), []);
@@ -141,8 +142,7 @@ export function ActivityCenterView({ go }: { go: (view: View, tab?: string) => v
   useLive(["activityWall"],loadWall);
   useEffect(()=>{
     if(!wall?.canPostDomains.length) return;
-    if(!wall.canPostDomains.includes(wallForm.domain)) {
-      const domain=wall.canPostDomains[0];
+    if(wallForm.domain!==domain) {
       const branchId=wall.branches.find((b)=>b.domain===domain)?.id||"";
       setWallForm((x)=>({...x,domain,branchId}));
     } else if(!wallForm.branchId || !wall.branches.some((b)=>b.id===wallForm.branchId&&b.domain===wallForm.domain)) {
@@ -156,7 +156,7 @@ export function ActivityCenterView({ go }: { go: (view: View, tab?: string) => v
     const monthKey=calendarKey(cursor,calendarSystem);
     const yearKey=calendarYearKey(cursor,calendarSystem);
     return data.items.filter((x)=>{
-      if(domain!=="all"&&x.domain!==domain) return false;
+      if(x.domain!==domain) return false;
       if(source!=="all"&&x.source!==source) return false;
       if(city!=="all"&&x.city!==city) return false;
       const d=new Date(`${x.date}T12:00:00`);
@@ -261,13 +261,13 @@ export function ActivityCenterView({ go }: { go: (view: View, tab?: string) => v
       <section className="adm-field-wall">
         <div className="adm-field-wall__head">
           <div><span className="adm-eyebrow">מהשטח</span><h2>קיר תיעוד חי</h2><p>תמונות ועדכונים מהפעילות, לפי סניף. חומר שמסומן לשיתוף עדיין נשאר פנימי עד שמחליטים לפרסם אותו.</p></div>
-          {wall?.canPostDomains.length ? <button type="button" className="btn btn--sm" onClick={()=>setWallOpen(!wallOpen)}><Icon name={wallOpen?"close":"plus"}/> {wallOpen?"סגירה":"הוספת תיעוד"}</button>:null}
+          {wall?.canPostDomains.includes(domain) ? <button type="button" className="btn btn--sm" onClick={()=>setWallOpen(!wallOpen)}><Icon name={wallOpen?"close":"plus"}/> {wallOpen?"סגירה":"הוספת תיעוד"}</button>:null}
         </div>
         {wallErr?<div className="adm-alert adm-alert--error">{wallErr}</div>:null}
         {wallOpen&&wall?(
           <div className="adm-panel adm-field-wall__form">
             <div className="adm-fields adm-fields--2">
-              {wall.canPostDomains.length>1?<label className="field"><span className="field__label">תחום</span><select className="select" value={wallForm.domain} onChange={(e)=>{const domain=e.target.value as "kollel"|"bnot";setWallForm({...wallForm,domain,branchId:wall.branches.find((b)=>b.domain===domain)?.id||""});}}><option value="kollel">טללי ברכה</option><option value="bnot">בנות צילה</option></select></label>:null}
+              
               <label className="field"><span className="field__label">סניף</span><select className="select" value={wallForm.branchId} onChange={(e)=>setWallForm({...wallForm,branchId:e.target.value})}><option value="">בחירת סניף</option>{wall.branches.filter((b)=>b.domain===wallForm.domain).map((b)=><option key={b.id} value={b.id}>{wallBranchLabel(b.id)}</option>)}</select></label>
               <label className="field"><span className="field__label">תאריך</span><input className="input" type="date" value={wallForm.date} onChange={(e)=>setWallForm({...wallForm,date:e.target.value})}/></label>
               <label className="field"><span className="field__label">כותרת</span><input className="input" value={wallForm.title} onChange={(e)=>setWallForm({...wallForm,title:e.target.value})} placeholder="לדוגמה: ערב לימוד בסניף"/></label>
@@ -280,7 +280,7 @@ export function ActivityCenterView({ go }: { go: (view: View, tab?: string) => v
           </div>
         ):null}
         <div className="adm-field-wall__grid">
-          {(wall?.entries||[]).slice(0,9).map((x)=>(
+          {(wall?.entries||[]).filter((x)=>x.domain===domain).slice(0,9).map((x)=>(
             <article className="adm-field-wall__card" key={x.id}>
               {x.photos?.[0]?<div className="adm-field-wall__cover"><img src={x.photos[0]} alt={x.title}/>{x.photos.length>1?<span>+{x.photos.length-1}</span>:null}</div>:<div className="adm-field-wall__cover is-empty"><Icon name="image"/></div>}
               <div className="adm-field-wall__body">
@@ -290,7 +290,7 @@ export function ActivityCenterView({ go }: { go: (view: View, tab?: string) => v
               </div>
             </article>
           ))}
-          {wall&&!wall.entries.length?<div className="adm-panel adm-empty">עדיין אין תיעוד מהשטח.</div>:null}
+          {wall&&!wall.entries.some((x)=>x.domain===domain)?<div className="adm-panel adm-empty">עדיין אין תיעוד מהשטח.</div>:null}
         </div>
       </section>
 
@@ -307,11 +307,8 @@ export function ActivityCenterView({ go }: { go: (view: View, tab?: string) => v
             <button type="button" aria-pressed={calendarSystem==="gregorian"} onClick={()=>setSystem("gregorian")}>לועזי</button>
           </div>
         </div>
-        <select className="select" value={domain} onChange={(e)=>setDomain(e.target.value as typeof domain)} aria-label="תחום">
-          <option value="all">שני הארגונים</option><option value="kollel">טללי ברכה</option><option value="bnot">בנות צילה</option>
-        </select>
         <select className="select" value={source} onChange={(e)=>setSource(e.target.value)} aria-label="סוג פעילות">
-          <option value="all">כל סוגי הפעילות</option><option value="bnotActivity">פעילות בנות צילה</option><option value="challah">הפרשת חלה</option><option value="kollelStudy">ערב לימוד</option><option value="scheduledLesson">שיעור</option><option value="siteEvent">אירוע האתר</option>
+          <option value="all">כל סוגי הפעילות</option>{domain==="bnot"?<><option value="bnotActivity">פעילות בסניף</option><option value="challah">הפרשת חלה</option></>:<option value="kollelStudy">ערב לימוד</option>}<option value="scheduledLesson">שיעור</option><option value="siteEvent">אירוע האתר</option>
         </select>
         <select className="select" value={city} onChange={(e)=>setCity(e.target.value)} aria-label="עיר">
           <option value="all">כל הארץ</option>
@@ -351,7 +348,7 @@ export function ActivityCenterView({ go }: { go: (view: View, tab?: string) => v
               const count=data.items.filter((x)=>{
                 const d=new Date(`${x.date}T12:00:00`);
                 if(calendarKey(d,calendarSystem)!==key) return false;
-                if(domain!=="all"&&x.domain!==domain) return false;
+                if(x.domain!==domain) return false;
                 if(source!=="all"&&x.source!==source) return false;
                 if(city!=="all"&&x.city!==city) return false;
                 return true;

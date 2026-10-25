@@ -4,6 +4,8 @@ import { Icon } from "../components/Icon";
 import type { NavEntry, NavHub, NavLeaf } from "./nav";
 
 export function HubView({ hub, badge, onOpen }: { hub: NavHub; badge: (l: NavLeaf) => number; onOpen: (l: NavLeaf) => void }) {
+  // קבוצות (אנשים / יצירת קשר) סגורות - נפתחות בלחיצה
+  const [openG, setOpenG] = useState<string | null>(null);
   return (
     <>
       <div className="adm-head">
@@ -13,7 +15,16 @@ export function HubView({ hub, badge, onOpen }: { hub: NavHub; badge: (l: NavLea
       </div>
       {(hub.items.some((l) => l.group) ? [...new Set(hub.items.map((l) => l.group || ""))] : [""]).map((g) => (
       <section key={g || "all"} className="adm-hub-group">
-      {g ? <h2 className="adm-hub-group__title">{g}</h2> : null}
+      {g ? (
+        <button type="button" className={`adm-hub-group__btn${openG === g ? " is-open" : ""}`} aria-expanded={openG === g} onClick={() => setOpenG(openG === g ? null : g)}>
+          <span className="adm-hub__icon"><Icon name={g === "אנשים" ? "users" : "chat"} /></span>
+          <strong>{g}</strong>
+          <small>{hub.items.filter((l) => l.group === g).length}</small>
+          {hub.items.filter((l) => l.group === g).reduce((n, l) => n + badge(l), 0) ? <span className="adm-badge">{hub.items.filter((l) => l.group === g).reduce((n, l) => n + badge(l), 0)}</span> : null}
+          <Icon name="chevronDown" className="adm-hub-group__chev" />
+        </button>
+      ) : null}
+      {!g || openG === g ? (
       <div className="adm-hub">
         {hub.items.filter((l) => !g || l.group === g).map((l) => {
           const b = badge(l);
@@ -32,6 +43,7 @@ export function HubView({ hub, badge, onOpen }: { hub: NavHub; badge: (l: NavLea
           );
         })}
       </div>
+      ) : null}
       </section>
       ))}
     </>

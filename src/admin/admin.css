@@ -4722,3 +4722,12 @@
 .adm .adm-appmenu .adm-appmenu__group-head strong { color: rgb(255 255 255 / 0.8) !important; }
 .adm .adm-appmenu .adm-appmenu__search { background: rgb(255 255 255 / 0.16) !important; }
 .adm .adm-appmenu .adm-appmenu__foot { background: rgb(0 0 0 / 0.12) !important; }
+.adm-hub-group__btn { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 56px; padding: 8px 12px; border: 1px solid #e3eaea; border-radius: 16px; background: #fff; font: inherit; cursor: pointer; text-align: right; margin-bottom: 8px; }
+.adm-hub-group__btn strong { flex: 1; font-size: 1rem; }
+.adm-hub-group__btn small { color: #7a8c8c; font-size: 0.8rem; }
+.adm-hub-group__btn .adm-badge { position: static; }
+.adm-hub-group__chev { width: 16px; height: 16px; color: #7a8c8c; transition: transform 0.2s; }
+.adm-hub-group__btn.is-open { border-color: var(--teal-strong); }
+.adm[data-mode="girls"] .adm-hub-group__btn.is-open { border-color: #be1354; }
+.adm-hub-group__btn.is-open .adm-hub-group__chev { transform: rotate(180deg); }
+.adm-hub-group .adm-hub { margin-bottom: 10px; }
