@@ -2,11 +2,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Icon } from "../../components/Icon";
 import { apiCached, api, del, post, put, type Me, type OrgUnit } from "../api";
-import { Chips, Combo, ContactActions, ExportBtn, Fab, IconActions, money, SwipeRow, ToneLegend } from "../components";
+import { Chips, Combo, ContactActions, ExportBtn, Fab, money, ToneLegend, waLink } from "../components";
 import { computePayroll, ENTRY_LABELS, type Avrech, type Entry, type EntryType, type KollelSettings } from "../kollelCalc";
 import { buildXlsx, downloadBlob, parsePasted } from "../xlsx";
 import { useLive } from "../live";
 import { MitchPanel, type Mitch } from "./MitchView";
+import { SheetTable } from "../SheetTable";
 
 export type Overview = {
   me: { manager: boolean; canEditAvrechim: boolean; canPayroll: boolean };
@@ -116,10 +117,6 @@ function AvrechimTab({ ov, reload, initialFilter, initialQ = "" }: { ov: Overvie
     const rows = [["שם", "טלפון", "סניף", "נסיעות חודשיות", "פעיל"], ...list.map((a) => [a.name, a.phone, branchLabel(ov, a.branchId), a.monthlyTravel || 0, a.active ? "כן" : "לא"])];
     downloadBlob(buildXlsx([{ name: "אברכים", rows, widths: [24, 16, 26, 16, 8], moneyCols: [3] }]), "אברכים.xlsx");
   };
-  const groups = [
-    ...ov.branches.map((b) => ({ id: b.id, name: `סניף ${branchLabel(ov, b.id)}`, items: list.filter((a) => a.branchId === b.id) })),
-    { id: "", name: "ללא סניף", items: list.filter((a) => !a.branchId || !known.has(a.branchId)) },
-  ].filter((g) => g.items.length);
 
   const save = async () => {
     if (!sel) return;
@@ -172,35 +169,32 @@ function AvrechimTab({ ov, reload, initialFilter, initialQ = "" }: { ov: Overvie
 
       <div className="adm-split">
         <div>
-          {groups.map((g) => (
-            <section key={g.id} style={{ marginBottom: 18 }}>
-              <h2 style={{ fontSize: "1rem", marginBottom: 8 }}>
-                {g.name} <span className="muted">({g.items.length})</span>
-              </h2>
-              <div className="adm-list">
-                {g.items.map((a) => (
-                  <SwipeRow
-                    key={a.id}
-                    phone={a.phone || undefined}
-                    waText={`שלום ${a.name}, `}
-                    tone={toneOf(a)}
-                    current={sel?.id === a.id}
-                    onClick={() => setSel({ ...a })}
-                    actions={<IconActions phone={a.phone || undefined} waText={`שלום ${a.name}, `} />}
-                  >
-                    <span className="adm-row__title">{a.name}</span>
-                    <span />
-                    <span className="adm-row__sub" dir="auto">
-                      {a.phone || "אין טלפון"}
-                      {a.monthlyTravel ? ` · נסיעות ${money(a.monthlyTravel)}` : ""}
-                      {manager && !a.inPayroll ? " · לא בטבלת המשכורות" : ""}
-                    </span>
-                  </SwipeRow>
-                ))}
-              </div>
-            </section>
-          ))}
-          {!groups.length ? <div className="adm-panel adm-empty">אין אברכים{canEdit ? ". אפשר להוסיף" + (manager ? " או לייבא מאקסל." : ".") : " בסניף שלך עדיין."}</div> : null}
+          <SheetTable<Avrech>
+            id="avrechim"
+            rows={list}
+            rowKey={(a) => a.id}
+            current={sel?.id}
+            onRow={(a) => setSel({ ...a })}
+            exportName="אברכים"
+            tone={toneOf}
+            empty="אין אברכים להצגה"
+            cols={[
+              { key: "name", label: "שם", fixed: true, width: 140, cell: (a) => a.name, value: (a) => a.name },
+              { key: "act", label: "", width: 70, cell: (a) => a.phone ? (
+                <span className="adm-sheet__mini">
+                  <a className="adm-ia--wa" href={waLink(a.phone, `שלום ${a.name}, `)} target="_blank" rel="noopener noreferrer" aria-label="וואטסאפ"><Icon name="whatsapp" /></a>
+                  <a className="adm-ia--call" href={`tel:${a.phone}`} aria-label="חיוג"><Icon name="phone" /></a>
+                </span>
+              ) : null },
+              { key: "phone", label: "טלפון", width: 100, cell: (a) => (a.phone ? <span dir="ltr">{a.phone}</span> : <span className="adm-sheet__tag adm-sheet__tag--yellow">חסר</span>), value: (a) => a.phone || "" },
+              { key: "city", label: "עיר", width: 90, cell: (a) => ov.cities.find((c) => c.id === ov.branches.find((b) => b.id === a.branchId)?.parentId)?.name || "", value: (a) => ov.cities.find((c) => c.id === ov.branches.find((b) => b.id === a.branchId)?.parentId)?.name || "" },
+              { key: "branch", label: "סניף", width: 90, cell: (a) => (noBranch(a) ? <span className="adm-sheet__tag adm-sheet__tag--yellow">ללא</span> : ov.branches.find((b) => b.id === a.branchId)?.name), value: (a) => ov.branches.find((b) => b.id === a.branchId)?.name || "" },
+              { key: "travel", label: "נסיעות חודשיות", width: 100, cell: (a) => (a.monthlyTravel ? money(a.monthlyTravel) : "—"), value: (a) => a.monthlyTravel || 0 },
+              ...(manager ? [{ key: "payroll", label: "במשכורות", width: 80, cell: (a: Avrech) => (a.inPayroll ? "✓" : <span className="adm-sheet__tag adm-sheet__tag--yellow">לא</span>), value: (a: Avrech) => (a.inPayroll ? "כן" : "לא") }] : []),
+              { key: "active", label: "סטטוס", width: 70, cell: (a) => (a.active ? "פעיל" : "לא פעיל"), value: (a) => (a.active ? "פעיל" : "לא פעיל") },
+            ]}
+          />
+          {!list.length && !ov.avrechim.length ? <div className="adm-panel adm-empty">אין אברכים{canEdit ? ". אפשר להוסיף" + (manager ? " או לייבא מאקסל." : ".") : " בסניף שלך עדיין."}</div> : null}
         </div>
 
         {sel ? (

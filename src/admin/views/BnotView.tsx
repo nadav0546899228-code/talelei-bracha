@@ -2,10 +2,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { Icon } from "../../components/Icon";
 import { apiCached, del, post, type Me, type OrgUnit } from "../api";
-import { Chips, Combo, ContactActions, ExportBtn, Fab, IconActions, SwipeRow } from "../components";
+import { Chips, Combo, ContactActions, ExportBtn, Fab, waLink } from "../components";
 import { useLive } from "../live";
 import { ChallahPanel } from "./ChallahView";
 import { MitchPanel } from "./MitchView";
+import { SheetTable } from "../SheetTable";
 import { buildXlsx, downloadBlob } from "../xlsx";
 
 type Member = { id: string; name: string; phone: string; branchId: string; active: boolean; notes?: string };
@@ -101,25 +102,29 @@ function Members({ d, branch, bName, reload, initialQ = "" }: { d: Data; branch:
       </div>
       {msg ? <div className="adm-alert adm-alert--error">{msg}</div> : null}
       <div className="adm-split">
-        <div className="adm-list">
-          {list.map((m) => (
-            <SwipeRow
-              key={m.id}
-              phone={m.phone || undefined}
-              waText={`שלום ${m.name}, `}
-              tone={!m.active ? "grey" : m.phone ? "green" : "yellow"}
-              current={sel?.id === m.id}
-              onClick={() => setSel({ ...m })}
-              actions={<IconActions phone={m.phone || undefined} waText={`שלום ${m.name}, `} />}
-            >
-              <span className="adm-row__title">{m.name}</span>
-              <span />
-              <span className="adm-row__sub">
-                {m.phone || "אין טלפון"} · {bName(m.branchId)}
-              </span>
-            </SwipeRow>
-          ))}
-          {!list.length ? <div className="adm-panel adm-empty">אין משתתפות להצגה.</div> : null}
+        <div>
+          <SheetTable<Member>
+            id="bnot-members"
+            rows={list}
+            rowKey={(m) => m.id}
+            current={sel?.id}
+            onRow={(m) => setSel({ ...m })}
+            exportName="משתתפות"
+            empty="אין משתתפות להצגה"
+            tone={(m) => (!m.active ? "grey" : m.phone ? "green" : "yellow")}
+            cols={[
+              { key: "name", label: "שם", fixed: true, width: 140, cell: (m) => m.name, value: (m) => m.name },
+              { key: "act", label: "", width: 70, cell: (m) => m.phone ? (
+                <span className="adm-sheet__mini">
+                  <a className="adm-ia--wa" href={waLink(m.phone, `שלום ${m.name}, `)} target="_blank" rel="noopener noreferrer" aria-label="וואטסאפ"><Icon name="whatsapp" /></a>
+                  <a className="adm-ia--call" href={`tel:${m.phone}`} aria-label="חיוג"><Icon name="phone" /></a>
+                </span>
+              ) : null },
+              { key: "phone", label: "טלפון", width: 100, cell: (m) => (m.phone ? <span dir="ltr">{m.phone}</span> : <span className="adm-sheet__tag adm-sheet__tag--yellow">חסר</span>), value: (m) => m.phone || "" },
+              { key: "branch", label: "סניף", width: 120, cell: (m) => bName(m.branchId), value: (m) => bName(m.branchId) },
+              { key: "notes", label: "הערות", width: 160, cell: (m) => (m as Member & { notes?: string }).notes || "", value: (m) => (m as Member & { notes?: string }).notes || "" },
+            ]}
+          />
         </div>
         {sel ? (
           <section className="adm-panel adm-detail is-open" aria-label="כרטיס משתתפת">

@@ -4,6 +4,7 @@ import { Icon } from "../../components/Icon";
 import { api, apiCached, del, post, put, type OrgUnit } from "../api";
 import { Chips, Combo, IconActions, SwipeRow, waLink } from "../components";
 import { useLive } from "../live";
+import { SheetTable } from "../SheetTable";
 import { buildXlsx, downloadBlob } from "../xlsx";
 
 export type Mitch = {
@@ -69,6 +70,21 @@ export function MitchPanel({ domain, initialQ = "", initialTab = "" }: { domain:
   const [q, setQ] = useState(initialQ);
   const [filter, setFilter] = useState<"all" | "due" | "pending" | string>(initialTab === "mitch:due" ? "due" : "all");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [view, setView] = useState<"table" | "list">(() => {
+    try {
+      return localStorage.getItem("tb-view:mitch") === "list" ? "list" : "table";
+    } catch {
+      return "table";
+    }
+  });
+  const pickView = (v: "table" | "list") => {
+    setView(v);
+    try {
+      localStorage.setItem("tb-view:mitch", v);
+    } catch {
+      /* */
+    }
+  };
   const [autoNew, setAutoNew] = useState(initialTab === "mitch:new");
   const [pendingCall, setPendingCall] = useState<{ id: string; name: string; type: string; armed: boolean } | null>(null);
   // כשחוזרים לאפליקציה אחרי השיחה - מציגים את השאלה
@@ -149,7 +165,11 @@ export function MitchPanel({ domain, initialQ = "", initialTab = "" }: { domain:
           <Icon name="search" />
           <input type="search" placeholder={`חיפוש ${word.one}`} value={q} onChange={(e) => setQ(e.target.value)} aria-label={`חיפוש ${word.one}`} />
         </label>
-        <button type="button" className="adm-ut-act" title="ייצוא לאקסל" aria-label="ייצוא לאקסל" onClick={exportXlsx}><Icon name="download" /></button>
+        <div className="adm-viewtoggle" role="radiogroup" aria-label="תצוגה">
+          <button type="button" className={view === "table" ? "is-on" : ""} onClick={() => pickView("table")} title="טבלה"><Icon name="grid" /></button>
+          <button type="button" className={view === "list" ? "is-on" : ""} onClick={() => pickView("list")} title="רשימה"><Icon name="list" /></button>
+        </div>
+        {view === "list" ? <button type="button" className="adm-ut-act" title="ייצוא לאקסל" aria-label="ייצוא לאקסל" onClick={exportXlsx}><Icon name="download" /></button> : null}
         {d.canManageWorkflow ? (
           <button type="button" className={`adm-ut-act${settingsOpen ? " is-on" : ""}`} title="הגדרות שלבים ומעקב" aria-label="הגדרות שלבים ומעקב" onClick={() => setSettingsOpen(!settingsOpen)}><Icon name="shield" /></button>
         ) : null}
@@ -186,6 +206,37 @@ export function MitchPanel({ domain, initialQ = "", initialTab = "" }: { domain:
           if (m) setPendingCall({ id: m.id, name: m.name, type: href.startsWith("tel:") ? "שיחה" : "הודעה", armed: false });
         }}
       >
+        {view === "table" ? (
+          <SheetTable<Mitch>
+            id={`mitch-${domain}`}
+            rows={rows}
+            rowKey={(m) => m.id}
+            current={sel?.id}
+            onRow={(m) => setSel({ ...m })}
+            exportName={word.many}
+            empty={`אין ${word.many} להצגה`}
+            tone={(m) => (m.status === "left" ? "grey" : m.attentionLevel === "high" || isDue(m) ? "red" : m.attentionLevel === "medium" || m.status === "paused" ? "yellow" : "green")}
+            cols={[
+              { key: "name", label: "שם", fixed: true, width: 140, cell: (m) => m.name, value: (m) => m.name },
+              { key: "act", label: "", width: 70, cell: (m) => m.phone ? (
+                <span className="adm-sheet__mini" data-mitch-id={m.id}>
+                  <a className="adm-ia--wa" href={waLink(m.phone, `שלום ${m.name}, `)} target="_blank" rel="noopener noreferrer" aria-label="וואטסאפ"><Icon name="whatsapp" /></a>
+                  <a className="adm-ia--call" href={`tel:${m.phone}`} aria-label="חיוג"><Icon name="phone" /></a>
+                </span>
+              ) : null },
+              { key: "phone", label: "טלפון", width: 100, cell: (m) => <span dir="ltr">{m.phone}</span>, value: (m) => m.phone },
+              { key: "branch", label: "סניף", width: 90, cell: (m) => bName(m.branchId), value: (m) => bName(m.branchId) },
+              { key: "mentor", label: domain === "kollel" ? "לומד עם" : "מלווה", width: 110, cell: (m) => (domain === "kollel" ? avName(m.avrechId) : m.mentor), value: (m) => (domain === "kollel" ? avName(m.avrechId) : m.mentor) },
+              { key: "stage", label: "שלב", width: 110, cell: (m) => <span className="adm-mp-stage" style={{ ["--p" as string]: `${Math.round(((d.stages.indexOf(m.stage) + 1) / d.stages.length) * 100)}%` }}>{m.stage}</span>, value: (m) => d.stages.indexOf(m.stage) },
+              { key: "last", label: "קשר אחרון", width: 90, cell: (m) => (m.lastContact ? ago(m.lastContact, d.today) : "—"), value: (m) => m.lastContact || "" },
+              { key: "next", label: "מעקב הבא", width: 90, cell: (m) => (m.nextFollowUp ? <span className={`adm-sheet__tag${isDue(m) ? " adm-sheet__tag--red" : ""}`}>{isDue(m) ? "היום" : dayLabel(m.nextFollowUp)}</span> : "—"), value: (m) => m.nextFollowUp || "9999" },
+              { key: "attn", label: "דורש טיפול", width: 140, cell: (m) => (m.attention?.[0] ? <span className={`adm-sheet__tag adm-sheet__tag--${m.attentionLevel === "high" ? "red" : "yellow"}`}>{m.attention[0].label}</span> : ""), value: (m) => (m.attention || []).map((x) => x.label).join(" · ") },
+              { key: "status", label: "סטטוס", width: 70, hidden: true, cell: (m) => STATUS[m.status], value: (m) => STATUS[m.status] },
+              { key: "source", label: "הגיע דרך", width: 110, hidden: true, cell: (m) => m.source, value: (m) => m.source },
+              { key: "start", label: "התחלה", width: 90, hidden: true, cell: (m) => (m.startDate ? dayLabel(m.startDate) : ""), value: (m) => m.startDate || "" },
+            ]}
+          />
+        ) : (
         <div className="adm-list">
           {rows.map((m) => {
             const due = isDue(m);
@@ -214,6 +265,7 @@ export function MitchPanel({ domain, initialQ = "", initialTab = "" }: { domain:
           })}
           {!rows.length ? <div className="adm-panel adm-empty">אין {word.many} להצגה.</div> : null}
         </div>
+        )}
         {sel ? (
           <MitchCard key={sel.id || "new"} d={d} m={sel} domain={domain} word={word} onClose={() => setSel(null)} onSaved={(id) => load().then(() => id && setSel((x) => (x ? { ...x, id } : x)))} />
         ) : (
