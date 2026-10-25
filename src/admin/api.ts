@@ -33,6 +33,8 @@ export type Role =
   | "developer"
   | "ceo"
   | "chief_coordinator"
+  | "kollel_region"
+  | "bnot_region"
   | "kollel_city"
   | "kollel_branch"
   | "bnot_city"
@@ -43,7 +45,7 @@ export type Role =
   | "content_editor";
 
 export type Domain = "kollel" | "bnot";
-export type Scope = Partial<Record<Domain, { cityId?: string; branchId?: string }>>;
+export type Scope = Partial<Record<Domain, { regionId?: string; cityId?: string; branchId?: string }>>;
 
 export type Me = {
   user: {
@@ -81,7 +83,9 @@ export type Me = {
 };
 
 /** תפקידים שמשויכים לעיר או לסניף (זהה לשרת) */
-export const ROLE_SCOPE: Partial<Record<Role, { domain: Domain; level: "city" | "branch" }>> = {
+export const ROLE_SCOPE: Partial<Record<Role, { domain: Domain; level: "region" | "city" | "branch" }>> = {
+  kollel_region: { domain: "kollel", level: "region" },
+  bnot_region: { domain: "bnot", level: "region" },
   kollel_city: { domain: "kollel", level: "city" },
   kollel_branch: { domain: "kollel", level: "branch" },
   bnot_city: { domain: "bnot", level: "city" },
@@ -91,8 +95,7 @@ export const ROLE_SCOPE: Partial<Record<Role, { domain: Domain; level: "city" | 
 
 export const DOMAIN_LABELS: Record<Domain, string> = { kollel: "כולל ערב", bnot: "בנות צילה" };
 
-export type OrgRegion = "north" | "center" | "south";
-export type OrgUnit = { id: string; type: "city" | "branch"; domain: Domain; name: string; parentId: string | null; region?: OrgRegion | null; lat?: number; lng?: number };
+export type OrgUnit = { id: string; type: "region" | "city" | "branch"; domain: Domain; name: string; parentId: string | null; lat?: number; lng?: number };
 
 export type Submission = {
   id: string;
