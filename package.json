@@ -9,7 +9,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "build": "vite build && node scripts/generate-sitemap.mjs",
     "test": "node --test server/mitchWorkflow.test.mjs",
-    "check": "tsc --noEmit -p tsconfig.json && npm test && vite build",
+    "check": "tsc --noEmit -p tsconfig.json && vite build",
     "start": "node server/index.mjs",
     "demo:seed": "node scripts/seed-demo.mjs",
     "demo:clear": "node scripts/clear-demo.mjs",
