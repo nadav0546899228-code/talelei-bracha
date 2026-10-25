@@ -34,6 +34,7 @@ import { handleMessages } from "./messages.mjs";
 import { handleBnot } from "./bnot.mjs";
 import { challahReminders, handleMitch, publicChallah, publicMitchShare } from "./mitch.mjs";
 import { handleActivityCenter } from "./activityCenter.mjs";
+import { handleSmart, publicImpact, runSmartAutomationSweep, smartSearch } from "./smart.mjs";
 import * as push from "./webpush.mjs";
 
 const ROOT = join(fileURLToPath(new URL(".", import.meta.url)), "..", "dist");
@@ -265,6 +266,7 @@ const BACKUP_COLLECTIONS = [
   "users", "phoneUsers", "submissions", "content", "avrechim", "kollelEntries", "kollelMonths", "kollelSettings", "kollelAttendance",
   "orgUnits", "contacts", "broadcasts", "settings", "messages", "bnotMembers", "bnotActivities", "pushSubs",
   "kollelMonthStatus", "bcTemplates", "bcScheduled", "donations", "avrechFiles", "mitchazkim", "challahEvents", "mitchAccess", "mitchUpdates",
+  "smartTasks", "callerAssignments",
 ];
 async function makeBackup(reason, byName = "מערכת") {
   const data = {};
@@ -299,6 +301,11 @@ async function everyMinute() {
     if (yemotConfigured()) await challahReminders(store, (text, phones) => dispatch("sms", text, null, settings, phones));
   } catch (e) {
     console.error("challah", e?.message);
+  }
+  try {
+    await runSmartAutomationSweep(store, notify);
+  } catch (e) {
+    console.error("smart automation", e?.message);
   }
   try {
     const rem = await store.get("settings", "kollelReminder");
@@ -438,6 +445,10 @@ async function api(req, res, url) {
   // עדכון אישי של מתחזק/ת דרך קישור מאובטח מוואטסאפ
   if (pathname === "/api/public/mitch-share") {
     if (await publicMitchShare(req, res, url, { store, json, readBody, clean, rateLimited, clientIp, notify })) return;
+  }
+
+  if (pathname === "/api/public/live-impact" && method === "GET") {
+    return json(res, 200, await publicImpact(store));
   }
 
   // גרסת האתר הבנוי - לפי שם קובץ הסקריפט הראשי (משתנה בכל בנייה). משמש להודעת "יש גרסה חדשה"
@@ -797,7 +808,8 @@ async function api(req, res, url) {
     if (can("donations")) {
       for (const d of await store.list("donations", 20000)) if (has(d.name, d.phone, d.email)) out.push({ kind: "donation", id: d.id, title: d.name || "תרומה", sub: `${d.amount} ₪`, view: "donations" });
     }
-    return send(200, { results: out.slice(0, 60) });
+    const smart = user.views.includes("smart") ? await smartSearch(user, store, q) : [];
+    return send(200, { results: [...smart, ...out].slice(0, 60) });
   }
 
   // ---- תרומות
@@ -905,6 +917,7 @@ async function api(req, res, url) {
     const origin = `${isSecure(req) ? "https" : "http"}://${req.headers.host}`;
     return send(200, { url: `${origin}/api/yemot/attendance?key=${hook.key}` });
   }
+  if (await handleSmart(req, res, url, ctx)) return;
   if (await handleActivityCenter(req, res, url, ctx)) return;
   if (await handleKollel(req, res, url, ctx)) return;
   if (await handleBroadcast(req, res, url, ctx)) return;
