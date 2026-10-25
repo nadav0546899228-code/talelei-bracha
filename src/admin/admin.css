@@ -3962,3 +3962,142 @@
   .adm-top-menu-btn svg{width:21px;height:21px}
   .adm-top__title--page{padding-inline-start:0!important}
 }
+
+
+/* ----- שדרוג מעקב מתחזקים: היום שלי, שלבים ותשומת לב ----- */
+.adm-mitch-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 10px 0 14px;
+}
+.adm-mitch-kpis > div {
+  border: 1px solid var(--adm-border, #e4e7e5);
+  background: var(--adm-surface, #fff);
+  border-radius: 14px;
+  padding: 12px 14px;
+  display: grid;
+  gap: 2px;
+}
+.adm-mitch-kpis strong { font-size: 1.35rem; }
+.adm-mitch-kpis span { color: var(--adm-muted, #69736f); font-size: .82rem; }
+
+.adm-workflow-settings { margin: 8px 0 14px; }
+.adm-workflow-settings > .adm-panel { margin-top: 10px; }
+
+.adm-mitch-attention {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0 14px;
+  padding: 12px 14px;
+  border: 1px solid #ead9a7;
+  background: #fff9e8;
+  border-radius: 14px;
+}
+.adm-mitch-attention.is-high { border-color: #efc4c4; background: #fff1f1; }
+.adm-mitch-attention > strong { display: flex; align-items: center; gap: 7px; }
+.adm-mitch-attention > strong svg { width: 18px; height: 18px; }
+.adm-mitch-attention > div { display: flex; flex-wrap: wrap; gap: 6px; }
+.adm-mitch-attention > div span {
+  background: rgba(255,255,255,.76);
+  border: 1px solid rgba(0,0,0,.07);
+  border-radius: 999px;
+  padding: 5px 9px;
+  font-size: .82rem;
+}
+
+.adm-stage-progress {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.adm-stage-progress button {
+  appearance: none;
+  border: 1px solid var(--adm-border, #e0e5e2);
+  background: #f7f9f8;
+  color: inherit;
+  border-radius: 12px;
+  padding: 9px 7px;
+  min-height: 64px;
+  display: grid;
+  place-items: center;
+  gap: 5px;
+  cursor: pointer;
+  font: inherit;
+}
+.adm-stage-progress button i {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #e7ece9;
+  font-style: normal;
+  font-size: .76rem;
+  font-weight: 800;
+}
+.adm-stage-progress button span { font-size: .76rem; line-height: 1.25; }
+.adm-stage-progress button.is-done {
+  background: #eff8f4;
+  border-color: #bcdccb;
+}
+.adm-stage-progress button.is-done i { background: #cfeadb; color: #195b42; }
+.adm-stage-progress button.is-current {
+  background: #e7f3ef;
+  border-color: #74aa98;
+  box-shadow: inset 0 0 0 1px #74aa98;
+}
+.adm-stage-progress button.is-current i { background: #236a57; color: #fff; }
+
+.adm-today-list { display: grid; gap: 8px; }
+.adm-today-row {
+  width: 100%;
+  border: 1px solid var(--adm-border, #e4e7e5);
+  background: var(--adm-surface, #fff);
+  color: inherit;
+  border-radius: 14px;
+  padding: 12px 14px;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+  text-align: right;
+  cursor: pointer;
+  font: inherit;
+}
+.adm-today-row.is-urgent { border-color: #efc4c4; background: #fff8f8; }
+.adm-today-row__icon {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  background: #edf5f2;
+}
+.adm-today-row.is-urgent .adm-today-row__icon { background: #fee9e9; color: #a83636; }
+.adm-today-row__icon svg, .adm-today-row > svg { width: 18px; height: 18px; }
+.adm-today-row__body { display: grid; gap: 2px; min-width: 0; }
+.adm-today-row__body strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.adm-today-row__body small { color: var(--adm-muted, #69736f); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.adm-today-month {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin-top: 12px;
+  color: var(--adm-muted, #69736f);
+  font-size: .84rem;
+}
+.adm-today-month strong { color: var(--adm-text, #182522); }
+
+@media (max-width: 720px) {
+  .adm-mitch-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .adm-stage-progress {
+    display: flex;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scroll-snap-type: x proximity;
+  }
+  .adm-stage-progress button { min-width: 112px; scroll-snap-align: start; }
+  .adm-today-row__body small { white-space: normal; }
+}
