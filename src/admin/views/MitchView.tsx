@@ -209,7 +209,7 @@ function WorkflowSettings({ domain, workflow, onSaved }: { domain: "kollel" | "b
   return (
     <section className="adm-workflow-settings">
       <button type="button" className="btn btn--ghost btn--sm" onClick={() => setOpen(!open)}>
-        <Icon name="settings" /> הגדרות תהליך ומעקב
+        <Icon name="edit" /> הגדרות תהליך ומעקב
       </button>
       {open ? (
         <div className="adm-panel">
