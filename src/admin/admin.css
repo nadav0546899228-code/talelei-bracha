@@ -2808,3 +2808,113 @@
   .adm-assigned-banner{align-items:stretch;flex-direction:column}
   .adm-assigned-banner .btn{width:100%;justify-content:center}
 }
+
+
+/* ===== National activity center ===== */
+.adm-activity-center{min-width:0}
+.adm-activity-kpis{
+  display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:9px;margin:0 0 14px;
+}
+.adm-activity-kpis>div{
+  min-width:0;padding:13px;border:1px solid #dfe8e8;border-radius:16px;background:#fff;
+  display:grid;grid-template-columns:32px 1fr;grid-template-areas:"icon n" "label label";gap:3px 8px;align-items:center;
+}
+.adm-activity-kpis svg{grid-area:icon;width:22px;height:22px;color:#20787c}
+.adm-activity-kpis strong{grid-area:n;font-size:1.45rem;color:#173f42}
+.adm-activity-kpis span{grid-area:label;font-size:.72rem;color:#728385;font-weight:750}
+.adm-activity-filters{
+  display:grid;grid-template-columns:auto repeat(3,minmax(150px,1fr));gap:8px;align-items:center;margin-bottom:14px;
+}
+.adm-segmented{display:flex;padding:3px;border:1px solid #dfe7e7;border-radius:12px;background:#f7f9f9}
+.adm-segmented button{border:0;background:transparent;padding:8px 11px;border-radius:9px;font-weight:800;color:#66797b;white-space:nowrap}
+.adm-segmented button[aria-pressed="true"]{background:#fff;color:#155f63;box-shadow:0 2px 8px rgba(33,77,80,.08)}
+.adm-activity-layout{
+  display:grid;grid-template-columns:minmax(0,1.08fr) minmax(320px,.92fr);gap:12px;align-items:start;
+}
+.adm-israel-map-panel{grid-column:1 / -1;display:grid;grid-template-columns:minmax(270px,.75fr) minmax(0,1.25fr);grid-template-areas:"head head" "map ranking" "legend ranking";gap:10px 18px}
+.adm-israel-map-panel>.adm-panel__head{grid-area:head}
+.adm-calendar-panel,.adm-day-panel,.adm-israel-map-panel{min-width:0}
+.adm-calendar-panel>.adm-panel__head{justify-content:center;gap:10px}
+.adm-calendar-panel>.adm-panel__head h2{min-width:160px;text-align:center}
+.adm-calendar-weekdays,.adm-calendar-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.adm-calendar-weekdays{margin:6px 0;color:#879597;font-size:.7rem;font-weight:850;text-align:center}
+.adm-calendar-day{
+  position:relative;min-width:0;min-height:67px;padding:7px;border:1px solid #e7ecec;border-radius:11px;background:#fff;
+  text-align:start;display:flex;flex-direction:column;gap:3px;cursor:pointer;
+}
+.adm-calendar-day>span{font-size:.78rem;font-weight:800;color:#5b6f71}
+.adm-calendar-day>strong{font-size:1.05rem;color:#1d6f73}
+.adm-calendar-day>i{position:absolute;bottom:7px;right:7px;width:8px;height:8px;border-radius:50%;background:#247a7e}
+.adm-calendar-day>i.is-bnot{background:#b2436d}
+.adm-calendar-day>i.is-mixed{background:linear-gradient(90deg,#247a7e 0 50%,#b2436d 50%)}
+.adm-calendar-day.is-out{opacity:.38}
+.adm-calendar-day.is-today{box-shadow:inset 0 0 0 1px #45a2a5}
+.adm-calendar-day.is-selected{background:#edf7f7;border-color:#7eb8ba;box-shadow:0 5px 14px rgba(24,104,108,.1)}
+.adm[data-mode="girls"] .adm-calendar-day.is-selected{background:#fff3f7;border-color:#d8a1b6}
+.adm-day-timeline{display:grid;gap:0;max-height:545px;overflow:auto;padding-inline-end:3px}
+.adm-time-event{display:grid;grid-template-columns:50px 30px minmax(0,1fr);gap:8px;padding:9px 0;border-bottom:1px solid #edf1f1;min-width:0}
+.adm-time-event__time{font-size:.82rem;font-weight:900;color:#52696b;padding-top:5px;text-align:center}
+.adm-time-event__dot{position:relative;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:#e8f4f4;color:#177277;z-index:1}
+.adm-time-event__dot:after{content:"";position:absolute;top:28px;bottom:-18px;left:50%;width:1px;background:#dfe8e8}
+.adm-time-event:last-child .adm-time-event__dot:after{display:none}
+.adm-time-event__dot svg{width:15px;height:15px}
+.adm-time-event--challah .adm-time-event__dot,.adm-time-event--bnot .adm-time-event__dot{background:#faeaf0;color:#a53f66}
+.adm-time-event--site .adm-time-event__dot{background:#fff2de;color:#9a651e}
+.adm-time-event__body{display:grid;gap:2px;min-width:0}
+.adm-time-event__body>div{display:flex;align-items:center;gap:6px;min-width:0}
+.adm-time-event__body strong{white-space:normal;overflow-wrap:anywhere;font-size:.87rem}
+.adm-time-event__body>span{font-size:.73rem;color:#697d7f}
+.adm-time-event__body>small{font-size:.7rem;color:#96a0a1;white-space:normal;overflow-wrap:anywhere}
+.adm-israel-map{grid-area:map;position:relative;height:520px;max-width:390px;width:100%;justify-self:center;border-radius:20px;background:linear-gradient(180deg,#f5fbfb,#eef6f5);overflow:hidden;border:1px solid #e0eaea}
+.adm-israel-map:before{content:"";position:absolute;inset:0;background:radial-gradient(circle at 50% 30%,rgba(47,144,148,.08),transparent 48%)}
+.adm-israel-map svg{position:absolute;inset:18px 22px;width:calc(100% - 44px);height:calc(100% - 36px)}
+.adm-israel-shape{fill:#fff;stroke:#9bbfc1;stroke-width:3}
+.adm-israel-river{fill:none;stroke:#c9dddd;stroke-width:2;stroke-dasharray:5 6}
+.adm-map-pin{
+  position:absolute;transform:translate(-50%,-50%);border:3px solid #fff;border-radius:50%;background:#1d7b7f;color:#fff;
+  display:grid;place-items:center;box-shadow:0 5px 13px rgba(21,77,80,.25);cursor:pointer;z-index:3;padding:0;
+}
+.adm-map-pin:hover,.adm-map-pin.is-active{z-index:5;background:#a73f67;transform:translate(-50%,-50%) scale(1.12)}
+.adm-map-pin>span{font-size:.68rem;font-weight:900;line-height:1}
+.adm-map-pin>small{position:absolute;top:calc(100% + 4px);left:50%;transform:translateX(-50%);background:rgba(24,59,62,.88);color:#fff;border-radius:6px;padding:2px 5px;font-size:.61rem;white-space:nowrap;opacity:0;pointer-events:none}
+.adm-map-pin:hover>small,.adm-map-pin.is-active>small{opacity:1}
+.adm-map-legend{grid-area:legend;display:flex;flex-wrap:wrap;gap:10px;justify-content:center;color:#738587;font-size:.69rem}
+.adm-map-legend span{display:flex;align-items:center;gap:4px}
+.adm-map-legend i{width:8px;height:8px;border-radius:50%;background:#267b7f}
+.adm-map-legend i.is-bnot{background:#ad4169}
+.adm-city-ranking{grid-area:ranking;display:grid;align-content:start;gap:7px}
+.adm-city-ranking button{display:grid;grid-template-columns:minmax(0,1fr) 42px 80px;gap:8px;align-items:center;padding:11px;border:1px solid #e5ebeb;border-radius:13px;background:#fff;text-align:start}
+.adm-city-ranking button:hover{border-color:#a9c7c8;background:#fafcfc}
+.adm-city-ranking span{font-weight:800}
+.adm-city-ranking strong{font-size:1.05rem;color:#1d7478;text-align:center}
+.adm-city-ranking small{font-size:.7rem;color:#899697;text-align:end}
+
+@media(max-width:1000px){
+  .adm-activity-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .adm-activity-filters{grid-template-columns:1fr 1fr}
+  .adm-segmented{grid-column:1/-1;justify-self:start}
+  .adm-activity-layout{grid-template-columns:1fr}
+  .adm-israel-map-panel{grid-column:auto}
+}
+@media(max-width:700px){
+  .adm-activity-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .adm-activity-kpis>div:last-child{grid-column:1/-1}
+  .adm-activity-filters{grid-template-columns:1fr}
+  .adm-activity-filters .select,.adm-segmented{width:100%;max-width:100%;grid-column:auto}
+  .adm-segmented button{flex:1}
+  .adm-calendar-day{min-height:54px;padding:5px}
+  .adm-calendar-day>strong{font-size:.85rem}
+  .adm-israel-map-panel{display:block}
+  .adm-israel-map-panel>.adm-panel__head{margin-bottom:10px}
+  .adm-israel-map{height:480px;margin:0 auto 10px}
+  .adm-map-legend{margin-bottom:12px}
+  .adm-city-ranking{margin-top:10px}
+  .adm-city-ranking button{grid-template-columns:minmax(0,1fr) 35px 70px}
+}
+@media(max-width:430px){
+  .adm-calendar-weekdays,.adm-calendar-grid{gap:2px}
+  .adm-calendar-day{min-height:48px;border-radius:8px}
+  .adm-calendar-day>i{width:6px;height:6px;bottom:5px;right:5px}
+  .adm-time-event{grid-template-columns:42px 27px minmax(0,1fr);gap:6px}
+  .adm-israel-map{height:430px}
+}
