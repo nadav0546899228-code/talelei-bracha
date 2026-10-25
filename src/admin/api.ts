@@ -10,10 +10,17 @@ export class ApiError extends Error {
 }
 
 export async function api<T = unknown>(path: string, init: RequestInit & { body?: BodyInit | null } = {}): Promise<T> {
+  let orgScope = "";
+  try { orgScope = localStorage.getItem("tb-active-org-scope") || ""; } catch { /* localStorage לא זמין */ }
   const res = await fetch(path, {
     credentials: "same-origin",
     ...init,
-    headers: { Accept: "application/json", ...(init.body ? { "Content-Type": "application/json" } : {}), ...init.headers },
+    headers: {
+      Accept: "application/json",
+      ...(init.body ? { "Content-Type": "application/json" } : {}),
+      ...(path.startsWith("/api/") && orgScope ? { "X-TB-Org-Scope": orgScope } : {}),
+      ...init.headers,
+    },
   });
   const isJson = res.headers.get("content-type")?.includes("json");
   const data = isJson ? await res.json() : null;
