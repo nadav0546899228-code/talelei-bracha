@@ -14,7 +14,7 @@ import { ImpersonateModal } from "./Impersonate";
 import { FirstRunGuide, guideKey } from "./FirstRunGuide";
 import { entriesFor, entryActive, hubsFor, loadBar, loadMode, MODE_LABELS, modesFor, saveBar, saveMode, type Mode, type NavEntry, type NavLeaf, type Screen } from "./nav";
 import { HubView } from "./NavParts";
-import { useAlerts } from "./alerts";
+import { useAlerts, type Alert } from "./alerts";
 import { SearchModal } from "./Search";
 import { disablePush, enablePush, pushState } from "./push";
 import { OrgView } from "./views/OrgView";
@@ -325,7 +325,6 @@ export default function AdminApp() {
   const hubs = useMemo(() => (me ? hubsFor(me, mode) : []), [me, mode]);
   const entries = useMemo(() => entriesFor(hubs), [hubs]);
   const dash = useAlerts(state === "ready" ? me : null, mode, subs);
-  const [bellOpen, setBellOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [appMenuOpen, setAppMenuOpen] = useState(false);
@@ -620,64 +619,48 @@ export default function AdminApp() {
       items: h.items.filter((l) => !menuQuery || `${h.label} ${l.label} ${l.hint || ""}`.toLocaleLowerCase("he").includes(menuQuery)),
     }))
     .filter((h) => h.items.length);
+  const unreadMessages = dash.active.find((a) => a.id === "msgs")?.count ?? 0;
 
   return (
     <div className="adm" data-mode={mode} data-display={displayMode}>
       <header className="adm-top">
-        <button
-          type="button"
-          className="adm-appmenu-trigger"
-          onClick={() => setAppMenuOpen(true)}
-          aria-label="פתיחת כל אפשרויות המערכת"
-          title="כל המערכת"
-        >
-          <Icon name="menu" />
-        </button>
         {modes.length > 1 ? (
-          <button type="button" className="adm-mode" onClick={switchMode} aria-label={`מעבר ל${MODE_LABELS[mode === "boys" ? "girls" : "boys"]}`} title={`מעבר ל${MODE_LABELS[mode === "boys" ? "girls" : "boys"]}`}>
-            <Logo org={mode === "boys" ? "taleiBracha" : "bnotTzila"} height={40} />
+          <button type="button" className="adm-mode adm-mode--logo-only" onClick={switchMode} aria-label={`מעבר ל${MODE_LABELS[mode === "boys" ? "girls" : "boys"]}`} title={`מעבר ל${MODE_LABELS[mode === "boys" ? "girls" : "boys"]}`}>
+            <Logo org={mode === "boys" ? "taleiBracha" : "bnotTzila"} height={42} />
             <Icon name="refresh" className="adm-mode__swap" />
           </button>
         ) : (
-          <Link to="/" aria-label="לאתר">
-            <Logo org={mode === "boys" ? "taleiBracha" : "bnotTzila"} height={40} />
+          <Link to="/" className="adm-mode adm-mode--logo-only" aria-label="לאתר">
+            <Logo org={mode === "boys" ? "taleiBracha" : "bnotTzila"} height={42} />
           </Link>
         )}
-        <div className="adm-top__title">
-          {MODE_LABELS[mode]}
-          <small>{title}</small>
+        <div className="adm-top__title adm-top__title--page">
+          <strong>{title}</strong>
         </div>
         <div className="adm-top__spacer" />
         <div className="adm-user">
-          {me.canImpersonate ? (
-            <button
-              type="button"
-              className="adm-viewbtn adm-views-trigger"
-              onClick={openImpersonate}
-              title="מעבר בין תצוגות"
-              aria-label={`התצוגה הנוכחית: ${viewName}. מעבר בין תצוגות`}
-            >
-              <span>{viewName}</span>
-              <Icon name="chevronDown" />
-            </button>
-          ) : null}
           <button type="button" className="adm-icon-btn adm-search-btn" onClick={() => setSearchOpen(true)} aria-label="חיפוש" title="חיפוש">
             <Icon name="search" />
           </button>
-          <button type="button" className="adm-icon-btn adm-bell" onClick={() => setBellOpen(!bellOpen)} aria-label={`התראות${dash.active.length ? ` (${dash.active.length})` : ""}`} title="התראות">
-            <Icon name="bell" />
-            {dash.active.length ? <span className="adm-badge">{dash.active.length}</span> : null}
-          </button>
-          <button type="button" className="adm-account-btn" onClick={() => setProfileOpen(true)} aria-label="האזור האישי" title="האזור האישי">
-            {account.picture ? <img src={account.picture} alt="" referrerPolicy="no-referrer" /> : <span className="adm-avatar">{initial}</span>}
+          <button type="button" className="adm-account-btn adm-account-btn--notified" onClick={() => setProfileOpen(true)} aria-label={`האזור האישי${unreadMessages ? `, ${unreadMessages} הודעות שלא נקראו` : ""}`} title="האזור האישי">
+            <span className="adm-account-btn__avatar-wrap">
+              {account.picture ? <img src={account.picture} alt="" referrerPolicy="no-referrer" /> : <span className="adm-avatar">{initial}</span>}
+              {unreadMessages ? <span className="adm-account-msg-badge">{unreadMessages > 99 ? "99+" : unreadMessages}</span> : null}
+            </span>
             <span className="adm-account-btn__text">
               <strong>{account.name || account.email}</strong>
-              <small>האזור האישי</small>
+              <small>{unreadMessages ? `${unreadMessages} הודעות חדשות` : "האזור האישי"}</small>
             </span>
             <Icon name="chevronDown" className="adm-account-btn__arrow" />
           </button>
         </div>
       </header>
+
+      <button type="button" className="adm-system-launcher adm-system-launcher--mobile" onClick={() => setAppMenuOpen(true)}>
+        <span className="adm-system-launcher__icon"><Icon name="menu" /></span>
+        <span><strong>כל המערכת</strong><small>כל האפשרויות במקום אחד</small></span>
+        <Icon name="arrowLeft" />
+      </button>
 
       {appMenuOpen ? (
         <div className="adm-appmenu-back" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && setAppMenuOpen(false)}>
@@ -764,6 +747,11 @@ export default function AdminApp() {
 
       <div className="adm-layout">
         <aside className="adm-side">
+          <button type="button" className="adm-system-launcher adm-system-launcher--side" onClick={() => setAppMenuOpen(true)}>
+            <span className="adm-system-launcher__icon"><Icon name="menu" /></span>
+            <span><strong>כל המערכת</strong><small>חיפוש וקיצורים</small></span>
+            <Icon name="arrowLeft" />
+          </button>
           {modes.length > 1 ? (
             <div className="adm-modes" role="tablist" aria-label="מצב">
               {modes.map((m) => (
@@ -808,39 +796,14 @@ export default function AdminApp() {
       </div>
       <div className="adm-tabs" ref={barScrollRef}>{barNav}</div>
       {searchOpen ? <SearchModal onClose={() => setSearchOpen(false)} onGo={go} /> : null}
-      {bellOpen ? (
-        <>
-          <div className="adm-pop-back" onClick={() => setBellOpen(false)} />
-          <div className="adm-pop" role="dialog" aria-label="התראות">
-            {dash.active.length ? (
-              dash.active.map((a) => (
-                <button
-                  key={a.id}
-                  type="button"
-                  className={`adm-pop__item adm-pop__item--${a.tone}`}
-                  onClick={() => {
-                    setBellOpen(false);
-                    go(a.view, a.tab);
-                  }}
-                >
-                  <Icon name={a.icon} />
-                  <span>{a.label}</span>
-                  <span className="adm-badge" style={{ flex: "none" }}>
-                    {a.count}
-                  </span>
-                </button>
-              ))
-            ) : (
-              <div className="adm-allgood" style={{ margin: 0 }}>
-                <Icon name="checkCircle" /> אין התראות
-              </div>
-            )}
-          </div>
-        </>
-      ) : null}
       {profileOpen ? (
         <Profile
           me={me}
+          alerts={dash.active}
+          onAlert={(view, tab) => {
+            setProfileOpen(false);
+            go(view, tab);
+          }}
           onLogout={logout}
           onClose={() => setProfileOpen(false)}
           onCode={() => {
@@ -887,6 +850,8 @@ export default function AdminApp() {
 
 function Profile({
   me,
+  alerts,
+  onAlert,
   onClose,
   onCode,
   onSaved,
@@ -897,6 +862,8 @@ function Profile({
   onDisplayMode,
 }: {
   me: Me;
+  alerts: Alert[];
+  onAlert: (view: View, tab?: string) => void;
   onClose: () => void;
   onCode: () => void;
   onSaved: () => void;
@@ -964,6 +931,25 @@ function Profile({
             <strong>{account.name || account.email}</strong>
             <span>{roleText}</span>
             {account.email ? <small dir="ltr">{account.email}</small> : null}
+          </div>
+        </section>
+
+        <section className="adm-personal__card adm-personal__alerts">
+          <div className="adm-personal__heading">
+            <span className="adm-personal__heading-badge"><Icon name="bell" />{alerts.length ? <b>{alerts.reduce((n, a) => n + a.count, 0)}</b> : null}</span>
+            <div><h2>הודעות והתראות</h2><p>כל מה שמחכה לך במערכת, במקום אחד.</p></div>
+          </div>
+          <div className="adm-personal__alert-list">
+            {alerts.length ? alerts.map((a) => (
+              <button type="button" className={`adm-personal__alert adm-personal__alert--${a.tone}`} key={a.id} onClick={() => onAlert(a.view, a.tab)}>
+                <span className="adm-personal__rowicon"><Icon name={a.icon} /></span>
+                <span><strong>{a.label}</strong><small>{a.id === "msgs" ? "פתיחת ההודעות" : "לחיצה למעבר לטיפול"}</small></span>
+                <b>{a.count}</b>
+                <Icon name="arrowLeft" className="adm-personal__arrow" />
+              </button>
+            )) : (
+              <div className="adm-allgood"><Icon name="checkCircle" /> אין הודעות או התראות שממתינות לך</div>
+            )}
           </div>
         </section>
 
