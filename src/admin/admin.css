@@ -4658,3 +4658,18 @@
 .adm-dashboard .adm-today-row__body strong { font-size: 0.9rem !important; }
 .adm-dashboard .adm-today-row__body small { font-size: 0.76rem !important; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
 .adm-dashboard .adm-today-row > svg:last-child { width: 14px !important; height: 14px !important; opacity: 0.4; }
+/* זום לטבלה בלבד + קיבוץ לפי עיר */
+.adm-sheet__wrap { touch-action: pan-x pan-y; }
+.adm-sheet__zoom { display: inline-flex; align-items: center; background: #eef3f3; border-radius: 10px; padding: 2px; }
+.adm-sheet__zoom button { min-width: 30px; height: 30px; border: 0; background: transparent; border-radius: 8px; font: inherit; font-weight: 800; font-size: 1.05rem; color: #3d5a5c; cursor: pointer; }
+.adm-sheet__zoom .adm-sheet__zoomval { font-size: 0.72rem; min-width: 42px; }
+.adm-sheet__zoom button:active { background: #fff; }
+.adm-sheet__group td { position: static !important; background: #e4f1f1 !important; border-top: 2px solid #9cc7c7 !important; padding: 6px 10px !important; font-size: 0.82rem; }
+.adm[data-mode="girls"] .adm-sheet__group td { background: #f8e3ec !important; border-top-color: #e2a5bf !important; }
+.adm-sheet__glabel { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.adm-sheet__glabel svg { width: 14px; height: 14px; }
+.adm-sheet__glabel small { color: #5b6b6b; }
+.adm-sheet__t tbody tr.adm-sheet__band--0:not(.adm-sheet__group) { background: #ffffff; }
+.adm-sheet__t tbody tr.adm-sheet__band--1:not(.adm-sheet__group) { background: #f6fafa; }
+.adm[data-mode="girls"] .adm-sheet__t tbody tr.adm-sheet__band--1:not(.adm-sheet__group) { background: #fdf6f9; }
+.adm-sheet__t tbody tr.adm-sheet__group.adm-sheet__band--1 td { background: #ddeeee !important; }

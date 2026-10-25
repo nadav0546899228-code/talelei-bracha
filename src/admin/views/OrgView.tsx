@@ -125,19 +125,29 @@ export function OrgView({ me, domain }: { me: Me; domain: Domain }) {
       const names = (list: { name?: string; email?: string }[]) => list.map((x) => x.name || x.email).join(", ");
       return (
         <SheetTable<R>
-          id={`org-${domain}`}
+          id={`org2-${domain}`}
           rows={rowsT}
           rowKey={(r) => r.key}
           exportName="מבנה ארגוני"
           empty={seesAll ? "מתחילים בהוספת אזור, אחר כך ערים וסניפים." : "לא הוגדר לך מבנה ארגוני."}
           tone={(r) => (r.branch && !branchPeople(r.branch.id).length ? "yellow" : "none")}
+          group={{
+            key: (r) => r.city.id,
+            label: (r, n) => (
+              <span className="adm-sheet__glabel">
+                <Icon name="pin" /> <b>{r.city.name}</b>
+                <small>{n > 1 || r.branch ? `${n} סניפים` : "אין סניפים"}{r.region ? ` · ${r.region.name}` : ""}</small>
+                <small>· {domain === "bnot" ? "רכזת" : "רכז"}: {names(cityPeople(r.city.id)) || "לא הוגדר"}</small>
+              </span>
+            ),
+          }}
           cols={[
-            { key: "branch", label: "סניף", fixed: true, width: 100, cell: (r) => r.branch?.name || <span className="adm-ut-dim">אין סניפים</span>, value: (r) => r.branch?.name || "" },
-            { key: "city", label: "עיר", width: 90, cell: (r) => r.city.name, value: (r) => r.city.name },
-            { key: "region", label: "אזור", width: 90, cell: (r) => r.region?.name || "", value: (r) => r.region?.name || "" },
+            { key: "city", label: "עיר", fixed: true, width: 90, cell: (r) => r.city.name, value: (r) => r.city.name },
+            { key: "branch", label: "סניף", width: 90, cell: (r) => r.branch?.name || <span className="adm-ut-dim">אין סניפים</span>, value: (r) => r.branch?.name || "" },
+            ...(domain === "kollel" ? [{ key: "count", label: "אברכים", width: 70, align: "center" as const, cell: (r: R) => (r.branch ? avrechim.filter((a) => a.active && a.branchId === r.branch!.id).length : ""), value: (r: R) => (r.branch ? avrechim.filter((a) => a.active && a.branchId === r.branch!.id).length : 0) }] : []),
             { key: "mgr", label: domain === "bnot" ? "מנהלת סניף" : "מנהל סניף", width: 130, cell: (r) => (r.branch ? names(branchPeople(r.branch.id)) || <span className="adm-sheet__tag adm-sheet__tag--yellow">לא הוגדר</span> : ""), value: (r) => (r.branch ? names(branchPeople(r.branch.id)) : "") },
-            { key: "cityMgr", label: domain === "bnot" ? "רכזת עיר" : "רכז עיר", width: 130, cell: (r) => names(cityPeople(r.city.id)) || <span className="adm-ut-dim">—</span>, value: (r) => names(cityPeople(r.city.id)) },
-            ...(domain === "kollel" ? [{ key: "count", label: "אברכים", width: 70, cell: (r: R) => (r.branch ? avrechim.filter((a) => a.active && a.branchId === r.branch!.id).length : ""), value: (r: R) => (r.branch ? avrechim.filter((a) => a.active && a.branchId === r.branch!.id).length : 0) }] : []),
+            { key: "cityMgr", label: domain === "bnot" ? "רכזת עיר" : "רכז עיר", width: 130, hidden: true, cell: (r) => names(cityPeople(r.city.id)) || <span className="adm-ut-dim">—</span>, value: (r) => names(cityPeople(r.city.id)) },
+            { key: "region", label: "אזור", width: 90, hidden: true, cell: (r) => r.region?.name || "", value: (r) => r.region?.name || "" },
             { key: "act", label: "פעולות", width: 150, cell: (r) => (
               <span className="adm-ut-acts">
                 <button type="button" className="adm-ut-act" title="כניסה לתצוגה" aria-label="כניסה לתצוגה" onClick={() => (r.branch ? activate("branch", r.branch.id) : activate("city", r.city.id))}><Icon name="eye" /></button>

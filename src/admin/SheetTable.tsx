@@ -3,7 +3,9 @@
  * גובה שורה לבחירה (צפוף / רגיל / מרווח), הסתרת עמודות, צבע שורה לפי מצב וייצוא.
  * ההעדפות נשמרות במכשיר לכל טבלה בנפרד.
  */
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
+
+type TouchLike = { touches: ArrayLike<{ clientX: number; clientY: number }>; preventDefault(): void };
 import { Icon } from "../components/Icon";
 import { buildXlsx, downloadBlob } from "./xlsx";
 
@@ -21,7 +23,7 @@ export type Col<T> = {
   align?: "start" | "center";
 };
 type Density = "compact" | "normal" | "roomy";
-type Prefs = { density: Density; hidden: string[] };
+type Prefs = { density: Density; hidden: string[]; zoom?: number };
 
 const read = (id: string, cols: Col<unknown>[]): Prefs => {
   try {
@@ -44,6 +46,7 @@ export function SheetTable<T>({
   current,
   empty = "אין נתונים להצגה",
   toolbar,
+  group,
 }: {
   id: string;
   rows: T[];
@@ -55,6 +58,8 @@ export function SheetTable<T>({
   current?: string | null;
   empty?: string;
   toolbar?: ReactNode;
+  /** קיבוץ שורות (למשל כל הסניפים של אותה עיר) - כותרת קבוצה ופס צבע לסירוגין */
+  group?: { key: (r: T) => string; label: (r: T, count: number) => ReactNode };
 }) {
   const [prefs, setPrefs] = useState<Prefs>(() => read(id, cols as Col<unknown>[]));
   const [sort, setSort] = useState<{ key: string; dir: 1 | -1 } | null>(null);
@@ -67,6 +72,11 @@ export function SheetTable<T>({
       /* */
     }
   };
+  // הגדלה/הקטנה של הטבלה בלבד (בכפתורים או בצביטה בשתי אצבעות) - שאר המסך לא זז
+  const zoom = prefs.zoom ?? 1;
+  const setZoom = (z: number) => save({ ...prefs, zoom: Math.round(Math.min(1.8, Math.max(0.6, z)) * 100) / 100 });
+  const pinch = useRef<{ d: number; z: number } | null>(null);
+  const dist = (e: TouchLike) => Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
   const visible = cols.filter((c) => c.fixed || !prefs.hidden.includes(c.key));
   const sorted = useMemo(() => {
     if (!sort) return rows;
@@ -79,6 +89,12 @@ export function SheetTable<T>({
       return (typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y), "he")) * sort.dir;
     });
   }, [rows, sort, cols]);
+
+  const groupIndex = useMemo(() => {
+    const m = new Map<string, number>();
+    if (group) for (const r of sorted) { const g = group.key(r); if (!m.has(g)) m.set(g, m.size); }
+    return m;
+  }, [sorted, group]);
 
   const exportXlsx = () => {
     const ex = visible.filter((c) => c.value);
@@ -119,14 +135,37 @@ export function SheetTable<T>({
             </div>
           ) : null}
         </div>
+        <div className="adm-sheet__zoom" aria-label="גודל הטבלה">
+          <button type="button" onClick={() => setZoom(zoom - 0.1)} aria-label="הקטנת הטבלה" title="הקטנה">−</button>
+          <button type="button" className="adm-sheet__zoomval" onClick={() => setZoom(1)} title="חזרה לגודל רגיל">{Math.round(zoom * 100)}%</button>
+          <button type="button" onClick={() => setZoom(zoom + 0.1)} aria-label="הגדלת הטבלה" title="הגדלה">+</button>
+        </div>
         {exportName ? (
           <button type="button" className="adm-ut-act" title="ייצוא לאקסל" aria-label="ייצוא לאקסל" onClick={exportXlsx}>
             <Icon name="download" />
           </button>
         ) : null}
       </div>
-      <div className="adm-sheet__wrap">
-        <table className="adm-sheet__t">
+      <div
+        className="adm-sheet__wrap"
+        onTouchStart={(e) => {
+          if (e.touches.length === 2) pinch.current = { d: dist(e), z: zoom };
+        }}
+        onTouchMove={(e) => {
+          if (e.touches.length === 2 && pinch.current) {
+            e.preventDefault();
+            const next = pinch.current.z * (dist(e) / pinch.current.d);
+            setPrefs((p) => ({ ...p, zoom: Math.min(1.8, Math.max(0.6, next)) }));
+          }
+        }}
+        onTouchEnd={() => {
+          if (pinch.current) {
+            pinch.current = null;
+            setZoom(prefs.zoom ?? 1);
+          }
+        }}
+      >
+        <table className="adm-sheet__t" style={{ zoom }}>
           <thead>
             <tr>
               {visible.map((c) => (
@@ -144,16 +183,27 @@ export function SheetTable<T>({
             </tr>
           </thead>
           <tbody>
-            {sorted.map((r) => {
+            {sorted.map((r, i) => {
               const k = rowKey(r);
+              const gk = group && !sort ? group.key(r) : null;
+              const startsGroup = gk !== null && (i === 0 || group!.key(sorted[i - 1]) !== gk);
+              const gIndex = gk !== null ? groupIndex.get(gk) ?? 0 : 0;
               const t = tone?.(r) || "none";
-              return (
-                <tr key={k} className={`adm-sheet__tone--${t}${current === k ? " is-current" : ""}${onRow ? " is-click" : ""}`} onClick={onRow ? (ev) => { if (!(ev.target as HTMLElement).closest("a,button,input,select")) onRow(r); } : undefined}>
+              const tr = (
+                <tr key={k} className={`adm-sheet__tone--${t}${current === k ? " is-current" : ""}${onRow ? " is-click" : ""}${gk !== null ? ` adm-sheet__band--${gIndex % 2}` : ""}`} onClick={onRow ? (ev) => { if (!(ev.target as HTMLElement).closest("a,button,input,select")) onRow(r); } : undefined}>
                   {visible.map((c) => (
                     <td key={c.key} style={{ textAlign: c.align === "center" ? "center" : undefined }}>{c.cell(r)}</td>
                   ))}
                 </tr>
               );
+              if (!startsGroup) return tr;
+              const count = sorted.filter((x) => group!.key(x) === gk).length;
+              return [
+                <tr key={`g:${gk}`} className={`adm-sheet__group adm-sheet__band--${gIndex % 2}`}>
+                  <td colSpan={visible.length}>{group!.label(r, count)}</td>
+                </tr>,
+                tr,
+              ];
             })}
             {!sorted.length ? (
               <tr>
