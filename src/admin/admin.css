@@ -4581,3 +4581,8 @@
   .adm-head { margin-bottom: 8px !important; gap: 6px !important; }
   .adm-head > .btn--ghost { display: none !important; }
 }
+.adm-sheet__t .adm-ut-acts { flex-wrap: nowrap; gap: 4px; }
+.adm-sheet__t .adm-ut-act { width: 30px; height: 30px; border-radius: 8px; }
+.adm-sheet__t .adm-ut-act svg { width: 15px; height: 15px; }
+.adm-sheet--compact .adm-sheet__t .adm-ut-act { width: 24px; height: 24px; }
+.adm-sheet__t .adm-sheet__tag { white-space: nowrap; }

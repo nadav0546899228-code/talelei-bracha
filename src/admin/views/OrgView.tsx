@@ -7,6 +7,7 @@ import { useOrg, type OrgPerson } from "../org";
 import { PhoneUsersPanel } from "./PhoneUsersPanel";
 import { Fab, IconActions } from "../components";
 import { useLive } from "../live";
+import { SheetTable } from "../SheetTable";
 
 type EditUnit={id?:string;type:"region"|"city"|"branch";name:string;parentId:string|null};
 
@@ -17,6 +18,21 @@ export function OrgView({ me, domain }: { me: Me; domain: Domain }) {
   const seesAll = roles.includes("developer") || roles.includes("ceo") || roles.includes("chief_coordinator");
   const canRegion = seesAll || roles.includes(`${domain}_region` as never);
   const [avrechim, setAvrechim] = useState<Avrech[]>([]);
+  const [orgView, setOrgView] = useState<"table" | "tree">(() => {
+    try {
+      return localStorage.getItem("tb-view:org") === "tree" ? "tree" : "table";
+    } catch {
+      return "table";
+    }
+  });
+  const pickOrgView = (v: "table" | "tree") => {
+    setOrgView(v);
+    try {
+      localStorage.setItem("tb-view:org", v);
+    } catch {
+      /* */
+    }
+  };
   const [edit, setEdit] = useState<EditUnit | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -92,7 +108,50 @@ export function OrgView({ me, domain }: { me: Me; domain: Domain }) {
     </section>:null}
     {msg?<div className={`adm-alert ${msg.ok?"adm-alert--ok":"adm-alert--error"}`}>{msg.text}</div>:null}
 
-    <div className="adm-org-tree">
+    <div className="adm-sheet__tools" style={{ marginBottom: 6 }}>
+      <div className="adm-viewtoggle" role="radiogroup" aria-label="תצוגה">
+        <button type="button" className={orgView === "table" ? "is-on" : ""} onClick={() => pickOrgView("table")}><Icon name="grid" /> טבלה</button>
+        <button type="button" className={orgView === "tree" ? "is-on" : ""} onClick={() => pickOrgView("tree")}><Icon name="list" /> עץ</button>
+      </div>
+    </div>
+    {orgView === "table" ? (() => {
+      type R = { key: string; region: OrgUnit | undefined; city: OrgUnit; branch: OrgUnit | null };
+      const rowsT: R[] = [];
+      for (const reg of regions) for (const city of cities.filter((c) => c.parentId === reg.id)) {
+        const bs = branches.filter((b) => b.parentId === city.id);
+        if (!bs.length) rowsT.push({ key: city.id, region: reg, city, branch: null });
+        for (const b of bs) rowsT.push({ key: b.id, region: reg, city, branch: b });
+      }
+      const names = (list: { name?: string; email?: string }[]) => list.map((x) => x.name || x.email).join(", ");
+      return (
+        <SheetTable<R>
+          id={`org-${domain}`}
+          rows={rowsT}
+          rowKey={(r) => r.key}
+          exportName="מבנה ארגוני"
+          empty={seesAll ? "מתחילים בהוספת אזור, אחר כך ערים וסניפים." : "לא הוגדר לך מבנה ארגוני."}
+          tone={(r) => (r.branch && !branchPeople(r.branch.id).length ? "yellow" : "none")}
+          cols={[
+            { key: "branch", label: "סניף", fixed: true, width: 100, cell: (r) => r.branch?.name || <span className="adm-ut-dim">אין סניפים</span>, value: (r) => r.branch?.name || "" },
+            { key: "city", label: "עיר", width: 90, cell: (r) => r.city.name, value: (r) => r.city.name },
+            { key: "region", label: "אזור", width: 90, cell: (r) => r.region?.name || "", value: (r) => r.region?.name || "" },
+            { key: "mgr", label: domain === "bnot" ? "מנהלת סניף" : "מנהל סניף", width: 130, cell: (r) => (r.branch ? names(branchPeople(r.branch.id)) || <span className="adm-sheet__tag adm-sheet__tag--yellow">לא הוגדר</span> : ""), value: (r) => (r.branch ? names(branchPeople(r.branch.id)) : "") },
+            { key: "cityMgr", label: domain === "bnot" ? "רכזת עיר" : "רכז עיר", width: 130, cell: (r) => names(cityPeople(r.city.id)) || <span className="adm-ut-dim">—</span>, value: (r) => names(cityPeople(r.city.id)) },
+            ...(domain === "kollel" ? [{ key: "count", label: "אברכים", width: 70, cell: (r: R) => (r.branch ? avrechim.filter((a) => a.active && a.branchId === r.branch!.id).length : ""), value: (r: R) => (r.branch ? avrechim.filter((a) => a.active && a.branchId === r.branch!.id).length : 0) }] : []),
+            { key: "act", label: "פעולות", width: 150, cell: (r) => (
+              <span className="adm-ut-acts">
+                <button type="button" className="adm-ut-act" title="כניסה לתצוגה" aria-label="כניסה לתצוגה" onClick={() => (r.branch ? activate("branch", r.branch.id) : activate("city", r.city.id))}><Icon name="eye" /></button>
+                <button type="button" className="adm-ut-act" title="עריכה" aria-label="עריכה" onClick={() => setEdit(r.branch ? { id: r.branch.id, type: "branch", name: r.branch.name, parentId: r.branch.parentId } : { id: r.city.id, type: "city", name: r.city.name, parentId: r.city.parentId })}><Icon name="edit" /></button>
+                <button type="button" className="adm-ut-act" title={`סניף חדש ב${r.city.name}`} aria-label={`סניף חדש ב${r.city.name}`} onClick={() => setEdit({ type: "branch", name: "", parentId: r.city.id })}><Icon name="plus" /></button>
+                {seesAll ? <button type="button" className="adm-ut-act adm-ut-act--danger" title="מחיקה" aria-label="מחיקה" onClick={() => remove(r.branch || r.city)}><Icon name="trash" /></button> : null}
+              </span>
+            ) },
+          ]}
+        />
+      );
+    })() : null}
+
+    <div className="adm-org-tree" style={orgView === "table" ? { display: "none" } : undefined}>
       {regions.map((reg)=>{
         const regCities=cities.filter((c)=>c.parentId===reg.id);
         const rp=regionPeople(reg.id);
