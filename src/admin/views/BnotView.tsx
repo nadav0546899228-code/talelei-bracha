@@ -47,7 +47,7 @@ export function BnotView({ initialTab }: { me: Me; initialTab?: string }) {
       </div>
       <div className="adm-tabs-inline" role="tablist">
         <button type="button" role="tab" className="adm-chip" aria-pressed={tab === "challah"} onClick={() => setTab("challah")}>
-          <Icon name="sparkle" width={16} height={16} /> הפרשת חלה
+          <Icon name="wheat" width={16} height={16} /> הפרשת חלה
         </button>
         <button type="button" role="tab" className="adm-chip" aria-pressed={tab === "mitch"} onClick={() => setTab("mitch")}>
           <Icon name="heart" width={16} height={16} /> מתחזקות
