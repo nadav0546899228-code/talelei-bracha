@@ -42,12 +42,12 @@ export function OrgScopeBar({me,mode}:{me:Me;mode:Mode}){
   if(!org||(!regions.length&&!cities.length&&!branches.length)) return null;
 
   return <div className="adm-orgscope" aria-label="רמת הצפייה במערכת">
-    <span className="adm-orgscope__label"><Icon name="layers"/><span>רמת צפייה</span></span>
+    <span className="adm-orgscope__label"><Icon name="grid"/><span>רמת צפייה</span></span>
     <div className="adm-orgscope__crumbs">
       <button type="button" className={!current?"is-active":""} onClick={()=>set(undefined)}>
         <Icon name="globe"/>{canNational?"ארצי":"כל תחום האחריות"}
       </button>
-      <Icon name="chevronLeft" className="adm-orgscope__sep"/>
+      <Icon name="arrowLeft" className="adm-orgscope__sep"/>
       <select
         className={selectedRegionId?"is-active":""}
         aria-label="אזור"
@@ -57,7 +57,7 @@ export function OrgScopeBar({me,mode}:{me:Me;mode:Mode}){
         <option value="">אזור</option>
         {regions.map((x)=><option key={x.id} value={x.id}>{x.name}</option>)}
       </select>
-      <Icon name="chevronLeft" className="adm-orgscope__sep"/>
+      <Icon name="arrowLeft" className="adm-orgscope__sep"/>
       <select
         className={selectedCityId?"is-active":""}
         aria-label="עיר"
@@ -68,7 +68,7 @@ export function OrgScopeBar({me,mode}:{me:Me;mode:Mode}){
         <option value="">עיר</option>
         {cities.filter((x)=>!selectedRegionId||x.parentId===selectedRegionId).map((x)=><option key={x.id} value={x.id}>{x.name}</option>)}
       </select>
-      <Icon name="chevronLeft" className="adm-orgscope__sep"/>
+      <Icon name="arrowLeft" className="adm-orgscope__sep"/>
       <select
         className={selectedBranchId?"is-active":""}
         aria-label="סניף"
