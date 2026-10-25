@@ -629,6 +629,7 @@ export default function AdminApp() {
     refreshSubs();
   };
   const ctx = { me, subs, refreshSubs, go, openImpersonate, mode };
+  const by = me.user.impersonatedBy;
   const ownRole = account.roles.includes("developer") ? "developer" : account.roles[0];
   const ownViewLabel = me.roleLabels[ownRole] || "החשבון שלי";
   const menuQuery = appMenuQuery.trim().toLocaleLowerCase("he");
