@@ -59,11 +59,18 @@ export async function handleActivityCenter(req, res, url, ctx) {
     return branchOk(domain, x.branchId);
   };
 
+  const canDeleteWall = (row) =>
+    isPrivileged(user.roles) ||
+    user.roles.includes("chief_coordinator") ||
+    row.by === user.id ||
+    canPostDomain(row.domain);
+
   if (pathname === "/api/activity-wall" && method === "GET") {
     const entries = (await store.list("activityWall", 3000))
       .filter(wallVisible)
       .sort((a, b) => String(b.date || b.createdAt || "").localeCompare(String(a.date || a.createdAt || "")))
-      .slice(0, 300);
+      .slice(0, 300)
+      .map((x) => ({ ...x, canDelete: canDeleteWall(x) }));
     return send(200, {
       entries,
       branches: org.branches.filter((b) => wallVisible({ domain: b.domain, branchId: b.id })),
@@ -117,8 +124,7 @@ export async function handleActivityCenter(req, res, url, ctx) {
   if (wallDelete && method === "DELETE") {
     const row = await store.get("activityWall", wallDelete[1]);
     if (!row || !wallVisible(row)) return send(404, { error: "לא נמצא" }), true;
-    const allowed = isPrivileged(user.roles) || user.roles.includes("chief_coordinator") || row.by === user.id || canPostDomain(row.domain);
-    if (!allowed) return send(403, { error: "אין הרשאה למחוק" }), true;
+    if (!canDeleteWall(row)) return send(403, { error: "אין הרשאה למחוק" }), true;
     await store.del("activityWall", row.id);
     await audit(user, "מחיקת תיעוד מהשטח", row.title || row.id);
     return send(200, { ok: true }), true;
