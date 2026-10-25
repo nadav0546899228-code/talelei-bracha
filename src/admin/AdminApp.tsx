@@ -235,6 +235,28 @@ export default function AdminApp() {
   const [mode, setModeState] = useState<Mode>("boys");
   const [bar, setBar] = useState<string[]>([]);
   const [asOpen, setAsOpen] = useState(false);
+
+  useEffect(() => {
+    const account = me?.account ?? me?.user;
+    if (!account) return;
+    const k = account.views.includes("kollel");
+    const b = account.views.includes("bnot");
+    const brand = k && b ? "combined" : b ? "bnot" : "kollel";
+    let manifest = document.head.querySelector<HTMLLinkElement>('link[rel="manifest"]');
+    if (!manifest) {
+      manifest = document.createElement("link");
+      manifest.rel = "manifest";
+      document.head.appendChild(manifest);
+    }
+    manifest.href = `/manifest-${brand}.webmanifest`;
+    let icon = document.head.querySelector<HTMLLinkElement>('link[rel~="icon"]');
+    if (!icon) {
+      icon = document.createElement("link");
+      icon.rel = "icon";
+      document.head.appendChild(icon);
+    }
+    icon.href = brand === "bnot" ? "/brand/logo-bnot-tzila.png" : brand === "kollel" ? "/brand/logo-keren-talelei-bracha.png" : "/brand/icon-combined-192.png";
+  }, [me?.user.id, me?.account?.id]);
   const [subs, setSubs] = useState<Submission[] | null>(null);
   const [codeOpen, setCodeOpen] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
@@ -398,6 +420,9 @@ export default function AdminApp() {
   const entryBadge = (e: NavEntry) => (e.leaf ? leafBadge(e.leaf) : (e.hub?.items ?? []).reduce((t, l) => t + leafBadge(l), 0));
 
   const account = me.account ?? me.user;
+  const hasKollelAccess = account.views.includes("kollel");
+  const hasBnotAccess = account.views.includes("bnot");
+  const appBrand = hasKollelAccess && hasBnotAccess ? "combined" : hasBnotAccess ? "bnot" : "kollel";
   const initial = (account.name || account.email || "?").trim().charAt(0).toUpperCase();
   const barEntries = bar.map((id) => entries.find((e) => e.id === id)).filter(Boolean) as NavEntry[];
   const curView: View | null = "hub" in current ? null : current.view;
