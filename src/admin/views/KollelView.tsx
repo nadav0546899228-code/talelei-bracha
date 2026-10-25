@@ -6,6 +6,7 @@ import { Chips, Combo, ContactActions, ExportBtn, Fab, IconActions, money, Swipe
 import { computePayroll, ENTRY_LABELS, type Avrech, type Entry, type EntryType, type KollelSettings } from "../kollelCalc";
 import { buildXlsx, downloadBlob, parsePasted } from "../xlsx";
 import { useLive } from "../live";
+import { MitchPanel, type Mitch } from "./MitchView";
 
 export type Overview = {
   me: { manager: boolean; canEditAvrechim: boolean; canPayroll: boolean };
@@ -16,7 +17,7 @@ export type Overview = {
   months: { id: string; label: string; locked: boolean; order: number }[];
 };
 
-type Tab = "avrechim" | "entries" | "attendance";
+type Tab = "avrechim" | "mitch" | "entries" | "attendance";
 
 const blankAvrech = (branchId: string | null): Avrech => ({ id: "", name: "", phone: "", email: "", branchId, monthlyTravel: 0, inPayroll: true, simchaFund: true, simchaExternal: false, active: true, notes: "" });
 
@@ -35,7 +36,7 @@ export function branchLabel(ov: Pick<Overview, "cities" | "branches">, id: strin
 
 export function KollelView({ me, go, initialTab }: { me: Me; go?: (v: "org") => void; initialTab?: string }) {
   const [ov, setOv] = useState<Overview | null>(null);
-  const [tab, setTab] = useState<Tab>(initialTab?.startsWith("entries") ? "entries" : initialTab === "attendance" ? "attendance" : "avrechim");
+  const [tab, setTab] = useState<Tab>(initialTab?.startsWith("entries") ? "entries" : initialTab === "attendance" ? "attendance" : initialTab?.startsWith("mitch") ? "mitch" : "avrechim");
   const [err, setErr] = useState<string | null>(null);
   const load = useCallback(() => api<Overview>("/api/kollel/overview").then(setOv).catch((e) => setErr(e.message)), []);
   useLive(["avrechim", "kollelMonths", "orgUnits", "kollelSettings"], load);
@@ -72,13 +73,17 @@ export function KollelView({ me, go, initialTab }: { me: Me; go?: (v: "org") => 
         <button type="button" role="tab" className="adm-chip" aria-pressed={tab === "entries"} onClick={() => setTab("entries")}>
           <Icon name="file" width={16} height={16} /> דיווחים
         </button>
+        <button type="button" role="tab" className="adm-chip" aria-pressed={tab === "mitch"} onClick={() => setTab("mitch")}>
+          <Icon name="heart" width={16} height={16} /> מתחזקים
+        </button>
         <button type="button" role="tab" className="adm-chip" aria-pressed={tab === "attendance"} onClick={() => setTab("attendance")}>
-          <Icon name="calendar" width={16} height={16} /> נוכחות
+          <Icon name="calendar" width={16} height={16} /> ערב לימוד
         </button>
       </div>
       {tab === "avrechim" ? <AvrechimTab ov={ov} reload={load} initialFilter={filterFromTab(initialTab)} initialQ={initialTab?.startsWith("avrechim:q:") ? initialTab.slice(11) : ""} /> : null}
       {tab === "entries" ? <EntriesTab ov={ov} /> : null}
       {tab === "attendance" ? <AttendanceTab ov={ov} /> : null}
+      {tab === "mitch" ? <MitchPanel domain="kollel" initialQ={initialTab?.startsWith("mitch:q:") ? initialTab.slice(8) : ""} /> : null}
     </>
   );
 }
@@ -548,7 +553,7 @@ function EntriesTab({ ov }: { ov: Overview }) {
 
 /* ------------------------------------------------------------------ נוכחות */
 
-export type Session = { id: string; branchId: string; date: string; month: string; present: string[]; byName: string };
+export type Session = { id: string; branchId: string; date: string; month: string; present: string[]; mPresent?: string[]; notes?: Record<string, string>; byName: string };
 
 const today = () => {
   const d = new Date();
@@ -562,6 +567,12 @@ function AttendanceTab({ ov }: { ov: Overview }) {
   const [branch, setBranch] = useState<string>(ov.branches[0]?.id ?? "");
   const [date, setDate] = useState(today());
   const [sessions, setSessions] = useState<Session[] | null>(null);
+  const [mitch, setMitch] = useState<Mitch[]>([]);
+  const loadMitch = useCallback(() => api<{ mitch: Mitch[] }>("/api/mitch?domain=kollel").then((r) => setMitch(r.mitch.filter((m) => m.status === "active"))).catch(() => undefined), []);
+  useEffect(() => {
+    loadMitch();
+  }, [loadMitch]);
+  useLive(["mitchazkim"], loadMitch);
   const [msg, setMsg] = useState<string | null>(null);
   const locked = ov.months.find((m) => m.id === month)?.locked ?? false;
 
@@ -589,14 +600,16 @@ function AttendanceTab({ ov }: { ov: Overview }) {
   const cur = branchSessions.find((x) => x.date === date);
   const present = new Set(cur?.present ?? []);
 
-  const save = async (next: string[]) => {
+  const save = async (next: string[], extra: { mPresent?: string[]; notes?: Record<string, string> } = {}) => {
     setMsg(null);
+    const mPresent = extra.mPresent ?? cur?.mPresent ?? [];
+    const notes = extra.notes ?? cur?.notes ?? {};
     // עדכון מיידי במסך, ואז שמירה
     setSessions((list) => {
       const rest = (list ?? []).filter((x) => !(x.branchId === branch && x.date === date));
-      return [...rest, { id: `${branch}_${date}`, branchId: branch, date, month, present: next, byName: "" }];
+      return [...rest, { id: `${branch}_${date}`, branchId: branch, date, month, present: next, mPresent, notes, byName: "" }];
     });
-    const body = { branchId: branch, date, month, present: next };
+    const body = { branchId: branch, date, month, present: next, mPresent, notes };
     try {
       await put("/api/kollel/attendance", body);
     } catch (e) {
@@ -611,6 +624,19 @@ function AttendanceTab({ ov }: { ov: Overview }) {
     }
   };
   const toggle = (id: string) => save(present.has(id) ? [...present].filter((x) => x !== id) : [...present, id]);
+  // מתחזק שהגיע - האברך שלו מסומן אוטומטית כנוכח
+  const mHere = new Set(cur?.mPresent ?? []);
+  const toggleM = (m: Mitch) => {
+    const on = mHere.has(m.id);
+    const mPresent = on ? [...mHere].filter((x) => x !== m.id) : [...mHere, m.id];
+    const nextPresent = !on && m.avrechId && !present.has(m.avrechId) ? [...present, m.avrechId] : [...present];
+    save(nextPresent, { mPresent });
+  };
+  const editNote = (avrechId: string, name: string) => {
+    const v = window.prompt(`מה למדו היום (${name})?`, cur?.notes?.[avrechId] ?? "");
+    if (v === null) return;
+    save([...present], { notes: { ...(cur?.notes ?? {}), [avrechId]: v } });
+  };
   const removeSession = async () => {
     if (!cur || !window.confirm(`למחוק את המפגש של ${dayLabel(date)}?`)) return;
     await del(`/api/kollel/attendance/${cur.id}`).catch((e) => setMsg(e.message));
@@ -661,16 +687,36 @@ function AttendanceTab({ ov }: { ov: Overview }) {
           {avs.map((a) => {
             const on = present.has(a.id);
             const st = stats(a.id);
+            const mine = mitch.filter((m) => m.avrechId === a.id);
+            const note = cur?.notes?.[a.id];
             return (
-              <button key={a.id} type="button" className={`adm-att__btn${on ? " is-on" : cur ? " is-off" : ""}`} disabled={locked} onClick={() => toggle(a.id)} aria-pressed={on}>
-                <span className="adm-att__mark">
-                  <Icon name={on ? "check" : "close"} />
-                </span>
-                <span className="adm-att__name">{a.name}</span>
-                <small>
-                  {st.came}/{st.total}
-                </small>
-              </button>
+              <div key={a.id} className="adm-att__card">
+                <button type="button" className={`adm-att__btn${on ? " is-on" : cur ? " is-off" : ""}`} disabled={locked} onClick={() => toggle(a.id)} aria-pressed={on}>
+                  <span className="adm-att__mark">
+                    <Icon name={on ? "check" : "close"} />
+                  </span>
+                  <span className="adm-att__name">{a.name}</span>
+                  <small>
+                    {st.came}/{st.total}
+                  </small>
+                </button>
+                {mine.length || on ? (
+                  <div className="adm-att__mitch">
+                    {mine.map((m) => (
+                      <button key={m.id} type="button" className={`adm-chip${mHere.has(m.id) ? " is-here" : ""}`} aria-pressed={mHere.has(m.id)} disabled={locked} onClick={() => toggleM(m)} title="מתחזק שלומד איתו">
+                        <Icon name={mHere.has(m.id) ? "check" : "users"} width={14} height={14} /> {m.name}
+                      </button>
+                    ))}
+                    {on && !locked ? (
+                      <button type="button" className="adm-chip" onClick={() => editNote(a.id, a.name)} title="מה למדו">
+                        <Icon name="edit" width={14} height={14} /> {note ? note.slice(0, 24) : "מה למדו"}
+                      </button>
+                    ) : note ? (
+                      <span className="muted" style={{ fontSize: "0.82rem" }}>{note}</span>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
             );
           })}
           {!avs.length ? <p className="muted">אין אברכים בסניף הזה.</p> : null}

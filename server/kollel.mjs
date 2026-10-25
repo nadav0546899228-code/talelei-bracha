@@ -336,7 +336,13 @@ export async function handleKollel(req, res, url, ctx) {
       const pm = await monthDoc(prev.month);
       if (pm?.locked) return send(400, { error: "המפגש שייך לחודש סגור" }), true;
     }
-    await store.put("kollelAttendance", id, { branchId, date, month, present, by: user.id, byName: user.name || user.email || user.phone });
+    // מתחזקים שהגיעו (החברותות של האברכים) + מה למדו
+    const mInBranch = new Set((await store.list("mitchazkim", 20000)).filter((x) => x.domain === "kollel" && x.branchId === branchId).map((x) => x.id));
+    const mPresent = (Array.isArray(b.mPresent) ? b.mPresent : prev?.mPresent || []).map(String).filter((x) => mInBranch.has(x));
+    const notes = {};
+    const srcNotes = b.notes && typeof b.notes === "object" ? b.notes : prev?.notes || {};
+    for (const [k, v] of Object.entries(srcNotes)) if (inBranch.has(k)) notes[k] = clean(v, 300);
+    await store.put("kollelAttendance", id, { branchId, date, month, present, mPresent, notes, by: user.id, byName: user.name || user.email || user.phone });
     if (!prev) await audit(user, "פתיחת מפגש נוכחות", `${date} · ${myBranches.find((x) => x.id === branchId)?.name || ""}`);
     return send(200, { ok: true, id }), true;
   }

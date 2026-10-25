@@ -4,6 +4,8 @@ import { Icon } from "../../components/Icon";
 import { api, del, post, type Me, type OrgUnit } from "../api";
 import { Chips, Combo, ContactActions, ExportBtn, Fab, IconActions, SwipeRow } from "../components";
 import { useLive } from "../live";
+import { ChallahPanel } from "./ChallahView";
+import { MitchPanel } from "./MitchView";
 import { buildXlsx, downloadBlob } from "../xlsx";
 
 type Member = { id: string; name: string; phone: string; branchId: string; active: boolean; notes?: string };
@@ -18,7 +20,10 @@ const dayLabel = (iso: string) => new Intl.DateTimeFormat("he-IL", { weekday: "s
 
 export function BnotView({ initialTab }: { me: Me; initialTab?: string }) {
   const [d, setD] = useState<Data | null>(null);
-  const [tab, setTab] = useState<"members" | "activities">(initialTab === "activities" ? "activities" : "members");
+  type BTab = "challah" | "mitch" | "members" | "activities";
+  const [tab, setTab] = useState<BTab>(
+    initialTab === "activities" ? "activities" : initialTab?.startsWith("members") ? "members" : initialTab?.startsWith("mitch") ? "mitch" : initialTab === "challah" ? "challah" : "challah",
+  );
   const [branch, setBranch] = useState("all");
   const [err, setErr] = useState<string | null>(null);
   const load = useCallback(() => api<Data>("/api/bnot/overview").then(setD).catch((e) => setErr(e.message)), []);
@@ -41,6 +46,12 @@ export function BnotView({ initialTab }: { me: Me; initialTab?: string }) {
         <h1>בנות צילה</h1>
       </div>
       <div className="adm-tabs-inline" role="tablist">
+        <button type="button" role="tab" className="adm-chip" aria-pressed={tab === "challah"} onClick={() => setTab("challah")}>
+          <Icon name="sparkle" width={16} height={16} /> הפרשת חלה
+        </button>
+        <button type="button" role="tab" className="adm-chip" aria-pressed={tab === "mitch"} onClick={() => setTab("mitch")}>
+          <Icon name="heart" width={16} height={16} /> מתחזקות
+        </button>
         <button type="button" role="tab" className="adm-chip" aria-pressed={tab === "members"} onClick={() => setTab("members")}>
           <Icon name="users" width={16} height={16} /> משתתפות ({d.members.filter((m) => m.active).length})
         </button>
@@ -48,10 +59,13 @@ export function BnotView({ initialTab }: { me: Me; initialTab?: string }) {
           <Icon name="calendar" width={16} height={16} /> פעילויות
         </button>
       </div>
-      {d.branches.length > 1 ? (
+      {tab === "challah" ? <ChallahPanel /> : null}
+      {tab === "mitch" ? <MitchPanel domain="bnot" initialQ={initialTab?.startsWith("mitch:q:") ? initialTab.slice(8) : ""} /> : null}
+      {(tab === "members" || tab === "activities") && d.branches.length > 1 ? (
         <Chips<string> value={tab === "activities" && branch === "all" ? d.branches[0].id : branch} onChange={setBranch} items={[...(tab === "members" ? [{ id: "all", label: "כל הסניפים" }] : []), ...d.branches.map((b) => ({ id: b.id, label: b.name }))]} />
       ) : null}
-      {tab === "members" ? <Members d={d} branch={branch} bName={bName} reload={load} initialQ={initialTab?.startsWith("members:q:") ? initialTab.slice(10) : ""} /> : <Activities d={d} branch={branch === "all" ? d.branches[0].id : branch} reload={load} />}
+      {tab === "members" ? <Members d={d} branch={branch} bName={bName} reload={load} initialQ={initialTab?.startsWith("members:q:") ? initialTab.slice(10) : ""} /> : null}
+      {tab === "activities" ? <Activities d={d} branch={branch === "all" ? d.branches[0].id : branch} reload={load} /> : null}
     </>
   );
 }

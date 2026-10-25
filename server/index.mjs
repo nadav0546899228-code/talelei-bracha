@@ -32,6 +32,7 @@ import { dispatch, handleBroadcast, runScheduled } from "./broadcast.mjs";
 import { yemotConfigured } from "./yemot.mjs";
 import { handleMessages } from "./messages.mjs";
 import { handleBnot } from "./bnot.mjs";
+import { challahReminders, handleMitch, publicChallah } from "./mitch.mjs";
 import * as push from "./webpush.mjs";
 
 const ROOT = join(fileURLToPath(new URL(".", import.meta.url)), "..", "dist");
@@ -51,11 +52,15 @@ const store = await createStore();
 /* באתר המפורסם: נתוני דמה נטענים פעם אחת אוטומטית (לבקשת נדב, עד שינקה אותם במסך מתכנת).
    אחרי "ניקוי" הם לא חוזרים. לכיבוי: SEED_DEMO_ONCE = false */
 const SEED_DEMO_ONCE = true;
-if (!DEMO && SEED_DEMO_ONCE && !(await store.get("settings", "demoState"))) {
-  const { seedDemo } = await import("./demoSeed.mjs");
-  await seedDemo(store);
-  await store.put("settings", "demoState", { state: "seeded", at: new Date().toISOString() });
-  console.log("נתוני דמה נטענו (פעם אחת)");
+const DEMO_VERSION = 2; // עולה כשמתווספים סוגי נתוני דמה חדשים (למשל מתחזקים והפרשת חלה)
+if (!DEMO && SEED_DEMO_ONCE) {
+  const st = await store.get("settings", "demoState");
+  if (!st || (st.state === "seeded" && (st.v || 1) < DEMO_VERSION)) {
+    const { seedDemo } = await import("./demoSeed.mjs");
+    await seedDemo(store);
+    await store.put("settings", "demoState", { state: "seeded", v: DEMO_VERSION, at: new Date().toISOString() });
+    console.log("נתוני דמה נטענו");
+  }
 }
 if (DEMO && !(await store.list("avrechim", 1)).length) {
   const { seedDemo } = await import("./demoSeed.mjs");
@@ -258,7 +263,7 @@ const ROLE_LABELS = Object.fromEntries(Object.entries(ROLES).map(([k, v]) => [k,
 const BACKUP_COLLECTIONS = [
   "users", "phoneUsers", "submissions", "content", "avrechim", "kollelEntries", "kollelMonths", "kollelSettings", "kollelAttendance",
   "orgUnits", "contacts", "broadcasts", "settings", "messages", "bnotMembers", "bnotActivities", "pushSubs",
-  "kollelMonthStatus", "bcTemplates", "bcScheduled", "donations", "avrechFiles",
+  "kollelMonthStatus", "bcTemplates", "bcScheduled", "donations", "avrechFiles", "mitchazkim", "challahEvents",
 ];
 async function makeBackup(reason, byName = "מערכת") {
   const data = {};
@@ -287,6 +292,12 @@ async function everyMinute() {
     await runScheduled(store, audit);
   } catch (e) {
     console.error("scheduled", e?.message);
+  }
+  try {
+    const settings = (await store.get("settings", "broadcast")) || {};
+    if (yemotConfigured()) await challahReminders(store, (text, phones) => dispatch("sms", text, null, settings, phones));
+  } catch (e) {
+    console.error("challah", e?.message);
   }
   try {
     const rem = await store.get("settings", "kollelReminder");
@@ -416,6 +427,11 @@ async function api(req, res, url) {
       byName: prev?.byName || "ימות המשיח",
     });
     return say(`שלום ${av.name} הנוכחות שלך נרשמה תודה`);
+  }
+
+  // הרשמה ציבורית להפרשת חלה
+  if (pathname.startsWith("/api/public/challah/")) {
+    if (await publicChallah(req, res, url, { store, json, readBody, clean, rateLimited, clientIp, notify })) return;
   }
 
   // גרסת האתר הבנוי - לפי שם קובץ הסקריפט הראשי (משתנה בכל בנייה). משמש להודעת "יש גרסה חדשה"
@@ -702,6 +718,7 @@ async function api(req, res, url) {
   if (await handleOrg(req, res, url, ctx)) return;
   if (await handleMessages(req, res, url, ctx)) return;
   if (await handleBnot(req, res, url, ctx)) return;
+  if (await handleMitch(req, res, url, ctx)) return;
 
   // ---- התראות לטלפון
   if (pathname === "/api/push/key" && method === "GET") {
@@ -750,6 +767,14 @@ async function api(req, res, url) {
         if (sc !== null && !sc.has(m.branchId)) continue;
         if (has(m.name, m.phone)) out.push({ kind: "member", id: m.id, title: m.name, sub: m.phone, view: "bnot", tab: `members:q:${m.name}` });
       }
+    }
+    for (const m of await store.list("mitchazkim", 20000)) {
+      const dom = m.domain === "bnot" ? "bnot" : "kollel";
+      if (!can(dom === "kollel" ? "kollel" : "bnot")) continue;
+      const { branchScope } = await import("./org.mjs");
+      const sc = branchScope(user, org, dom);
+      if (sc !== null && !sc.has(m.branchId)) continue;
+      if (has(m.name, m.phone)) out.push({ kind: "mitch", id: m.id, title: m.name, sub: [m.phone, m.stage].filter(Boolean).join(" · "), view: dom === "kollel" ? "kollel" : "bnot", tab: `mitch:q:${m.name}` });
     }
     const forms = Object.entries(FORM_VIEW).filter(([, v]) => can(v)).map(([f]) => f);
     for (const s2 of await store.list("submissions", 5000)) {
@@ -844,7 +869,7 @@ async function api(req, res, url) {
     const { seedDemo, clearDemo } = await import("./demoSeed.mjs");
     if (pathname.endsWith("seed")) {
       await seedDemo(store);
-      await store.put("settings", "demoState", { state: "seeded", at: new Date().toISOString() });
+      await store.put("settings", "demoState", { state: "seeded", v: DEMO_VERSION, at: new Date().toISOString() });
       await audit(user, "הוספת נתוני דמה");
       return send(200, { ok: true });
     }

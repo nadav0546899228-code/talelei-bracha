@@ -28,10 +28,10 @@ function tree(mode: Mode): NavHub[] {
     items: [
       leaf("content", "תוכן האתר", "edit", "content", { hint: "טקסטים, תמונות, פרטי קשר ותרומות" }),
       leaf("events", "אירועים ושיעורים", "calendar", "content", { tab: "events", hint: "מתעדכן מיד באתר הציבורי" }),
-      leaf("donations", "תרומות", "heart", "donations", { hint: "רשימת תורמים, סכומים וייצוא" }),
       leaf("users", "משתמשים והרשאות", "users", "users", { hint: "מי נכנס ומה כל אחד רואה" }),
       leaf("audit", "יומן פעולות", "list", "audit", { hint: "כל פעולה במערכת" }),
       leaf("developer", "מתכנת", "code", "developer", { hint: "בדיקות מערכת, גיבוי וכניסה כ..." }),
+      leaf("donations", "תרומות", "gift", "donations"),
     ],
   };
   const common = {
@@ -53,9 +53,10 @@ function tree(mode: Mode): NavHub[] {
         label: "כולל ערב",
         icon: "book",
         items: [
+          leaf("attendance", "ערב לימוד", "calendar", "kollel", { tab: "attendance", hint: "מי הגיע הערב - אברכים והמתחזקים שלהם" }),
+          leaf("mitch-k", "מתחזקים", "heart", "kollel", { tab: "mitch", hint: "כל מתחזק, עם מי לומד, שלב ומעקב" }),
           leaf("avrechim", "אברכים", "users", "kollel", { tab: "avrechim", hint: "לפי ערים וסניפים" }),
           leaf("entries", "נסיעות והוצאות", "file", "kollel", { tab: "entries", hint: "דיווח ואישור בחודש הפתוח" }),
-          leaf("attendance", "נוכחות", "calendar", "kollel", { tab: "attendance", hint: "סימון מי הגיע בכל מפגש" }),
           leaf("payroll", "משכורות", "file", "payroll", { hint: "טבלת החודש, שמחות, ייצוא לאקסל" }),
           leaf("reports", "דוחות וגרפים", "grid", "reports", { hint: "השוואה בין ערים וסניפים" }),
           leaf("org-kollel", "ערים, סניפים ורכזים", "pin", "org", { hint: "מבנה הכולל ומי אחראי על מה" }),
@@ -72,6 +73,8 @@ function tree(mode: Mode): NavHub[] {
       label: "בנות צילה",
       icon: "heart",
       items: [
+        leaf("challah", "הפרשת חלה", "sparkle", "bnot", { tab: "challah", hint: "אירוע, הרשמה, הגעה ותיעוד" }),
+        leaf("mitch-b", "מתחזקות", "heart", "bnot", { tab: "mitch", hint: "קשר מתמשך: שיחות, שלב ומעקב" }),
         leaf("bnot-members", "משתתפות", "users", "bnot", { tab: "members", hint: "לפי ערים וסניפים" }),
         leaf("bnot-acts", "פעילויות ונוכחות", "calendar", "bnot", { tab: "activities", hint: "מפגשים בסניפים ומי הגיעה" }),
         leaf("isha-req", "בקשות שיחה", "chat", "isha", { tab: "ishaRequest", badgeForms: ["ishaRequest"], hint: "אישה לאישה - שיבוץ מלווה" }),

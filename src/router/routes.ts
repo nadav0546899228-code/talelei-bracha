@@ -47,6 +47,12 @@ export const routes: RouteDef[] = [
     component: lazy(() => import("../pages/Lessons")),
   },
   {
+    path: "/register",
+    title: `הרשמה לאירוע | ${SITE}`,
+    description: "הרשמה לאירוע של בנות צילה.",
+    component: lazy(() => import("../pages/Register")),
+  },
+  {
     path: "/events",
     title: `אירועים | ${SITE}`,
     description: "אירועים קרובים, הרשמה ופרטי הגעה.",

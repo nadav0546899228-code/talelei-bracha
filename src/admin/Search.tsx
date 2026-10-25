@@ -6,6 +6,7 @@ import { api, type View } from "./api";
 type Result = { kind: string; id: string; title: string; sub?: string; view: View; tab?: string };
 const KIND: Record<string, { label: string; icon: IconName }> = {
   avrech: { label: "אברך", icon: "book" },
+  mitch: { label: "מתחזק/ת", icon: "heart" },
   member: { label: "משתתפת", icon: "heart" },
   submission: { label: "פנייה", icon: "inbox" },
   staff: { label: "צוות", icon: "users" },

@@ -2603,3 +2603,33 @@
 .adm-views-trigger svg{width:15px;height:15px;flex:none}
 @media(max-width:719px){.adm-views-trigger{max-width:118px!important;min-width:0!important;width:auto!important;padding-inline:9px!important}}
 @media(max-width:370px){.adm-views-trigger{max-width:92px!important}.adm-views-trigger span{display:inline!important}}
+/* ---------- ערב לימוד: אברך + המתחזקים שלו ---------- */
+.adm-att__card {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+}
+.adm-att__mitch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding-inline: 4px;
+}
+.adm-att__mitch .adm-chip {
+  min-height: 32px;
+  padding: 0 10px;
+  font-size: 0.8rem;
+}
+.adm-att__mitch .adm-chip.is-here,
+.adm-att__mitch .adm-chip[aria-pressed="true"] {
+  background: #1e7a3c;
+  border-color: #1e7a3c;
+  color: #fff;
+}
+.adm-quicklog {
+  display: grid;
+  gap: 8px;
+  background: #f7f9f9;
+  border-radius: 14px;
+  padding: 10px;
+}

@@ -165,6 +165,43 @@ export async function seedDemo(store) {
   }
 
 
+  // מתחזקים (כולל ערב) - כל אחד לומד עם אברך
+  const kStages = ["היכרות", "לומד בחברותא", "לומד בקביעות", "מתקדם", "שומר תו״מ"];
+  const men = ["אורי בן חיים", "טל אדרי", "רועי שושן", "עידן מור", "ליאור אלון", "גיא נחום", "אלון שפירא", "דור כהן", "ניר עמר", "בר גולן", "שחר טל", "עומר רז"];
+  for (let i = 0; i < men.length; i++) {
+    const av = avIds[i % 20];
+    const bi = (i % 20) % kBranches.length;
+    await put("mitchazkim", "mk-" + (i + 1), {
+      domain: "kollel", name: men[i] + " (דמה)", phone: "054000" + String(i + 1).padStart(4, "0"), branchId: kBranches[bi], avrechId: av,
+      mentor: "", stage: kStages[i % kStages.length], status: i === 11 ? "paused" : "active",
+      nextFollowUp: i % 3 === 0 ? dateAgo(1) : null, source: ["חבר", "שיעור בבית כנסת", "שכן", "פעילות בשכונה"][i % 4], notes: "",
+      startDate: dateAgo(30 + i * 9), lastContact: dateAgo(i + 2),
+      log: [{ id: "l" + i, date: dateAgo(i + 2), type: "שיעור", note: "למדו גמרא, מסכת ברכות", by: "מנהל סניף (דמה)" }],
+    });
+  }
+  // מתחזקות (בנות צילה) אחרי הפרשת חלה
+  const bStages = ["השתתפה בהפרשת חלה", "בקשר", "משתתפת בפעילות", "בקשר קבוע", "שומרת תו״מ"];
+  const ws = ["דנה לוי", "מורן כהן", "שני אברהם", "הילה דוד", "קרן מזרחי", "ספיר פרץ", "נועה ביטון", "רוני אלמוג", "גלית שרון", "לירון חן"];
+  for (let i = 0; i < ws.length; i++) {
+    await put("mitchazkim", "mb-" + (i + 1), {
+      domain: "bnot", name: ws[i] + " (דמה)", phone: "055000" + String(i + 1).padStart(4, "0"), branchId: bBranches[i % bBranches.length], avrechId: null,
+      mentor: ["רבקה שלום", "יעל גבאי", "שרה לוי"][i % 3] + " (דמה)", stage: bStages[i % bStages.length], status: "active",
+      nextFollowUp: i % 3 === 1 ? dateAgo(2) : dateAgo(-5), source: "הפרשת חלה", notes: "",
+      startDate: dateAgo(20 + i * 6), lastContact: dateAgo(i + 1),
+      log: [{ id: "w" + i, date: dateAgo(i + 1), type: "שיחה", note: "שיחת המשך אחרי האירוע", by: "רכזת עיר (דמה)" }],
+    });
+  }
+  // אירועי הפרשת חלה
+  const dateAhead = (n) => new Date(Date.now() + n * day).toISOString().slice(0, 10);
+  await put("challahEvents", "ch-1", {
+    title: "הפרשת חלה - ערב נשים", date: dateAhead(4), time: "20:00", place: "אולם הקהילה", branchId: bBranches[0], capacity: 40, notes: "", summary: "", open: true, reminderSent: false,
+    registrations: ws.slice(0, 7).map((w, i) => ({ id: "r" + i, name: w + " (דמה)", phone: "055000" + String(i + 1).padStart(4, "0"), arrived: false, at: new Date().toISOString(), mitchId: null })),
+  });
+  await put("challahEvents", "ch-2", {
+    title: "הפרשת חלה לקראת שבת", date: dateAgo(10), time: "19:30", place: "בית משפחת כהן", branchId: bBranches[1], capacity: 0, notes: "", summary: "השתתפו 9 נשים, אווירה מרוממת. 3 ביקשו להמשיך בקשר.", open: false, reminderSent: true,
+    registrations: ws.slice(3, 10).map((w, i) => ({ id: "s" + i, name: w + " (דמה)", phone: "055000" + String(i + 4).padStart(4, "0"), arrived: i < 5, at: new Date().toISOString(), mitchId: i < 3 ? P + "mb-" + (i + 4) : null })),
+  });
+
   // אנשי צוות לדוגמה - כניסה בטלפון וקוד 1234
   const staff = [
     ["staff-chief", "רכז ראשי (דמה)", "0500000100", ["chief_coordinator"], {}],

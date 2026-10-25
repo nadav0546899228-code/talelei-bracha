@@ -13,6 +13,7 @@ export function useAlerts(me: Me | null, mode: Mode, subs: Submission[] | null) 
   const [kollel, setKollel] = useState<Overview | null>(null);
   const [org, setOrg] = useState<OrgData | null>(null);
   const [unread, setUnread] = useState(0);
+  const [due, setDue] = useState(0);
   const views = me?.user.views ?? [];
   const canKollel = mode === "boys" && views.includes("kollel");
   const canOrg = views.includes("org");
@@ -34,6 +35,18 @@ export function useAlerts(me: Me | null, mode: Mode, subs: Submission[] | null) 
     loadMsgs();
   }, [loadMsgs]);
   useLive(["messages"], loadMsgs);
+  // מתחזקים שצריך לחזור אליהם (תאריך המעקב הגיע)
+  const mDomain = mode === "boys" ? "kollel" : "bnot";
+  const loadDue = useCallback(() => {
+    if (!me?.user.views.includes(mDomain)) return setDue(0);
+    api<{ mitch: { status: string; nextFollowUp: string | null }[]; today: string }>(`/api/mitch?domain=${mDomain}`)
+      .then((r) => setDue(r.mitch.filter((m) => m.status === "active" && m.nextFollowUp && m.nextFollowUp <= r.today).length))
+      .catch(() => setDue(0));
+  }, [me, mDomain]);
+  useEffect(() => {
+    loadDue();
+  }, [loadDue]);
+  useLive(["mitchazkim"], loadDue);
 
   useEffect(() => {
     load();
@@ -42,6 +55,7 @@ export function useAlerts(me: Me | null, mode: Mode, subs: Submission[] | null) 
 
   const alerts: Alert[] = [];
   alerts.push({ id: "msgs", icon: "chat", label: "הודעות שלא נקראו", count: unread, tone: "red", view: "messages" });
+  alerts.push({ id: "due", icon: "heart", label: mode === "boys" ? "מתחזקים לחזור אליהם" : "מתחזקות לחזור אליהן", count: due, tone: "red", view: mode === "boys" ? "kollel" : "bnot", tab: "mitch" });
   const list = subs ?? [];
   const newOf = (forms: string[]) => list.filter((s) => forms.includes(s.form) && s.status === "new").length;
 
