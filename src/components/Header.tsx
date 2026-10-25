@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { bnotNav, kollelNav, mainNav, publicSiteMode } from "../config/site";
+import { runtime } from "../config/contentModel";
 import { Link, useRouter } from "../router/Router";
 import { Icon } from "./Icon";
 import { Logo } from "./Logo";
@@ -147,10 +148,12 @@ export function Header() {
             <Icon name="lock" />
             <span className="staff-link__text">כניסת צוות</span>
           </Link>
-          <Link to="/donate" className="btn btn--flame btn--sm">
-            <Icon name="heart" />
-            לתרומה
-          </Link>
+          {runtime.featureFlags.donations ? (
+            <Link to="/donate" className="btn btn--flame btn--sm">
+              <Icon name="heart" />
+              לתרומה
+            </Link>
+          ) : null}
           <button
             ref={toggleRef}
             type="button"
@@ -227,10 +230,12 @@ export function Header() {
             </ul>
           </div>
           <div className="mobile-menu__foot">
-            <Link to="/donate" className="btn btn--flame btn--block" tabIndex={menuOpen ? 0 : -1}>
-              <Icon name="heart" />
-              לתרומה
-            </Link>
+            {runtime.featureFlags.donations ? (
+              <Link to="/donate" className="btn btn--flame btn--block" tabIndex={menuOpen ? 0 : -1}>
+                <Icon name="heart" />
+                לתרומה
+              </Link>
+            ) : null}
             <Link to="/isha-le-isha" className="btn btn--ghost-rose btn--block" tabIndex={menuOpen ? 0 : -1}>
               אישה לאישה - בקשת שיחה
             </Link>
