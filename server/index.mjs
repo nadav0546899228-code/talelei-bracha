@@ -32,7 +32,7 @@ import { dispatch, handleBroadcast, runScheduled } from "./broadcast.mjs";
 import { yemotConfigured } from "./yemot.mjs";
 import { handleMessages } from "./messages.mjs";
 import { handleBnot } from "./bnot.mjs";
-import { challahReminders, handleMitch, publicChallah } from "./mitch.mjs";
+import { challahReminders, handleMitch, publicChallah, publicMitchShare } from "./mitch.mjs";
 import * as push from "./webpush.mjs";
 
 const ROOT = join(fileURLToPath(new URL(".", import.meta.url)), "..", "dist");
@@ -263,7 +263,7 @@ const ROLE_LABELS = Object.fromEntries(Object.entries(ROLES).map(([k, v]) => [k,
 const BACKUP_COLLECTIONS = [
   "users", "phoneUsers", "submissions", "content", "avrechim", "kollelEntries", "kollelMonths", "kollelSettings", "kollelAttendance",
   "orgUnits", "contacts", "broadcasts", "settings", "messages", "bnotMembers", "bnotActivities", "pushSubs",
-  "kollelMonthStatus", "bcTemplates", "bcScheduled", "donations", "avrechFiles", "mitchazkim", "challahEvents",
+  "kollelMonthStatus", "bcTemplates", "bcScheduled", "donations", "avrechFiles", "mitchazkim", "challahEvents", "mitchAccess", "mitchUpdates",
 ];
 async function makeBackup(reason, byName = "מערכת") {
   const data = {};
@@ -434,6 +434,11 @@ async function api(req, res, url) {
     if (await publicChallah(req, res, url, { store, json, readBody, clean, rateLimited, clientIp, notify })) return;
   }
 
+  // עדכון אישי של מתחזק/ת דרך קישור מאובטח מוואטסאפ
+  if (pathname === "/api/public/mitch-share") {
+    if (await publicMitchShare(req, res, url, { store, json, readBody, clean, rateLimited, clientIp, notify })) return;
+  }
+
   // גרסת האתר הבנוי - לפי שם קובץ הסקריפט הראשי (משתנה בכל בנייה). משמש להודעת "יש גרסה חדשה"
   if (pathname === "/api/public/version" && method === "GET") {
     let v = "";
@@ -575,6 +580,7 @@ async function api(req, res, url) {
   if (pathname === "/api/auth/me" && method === "GET") {
     return send(200, {
       user,
+      account: real,
       roleLabels: Object.fromEntries(Object.entries(ROLES).map(([k, v]) => [k, v.label])),
       viewLabels: VIEW_LABELS,
       assignableRoles: grantableRoles(user.roles),
@@ -616,24 +622,23 @@ async function api(req, res, url) {
     return json(res, 200, { ok: true }, { "Set-Cookie": createSessionCookie(real.id, isSecure(req)) });
   }
 
-  // ---- הפרופיל שלי: כל משתמש מעדכן לעצמו שם וטלפון
+  // ---- הפרופיל שלי: תמיד מעדכן את החשבון האמיתי, גם בזמן צפייה בתצוגה אחרת
   if (pathname === "/api/auth/profile" && method === "POST") {
-    if (user.impersonatedBy || user.kind === "virtual") return send(400, { error: "בתצוגה של משתמש אחר אי אפשר לערוך פרופיל" });
     const b = await readBody(req);
     const name = clean(b.name, 80).trim();
     const ph = b.phone ? phone.normalizePhone(b.phone) : "";
     if (ph && !phone.validPhone(ph)) return send(400, { error: "מספר טלפון לא תקין" });
-    if (user.kind === "phone") {
+    if (real.kind === "phone") {
       if (!ph) return send(400, { error: "חובה טלפון - זה שם המשתמש שלך" });
       const all = await store.list("phoneUsers");
-      if (all.some((u) => u.phone === ph && u.id !== user.subId)) return send(400, { error: "המספר כבר רשום אצל משתמש אחר" });
-      const doc = all.find((u) => u.id === user.subId);
+      if (all.some((u) => u.phone === ph && u.id !== real.subId)) return send(400, { error: "המספר כבר רשום אצל משתמש אחר" });
+      const doc = all.find((u) => u.id === real.subId);
       await store.put("phoneUsers", doc.id, { ...doc, phone: ph, name: name || doc.name });
     } else {
-      const prev = (await store.get("users", user.email)) || { roles: [] };
-      await store.put("users", user.email, { ...prev, phone: ph, name: name || prev.name || "" });
+      const prev = (await store.get("users", real.email)) || { roles: [] };
+      await store.put("users", real.email, { ...prev, phone: ph, name: name || prev.name || "" });
     }
-    await audit(user, "עדכון פרופיל אישי", name || user.name || "");
+    await audit(real, "עדכון פרופיל אישי", name || real.name || "");
     return send(200, { ok: true });
   }
 
