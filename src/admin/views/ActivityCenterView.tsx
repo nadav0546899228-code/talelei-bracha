@@ -39,13 +39,43 @@ const addDays = (iso:string,n:number) => {
   d.setDate(d.getDate()+n);
   return dayIso(d);
 };
-const heDay = (iso:string) => new Intl.DateTimeFormat("he-IL",{weekday:"long",day:"numeric",month:"long"}).format(new Date(`${iso}T12:00:00`));
-const monthTitle = (d:Date) => new Intl.DateTimeFormat("he-IL",{month:"long",year:"numeric"}).format(d);
+type CalendarSystem = "hebrew" | "gregorian";
+type CalendarView = "day" | "month" | "year" | "list";
+
+const calLocale = (system:CalendarSystem, hebrewLabels=true) =>
+  system==="hebrew" ? (hebrewLabels ? "he-IL-u-ca-hebrew" : "en-US-u-ca-hebrew") : "he-IL-u-ca-gregory";
+const heDay = (iso:string,system:CalendarSystem) => new Intl.DateTimeFormat(calLocale(system),{weekday:"long",day:"numeric",month:"long",year:"numeric"}).format(new Date(`${iso}T12:00:00`));
+const monthTitle = (d:Date,system:CalendarSystem) => new Intl.DateTimeFormat(calLocale(system),{month:"long",year:"numeric"}).format(d);
+const yearTitle = (d:Date,system:CalendarSystem) => new Intl.DateTimeFormat(calLocale(system),{year:"numeric"}).format(d);
+const calendarKey = (d:Date,system:CalendarSystem) => {
+  const parts=new Intl.DateTimeFormat(calLocale(system,false),{year:"numeric",month:"long"}).formatToParts(d);
+  return `${parts.find((p)=>p.type==="year")?.value||""}|${parts.find((p)=>p.type==="month")?.value||""}`;
+};
+const calendarYearKey = (d:Date,system:CalendarSystem) => new Intl.DateTimeFormat(calLocale(system,false),{year:"numeric"}).format(d);
+const calendarDayNum = (d:Date,system:CalendarSystem) => new Intl.DateTimeFormat(calLocale(system,false),{day:"numeric"}).format(d);
+const startOfCalendarMonth = (cursor:Date,system:CalendarSystem) => {
+  const key=calendarKey(cursor,system); const d=new Date(cursor); d.setHours(12,0,0,0);
+  for(let i=0;i<40;i++){const prev=new Date(d);prev.setDate(d.getDate()-1);if(calendarKey(prev,system)!==key)break;d.setDate(d.getDate()-1);}
+  return d;
+};
+const nextCalendarMonth = (cursor:Date,system:CalendarSystem,dir:1|-1) => {
+  const start=startOfCalendarMonth(cursor,system);
+  if(dir===1){const key=calendarKey(start,system);const d=new Date(start);for(let i=0;i<40;i++){d.setDate(d.getDate()+1);if(calendarKey(d,system)!==key)return d;}return d;}
+  const d=new Date(start);d.setDate(d.getDate()-1);return startOfCalendarMonth(d,system);
+};
+const calendarYearMonths = (cursor:Date,system:CalendarSystem) => {
+  const y=calendarYearKey(cursor,system);
+  const first=new Date(cursor);first.setHours(12,0,0,0);
+  for(let i=0;i<390;i++){const p=new Date(first);p.setDate(first.getDate()-1);if(calendarYearKey(p,system)!==y)break;first.setDate(first.getDate()-1);}
+  const out:Date[]=[];let d=startOfCalendarMonth(first,system);
+  for(let i=0;i<14&&calendarYearKey(d,system)===y;i++){out.push(new Date(d));d=nextCalendarMonth(d,system,1);}
+  return out;
+};
 const sourceIcon = (s:ActivityItem["source"]): IconName => s==="challah" ? "wheat" : s==="kollelStudy" || s==="scheduledLesson" ? "book" : s==="siteEvent" ? "globe" : "users";
 const sourceClass = (s:ActivityItem["source"]) => s==="challah" ? "challah" : s==="kollelStudy" || s==="scheduledLesson" ? "kollel" : s==="siteEvent" ? "site" : "bnot";
 
-function monthCells(cursor: Date) {
-  const first=new Date(cursor.getFullYear(),cursor.getMonth(),1,12);
+function monthCells(cursor: Date, system: CalendarSystem) {
+  const first=startOfCalendarMonth(cursor,system);
   const start=new Date(first);
   start.setDate(first.getDate()-first.getDay());
   return Array.from({length:42},(_,i)=>{
@@ -71,11 +101,12 @@ export function ActivityCenterView({ go }: { go: (view: View, tab?: string) => v
   const [domain,setDomain]=useState<"all"|"kollel"|"bnot">("all");
   const [source,setSource]=useState("all");
   const [city,setCity]=useState("all");
-  const [range,setRange]=useState<"month"|"week"|"today">("month");
+  const [calendarSystem,setCalendarSystem]=useState<CalendarSystem>(()=>(localStorage.getItem("tb-calendar-system")==="gregorian"?"gregorian":"hebrew"));
+  const [calendarView,setCalendarView]=useState<CalendarView>("month");
 
   const load=useCallback(()=>{
-    const from=addDays(todayIso(),-75);
-    const to=addDays(todayIso(),120);
+    const from=addDays(todayIso(),-400);
+    const to=addDays(todayIso(),730);
     return api<Data>(`/api/activity-center?from=${from}&to=${to}`).then(setData).catch((e)=>setErr(e.message));
   },[]);
   useEffect(()=>{load();},[load]);
@@ -83,22 +114,22 @@ export function ActivityCenterView({ go }: { go: (view: View, tab?: string) => v
 
   const filtered=useMemo(()=>{
     if(!data) return [];
-    const today=todayIso();
-    const weekEnd=addDays(today,6);
-    const monthPrefix=`${cursor.getFullYear()}-${String(cursor.getMonth()+1).padStart(2,"0")}`;
+    const monthKey=calendarKey(cursor,calendarSystem);
+    const yearKey=calendarYearKey(cursor,calendarSystem);
     return data.items.filter((x)=>{
       if(domain!=="all"&&x.domain!==domain) return false;
       if(source!=="all"&&x.source!==source) return false;
       if(city!=="all"&&x.city!==city) return false;
-      if(range==="today"&&x.date!==today) return false;
-      if(range==="week"&&(x.date<today||x.date>weekEnd)) return false;
-      if(range==="month"&&!x.date.startsWith(monthPrefix)) return false;
+      const d=new Date(`${x.date}T12:00:00`);
+      if(calendarView==="day"&&x.date!==selectedDate) return false;
+      if((calendarView==="month"||calendarView==="list")&&calendarKey(d,calendarSystem)!==monthKey) return false;
+      if(calendarView==="year"&&calendarYearKey(d,calendarSystem)!==yearKey) return false;
       return true;
     });
-  },[data,domain,source,city,range,cursor]);
+  },[data,domain,source,city,calendarView,cursor,selectedDate,calendarSystem]);
 
   const dayItems=useMemo(()=>filtered.filter((x)=>x.date===selectedDate).sort((a,b)=>(a.time||"99:99").localeCompare(b.time||"99:99")), [filtered,selectedDate]);
-  const cells=useMemo(()=>monthCells(cursor),[cursor]);
+  const cells=useMemo(()=>monthCells(cursor,calendarSystem),[cursor,calendarSystem]);
   const dayCounts=useMemo(()=>{
     const m=new Map<string,ActivityItem[]>();
     for(const x of filtered){const a=m.get(x.date)||[];a.push(x);m.set(x.date,a);}
@@ -124,10 +155,19 @@ export function ActivityCenterView({ go }: { go: (view: View, tab?: string) => v
   const todayCount=filtered.filter((x)=>x.date===todayIso()).length;
   const upcoming=filtered.filter((x)=>x.date>=todayIso()).length;
 
-  const moveMonth=(n:number)=>{
-    const d=new Date(cursor);d.setMonth(d.getMonth()+n);setCursor(d);
-    const first=dayIso(new Date(d.getFullYear(),d.getMonth(),1,12));setSelectedDate(first);setRange("month");
+  const movePeriod=(dir:1|-1)=>{
+    if(calendarView==="day"){
+      const d=new Date(`${selectedDate}T12:00:00`);d.setDate(d.getDate()+dir);setSelectedDate(dayIso(d));setCursor(d);return;
+    }
+    if(calendarView==="year"){
+      const y=calendarYearKey(cursor,calendarSystem);const d=new Date(cursor);const step=dir>0?1:-1;
+      for(let i=0;i<420;i++){d.setDate(d.getDate()+step);if(calendarYearKey(d,calendarSystem)!==y){setCursor(d);setSelectedDate(dayIso(d));return;}}
+      return;
+    }
+    const d=nextCalendarMonth(cursor,calendarSystem,dir);setCursor(d);setSelectedDate(dayIso(d));
   };
+  const jumpToday=()=>{const d=new Date();setCursor(d);setSelectedDate(todayIso());};
+  const setSystem=(v:CalendarSystem)=>{setCalendarSystem(v);localStorage.setItem("tb-calendar-system",v);};
 
   if(err) return <div className="adm-alert adm-alert--error">{err}</div>;
   if(!data) return <p className="muted">טוען את מרכז הפעילות…</p>;
@@ -152,10 +192,17 @@ export function ActivityCenterView({ go }: { go: (view: View, tab?: string) => v
       </section>
 
       <div className="adm-activity-filters">
-        <div className="adm-segmented">
-          <button type="button" aria-pressed={range==="today"} onClick={()=>{setRange("today");setSelectedDate(todayIso());}}>היום</button>
-          <button type="button" aria-pressed={range==="week"} onClick={()=>{setRange("week");setSelectedDate(todayIso());}}>השבוע</button>
-          <button type="button" aria-pressed={range==="month"} onClick={()=>setRange("month")}>חודש</button>
+        <div className="adm-calendar-view-controls">
+          <div className="adm-segmented">
+            <button type="button" aria-pressed={calendarView==="day"} onClick={()=>{setCalendarView("day");jumpToday();}}>היום</button>
+            <button type="button" aria-pressed={calendarView==="month"} onClick={()=>setCalendarView("month")}>חודש</button>
+            <button type="button" aria-pressed={calendarView==="year"} onClick={()=>setCalendarView("year")}>שנה</button>
+            <button type="button" aria-pressed={calendarView==="list"} onClick={()=>setCalendarView("list")}><Icon name="list"/> רשימה</button>
+          </div>
+          <div className="adm-segmented">
+            <button type="button" aria-pressed={calendarSystem==="hebrew"} onClick={()=>setSystem("hebrew")}>עברי</button>
+            <button type="button" aria-pressed={calendarSystem==="gregorian"} onClick={()=>setSystem("gregorian")}>לועזי</button>
+          </div>
         </div>
         <select className="select" value={domain} onChange={(e)=>setDomain(e.target.value as typeof domain)} aria-label="תחום">
           <option value="all">שני הארגונים</option><option value="kollel">טללי ברכה</option><option value="bnot">בנות צילה</option>
@@ -171,26 +218,67 @@ export function ActivityCenterView({ go }: { go: (view: View, tab?: string) => v
 
       <div className="adm-activity-layout">
         <section className="adm-panel adm-calendar-panel">
-          <div className="adm-panel__head">
-            <button type="button" className="adm-icon-btn" onClick={()=>moveMonth(-1)} aria-label="חודש קודם"><Icon name="arrowRight"/></button>
-            <h2>{monthTitle(cursor)}</h2>
-            <button type="button" className="adm-icon-btn" onClick={()=>moveMonth(1)} aria-label="חודש הבא"><Icon name="arrowLeft"/></button>
+          <div className="adm-calendar-nav">
+            <button type="button" className="adm-icon-btn" onClick={()=>movePeriod(-1)} aria-label="תקופה קודמת"><Icon name="arrowRight"/></button>
+            <button type="button" className="adm-calendar-nav__title" onClick={()=>calendarView==="day"?setCalendarView("month"):calendarView==="month"?setCalendarView("year"):jumpToday()}>
+              <strong>{calendarView==="day"?heDay(selectedDate,calendarSystem):calendarView==="year"?yearTitle(cursor,calendarSystem):monthTitle(cursor,calendarSystem)}</strong>
+              <small>{calendarView==="day"?"לחיצה למעבר לחודש":calendarView==="month"||calendarView==="list"?"לחיצה למעבר לשנה":"לחיצה לחזרה להיום"}</small>
+            </button>
+            <button type="button" className="adm-icon-btn" onClick={()=>movePeriod(1)} aria-label="תקופה הבאה"><Icon name="arrowLeft"/></button>
+            <button type="button" className="btn btn--ghost btn--sm adm-calendar-today" onClick={jumpToday}>היום</button>
           </div>
-          <div className="adm-calendar-weekdays">{["א","ב","ג","ד","ה","ו","ש"].map((x)=><span key={x}>{x}</span>)}</div>
-          <div className="adm-calendar-grid">
-            {cells.map((d)=>{
-              const iso=dayIso(d);const items=dayCounts.get(iso)||[];const inMonth=d.getMonth()===cursor.getMonth();
-              return <button type="button" key={iso} className={`adm-calendar-day${selectedDate===iso?" is-selected":""}${iso===todayIso()?" is-today":""}${!inMonth?" is-out":""}`} onClick={()=>setSelectedDate(iso)}>
-                <span>{d.getDate()}</span>
-                {items.length?<strong>{items.length}</strong>:null}
-                {items.length?<i className={items.some((x)=>x.domain==="bnot")&&items.some((x)=>x.domain==="kollel")?"is-mixed":items[0].domain==="bnot"?"is-bnot":"is-kollel"}/>:null}
+
+          {calendarView==="month" ? <>
+            <div className="adm-calendar-weekdays">{["א","ב","ג","ד","ה","ו","ש"].map((x)=><span key={x}>{x}</span>)}</div>
+            <div className="adm-calendar-grid">
+              {cells.map((d)=>{
+                const iso=dayIso(d);const items=dayCounts.get(iso)||[];const inMonth=calendarKey(d,calendarSystem)===calendarKey(cursor,calendarSystem);
+                return <button type="button" key={iso} className={`adm-calendar-day${selectedDate===iso?" is-selected":""}${iso===todayIso()?" is-today":""}${!inMonth?" is-out":""}`} onClick={()=>{setSelectedDate(iso);setCursor(d);setCalendarView("day");}}>
+                  <span>{calendarDayNum(d,calendarSystem)}</span>
+                  {items.length?<strong>{items.length}</strong>:null}
+                  {items.length?<i className={items.some((x)=>x.domain==="bnot")&&items.some((x)=>x.domain==="kollel")?"is-mixed":items[0].domain==="bnot"?"is-bnot":"is-kollel"}/>:null}
+                </button>;
+              })}
+            </div>
+          </> : null}
+
+          {calendarView==="year" ? <div className="adm-year-grid">
+            {calendarYearMonths(cursor,calendarSystem).map((m)=>{
+              const key=calendarKey(m,calendarSystem);
+              const count=data.items.filter((x)=>{
+                const d=new Date(`${x.date}T12:00:00`);
+                if(calendarKey(d,calendarSystem)!==key) return false;
+                if(domain!=="all"&&x.domain!==domain) return false;
+                if(source!=="all"&&x.source!==source) return false;
+                if(city!=="all"&&x.city!==city) return false;
+                return true;
+              }).length;
+              return <button type="button" key={key} onClick={()=>{setCursor(m);setSelectedDate(dayIso(m));setCalendarView("month");}}>
+                <span>{new Intl.DateTimeFormat(calLocale(calendarSystem),{month:"long"}).format(m)}</span><strong>{count}</strong><small>פעילויות</small>
               </button>;
             })}
-          </div>
+          </div> : null}
+
+          {calendarView==="day" ? <div className="adm-calendar-day-focus">
+            <span>{new Intl.DateTimeFormat(calLocale(calendarSystem),{weekday:"long"}).format(new Date(`${selectedDate}T12:00:00`))}</span>
+            <strong>{new Intl.DateTimeFormat(calLocale(calendarSystem),{day:"numeric"}).format(new Date(`${selectedDate}T12:00:00`))}</strong>
+            <h3>{new Intl.DateTimeFormat(calLocale(calendarSystem),{month:"long",year:"numeric"}).format(new Date(`${selectedDate}T12:00:00`))}</h3>
+            <small>{dayItems.length} פעילויות ביום זה</small>
+          </div> : null}
+
+          {calendarView==="list" ? <div className="adm-calendar-list">
+            {filtered.slice().sort((a,b)=>`${a.date}T${a.time||"99:99"}`.localeCompare(`${b.date}T${b.time||"99:99"}`)).map((x)=><button type="button" key={x.id} onClick={()=>{setSelectedDate(x.date);setCalendarView("day");}}>
+              <span className="adm-calendar-list__date">{new Intl.DateTimeFormat(calLocale(calendarSystem),{day:"numeric",month:"short"}).format(new Date(`${x.date}T12:00:00`))}</span>
+              <span><strong>{x.title}</strong><small>{[x.time,x.city,x.branch,x.place].filter(Boolean).join(" · ")}</small></span>
+              <span className="adm-calendar-list__kind">{x.sourceLabel}</span>
+              <Icon name="arrowLeft"/>
+            </button>)}
+            {!filtered.length?<div className="adm-empty">אין פעילות בתקופה שנבחרה.</div>:null}
+          </div> : null}
         </section>
 
         <section className="adm-panel adm-day-panel">
-          <div className="adm-panel__head"><div><span className="adm-eyebrow">ציר שעות</span><h2>{heDay(selectedDate)}</h2></div><span className="adm-section-count">{dayItems.length}</span></div>
+          <div className="adm-panel__head"><div><span className="adm-eyebrow">ציר שעות</span><h2>{heDay(selectedDate,calendarSystem)}</h2></div><span className="adm-section-count">{dayItems.length}</span></div>
           {dayItems.length?(
             <div className="adm-day-timeline">
               {dayItems.map((x)=><article
