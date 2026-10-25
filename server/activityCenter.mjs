@@ -40,6 +40,12 @@ export async function handleActivityCenter(req, res, url, ctx) {
   const canK = globalCalendar || user.views.includes("kollel") || user.roles.some((r) => r.startsWith("kollel_")) || user.roles.includes("chief_coordinator") || user.roles.includes("ceo") || user.roles.includes("developer");
   const canB = globalCalendar || user.views.includes("bnot") || user.views.includes("isha") || user.roles.some((r) => r.startsWith("bnot_")) || user.roles.includes("chief_coordinator") || user.roles.includes("ceo") || user.roles.includes("developer");
 
+  const branchOk = (domain, branchId) => {
+    if (!branchId || globalCalendar) return true;
+    const scope = domain === "bnot" ? bScope : kScope;
+    return scope === null || scope.has(branchId);
+  };
+
   const canPostDomain = (domain) =>
     isPrivileged(user.roles) ||
     user.roles.includes("chief_coordinator") ||
@@ -123,11 +129,6 @@ export async function handleActivityCenter(req, res, url, ctx) {
 
   const from = url.searchParams.get("from") || "";
   const to = url.searchParams.get("to") || "";
-  const branchOk = (domain, branchId) => {
-    if (!branchId || globalCalendar) return true;
-    const scope = domain === "bnot" ? bScope : kScope;
-    return scope === null || scope.has(branchId);
-  };
   const branchInfo = (branchId) => {
     const branch = org.branches.find((b) => b.id === branchId);
     const city = org.cities.find((c) => c.id === branch?.parentId);
