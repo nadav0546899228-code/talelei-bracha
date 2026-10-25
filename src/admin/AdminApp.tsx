@@ -310,8 +310,8 @@ export default function AdminApp() {
   }, [me, mode, entries]);
 
   useEffect(() => {
-    if (me) setDisplayMode(loadDisplayMode(me.user.id));
-  }, [me?.user.id]);
+    if (me) setDisplayMode(loadDisplayMode((me.account ?? me.user).id));
+  }, [me?.user.id, me?.account?.id]);
 
   useEffect(() => {
     if (!me || state !== "ready") return;
@@ -357,8 +357,9 @@ export default function AdminApp() {
     setDisplayMode(next);
     if (!me) return;
     try {
-      if (next === "auto") localStorage.removeItem(`tb-display-mode:${me.user.id}`);
-      else localStorage.setItem(`tb-display-mode:${me.user.id}`, next);
+      const accountId = (me.account ?? me.user).id;
+      if (next === "auto") localStorage.removeItem(`tb-display-mode:${accountId}`);
+      else localStorage.setItem(`tb-display-mode:${accountId}`, next);
     } catch {
       /* העדפה מקומית בלבד */
     }
@@ -396,7 +397,8 @@ export default function AdminApp() {
   const leafBadge = (l: NavLeaf) => (l.badgeMessages ? unreadMsgs : 0) + (l.badgeForms ? newCount(l.badgeForms) : 0);
   const entryBadge = (e: NavEntry) => (e.leaf ? leafBadge(e.leaf) : (e.hub?.items ?? []).reduce((t, l) => t + leafBadge(l), 0));
 
-  const initial = (me.user.name || me.user.email || "?").trim().charAt(0).toUpperCase();
+  const account = me.account ?? me.user;
+  const initial = (account.name || account.email || "?").trim().charAt(0).toUpperCase();
   const barEntries = bar.map((id) => entries.find((e) => e.id === id)).filter(Boolean) as NavEntry[];
   const curView: View | null = "hub" in current ? null : current.view;
   const curTab = "hub" in current ? undefined : current.tab;
@@ -544,11 +546,13 @@ export default function AdminApp() {
   const ctx = { me, subs, refreshSubs, go, openImpersonate, mode };
   const by = me.user.impersonatedBy;
   // שם התצוגה שפתוחה עכשיו (התפקיד שלי, או של מי שנכנסתי בשמו)
+  const ownRole = account.roles.includes("developer") ? "developer" : account.roles[0];
   const viewName = by
     ? me.user.kind === "virtual"
       ? me.user.name.replace(" (תצוגה לדוגמה)", "")
       : me.roleLabels[me.user.roles[0]] || me.user.name || ""
-    : me.roleLabels[me.user.roles[0]] || "תצוגות";
+    : me.roleLabels[ownRole] || "תצוגות";
+  const ownViewLabel = me.roleLabels[ownRole] || "החשבון שלי";
 
   return (
     <div className="adm" data-mode={mode} data-display={displayMode}>
@@ -589,9 +593,9 @@ export default function AdminApp() {
             {dash.active.length ? <span className="adm-badge">{dash.active.length}</span> : null}
           </button>
           <button type="button" className="adm-account-btn" onClick={() => setProfileOpen(true)} aria-label="האזור האישי" title="האזור האישי">
-            {me.user.picture ? <img src={me.user.picture} alt="" referrerPolicy="no-referrer" /> : <span className="adm-avatar">{initial}</span>}
+            {account.picture ? <img src={account.picture} alt="" referrerPolicy="no-referrer" /> : <span className="adm-avatar">{initial}</span>}
             <span className="adm-account-btn__text">
-              <strong>{me.user.name || me.user.email}</strong>
+              <strong>{account.name || account.email}</strong>
               <small>האזור האישי</small>
             </span>
             <Icon name="chevronDown" className="adm-account-btn__arrow" />
@@ -613,7 +617,7 @@ export default function AdminApp() {
           {sideNav}
           <div className="adm-side__foot">
             <Link to="/">← לאתר הציבורי</Link>
-            <span className="muted" dir="ltr">{me.user.email || me.user.phone}</span>
+            <span className="muted" dir="ltr">{account.email || account.phone}</span>
           </div>
         </aside>
         <main className="adm-main" id="main" tabIndex={-1}>
@@ -702,6 +706,7 @@ export default function AdminApp() {
       {asOpen ? (
         <ImpersonateModal
           current={by ? me.user.id : undefined}
+          backLabel={ownViewLabel}
           onClose={() => setAsOpen(false)}
           onSwitched={switched}
           onBack={
@@ -741,8 +746,9 @@ function Profile({
   displayMode: DisplayMode;
   onDisplayMode: (mode: DisplayMode) => void;
 }) {
-  const [name, setName] = useState(me.user.name || "");
-  const [phone, setPhone] = useState(me.user.phone || "");
+  const account = me.account ?? me.user;
+  const [name, setName] = useState(account.name || "");
+  const [phone, setPhone] = useState(account.phone || "");
   const [err, setErr] = useState<string | null>(null);
   const [push, setPush] = useState<"on" | "off" | "blocked" | "unsupported" | "busy">("busy");
 
@@ -776,8 +782,8 @@ function Profile({
     }
   };
 
-  const roleText = me.user.roles.map((r) => me.roleLabels[r]).join(" · ");
-  const initial = (me.user.name || me.user.email || "?").trim().charAt(0).toUpperCase();
+  const roleText = account.roles.map((r) => me.roleLabels[r]).join(" · ");
+  const initial = (account.name || account.email || "?").trim().charAt(0).toUpperCase();
 
   return (
     <div className="adm-personal-back" role="dialog" aria-modal="true" aria-label="האזור האישי">
@@ -793,11 +799,11 @@ function Profile({
         </header>
 
         <section className="adm-personal__profile">
-          {me.user.picture ? <img src={me.user.picture} alt="" referrerPolicy="no-referrer" /> : <span className="adm-personal__avatar">{initial}</span>}
+          {account.picture ? <img src={account.picture} alt="" referrerPolicy="no-referrer" /> : <span className="adm-personal__avatar">{initial}</span>}
           <div>
-            <strong>{me.user.name || me.user.email}</strong>
+            <strong>{account.name || account.email}</strong>
             <span>{roleText}</span>
-            {me.user.email ? <small dir="ltr">{me.user.email}</small> : null}
+            {account.email ? <small dir="ltr">{account.email}</small> : null}
           </div>
         </section>
 
@@ -853,7 +859,7 @@ function Profile({
             <Icon name="arrowLeft" className="adm-personal__arrow" />
           </button>
 
-          {me.user.kind === "phone" && !me.user.impersonatedBy ? (
+          {account.kind === "phone" ? (
             <button type="button" className="adm-personal__row" onClick={onCode}>
               <span className="adm-personal__rowicon"><Icon name="lock" /></span>
               <span><strong>החלפת קוד אישי</strong><small>עדכון קוד הכניסה למערכת</small></span>
