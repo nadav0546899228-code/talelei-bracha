@@ -1,7 +1,7 @@
 /** ערים, סניפים ורכזים - בשני התחומים: כולל ערב ובנות צילה */
 import { useEffect, useMemo, useState } from "react";
 import { Icon } from "../../components/Icon";
-import { api, del, DOMAIN_LABELS, post, type Domain, type Me, type OrgUnit } from "../api";
+import { api, del, DOMAIN_LABELS, post, type Domain, type Me, type OrgRegion, type OrgUnit } from "../api";
 import type { Avrech } from "../kollelCalc";
 import { useOrg, type OrgPerson } from "../org";
 import { PhoneUsersPanel } from "./PhoneUsersPanel";
@@ -14,7 +14,7 @@ export function OrgView({ me, domain }: { me: Me; domain: Domain }) {
   const roles = me.user.roles;
   const seesAll = roles.includes("developer") || roles.includes("ceo") || roles.includes("chief_coordinator");
   const [avrechim, setAvrechim] = useState<Avrech[]>([]);
-  const [edit, setEdit] = useState<{ id?: string; type: "city" | "branch"; name: string; parentId: string | null } | null>(null);
+  const [edit, setEdit] = useState<{ id?: string; type: "city" | "branch"; name: string; parentId: string | null; region?: OrgRegion | "" } | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   useEffect(() => {
@@ -87,7 +87,7 @@ export function OrgView({ me, domain }: { me: Me; domain: Domain }) {
 
       <div className="adm-toolbar">
         {seesAll ? (
-          <button type="button" className="btn btn--sm" onClick={() => setEdit({ type: "city", name: "", parentId: null })}>
+          <button type="button" className="btn btn--sm" onClick={() => setEdit({ type: "city", name: "", parentId: null, region: "" })}>
             <Icon name="plus" /> עיר
           </button>
         ) : null}
@@ -102,16 +102,28 @@ export function OrgView({ me, domain }: { me: Me; domain: Domain }) {
               <input className="input" value={edit.name} autoFocus onChange={(e) => setEdit({ ...edit, name: e.target.value })} />
             </label>
             {edit.type === "branch" ? (
-              <label className="field">
-                <span className="field__label">עיר</span>
-                <select className="select" value={edit.parentId ?? ""} onChange={(e) => setEdit({ ...edit, parentId: e.target.value })}>
-                  {cities.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <>
+                <label className="field">
+                  <span className="field__label">עיר</span>
+                  <select className="select" value={edit.parentId ?? ""} onChange={(e) => setEdit({ ...edit, parentId: e.target.value })}>
+                    {cities.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="field">
+                  <span className="field__label">אזור בארץ</span>
+                  <select className="select" value={edit.region ?? ""} onChange={(e) => setEdit({ ...edit, region: e.target.value as OrgRegion | "" })}>
+                    <option value="">לא הוגדר</option>
+                    <option value="north">צפון</option>
+                    <option value="center">מרכז</option>
+                    <option value="south">דרום</option>
+                  </select>
+                  <span className="field__hint">זהו סיווג ארגוני/גאוגרפי נפרד משם הסניף.</span>
+                </label>
+              </>
             ) : null}
           </div>
           <div className="btn-row" style={{ marginTop: 12 }}>
@@ -136,7 +148,7 @@ export function OrgView({ me, domain }: { me: Me; domain: Domain }) {
               </h2>
               {seesAll ? (
                 <span className="adm-item__actions">
-                  <button type="button" className="adm-icon-btn" aria-label={`עריכת ${c.name}`} onClick={() => setEdit({ id: c.id, type: "city", name: c.name, parentId: null })}>
+                  <button type="button" className="adm-icon-btn" aria-label={`עריכת ${c.name}`} onClick={() => setEdit({ id: c.id, type: "city", name: c.name, parentId: null, region: "" })}>
                     <Icon name="edit" />
                   </button>
                   <button type="button" className="adm-icon-btn adm-icon-btn--danger" aria-label={`מחיקת ${c.name}`} onClick={() => remove(c)}>
@@ -154,10 +166,13 @@ export function OrgView({ me, domain }: { me: Me; domain: Domain }) {
                 const count = avrechim.filter((a) => a.active && a.branchId === b.id).length;
                 return (
                   <div key={b.id} className={`adm-row adm-row--tone-${mgrs.length ? "green" : "yellow"}`} style={{ cursor: "default" }}>
-                    <span className="adm-row__title">סניף {b.name}</span>
+                    <span className="adm-row__title">
+                      סניף {b.name}
+                      {b.region ? <span className="adm-scope-chip" style={{ marginInlineStart: 7 }}>אזור: {b.region === "north" ? "צפון" : b.region === "south" ? "דרום" : "מרכז"}</span> : null}
+                    </span>
                     <span className="adm-item__actions">
                       {mgrs[0]?.phone ? <IconActions phone={mgrs[0].phone} waText={`שלום ${mgrs[0].name}, `} /> : null}
-                      <button type="button" className="adm-icon-btn" aria-label={`עריכת ${b.name}`} onClick={() => setEdit({ id: b.id, type: "branch", name: b.name, parentId: b.parentId })}>
+                      <button type="button" className="adm-icon-btn" aria-label={`עריכת ${b.name}`} onClick={() => setEdit({ id: b.id, type: "branch", name: b.name, parentId: b.parentId, region: b.region ?? "" })}>
                         <Icon name="edit" />
                       </button>
                       {seesAll ? (
@@ -185,7 +200,7 @@ export function OrgView({ me, domain }: { me: Me; domain: Domain }) {
         </div>
       ) : null}
 
-      {cities.length && !edit ? <Fab label="הוספת סניף" onClick={() => setEdit({ type: "branch", name: "", parentId: cities[0]?.id ?? null })} /> : null}
+      {cities.length && !edit ? <Fab label="הוספת סניף" onClick={() => setEdit({ type: "branch", name: "", parentId: cities[0]?.id ?? null, region: "" })} /> : null}
       <div style={{ marginTop: 20 }}>
         <PhoneUsersPanel me={me} org={org} onChange={reload} title="רכזים ומנהלי סניפים (כניסה בטלפון וקוד)" />
       </div>
