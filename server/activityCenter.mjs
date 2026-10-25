@@ -80,7 +80,7 @@ export async function handleActivityCenter(req, res, url, ctx) {
   }
 
   if (pathname === "/api/activity-wall" && method === "POST") {
-    const body = await readBody(req, 4 * 1024 * 1024);
+    const body = await readBody(req, 5 * 1024 * 1024);
     const domain = body.domain === "bnot" ? "bnot" : "kollel";
     if (!canPostDomain(domain)) return send(403, { error: "אין הרשאה להוסיף תיעוד בתחום הזה" }), true;
     const branchId = String(body.branchId || "");
