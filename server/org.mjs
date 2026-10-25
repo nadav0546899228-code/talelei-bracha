@@ -25,10 +25,10 @@ export function branchScope(user, org, domain) {
   if (seesAll(user)) return null;
   const set = new Set();
   const s = user.scope?.[domain] || {};
-  if (user.roles.includes(`${domain}_city`) && s.cityId) {
+  if (user.roles.some((r) => ROLE_SCOPE[r]?.domain === domain && ROLE_SCOPE[r]?.level === "city") && s.cityId) {
     for (const b of org.branches) if (b.domain === domain && b.parentId === s.cityId) set.add(b.id);
   }
-  if (user.roles.includes(`${domain}_branch`) && s.branchId) set.add(s.branchId);
+  if (user.roles.some((r) => ROLE_SCOPE[r]?.domain === domain && ROLE_SCOPE[r]?.level === "branch") && s.branchId) set.add(s.branchId);
   return set;
 }
 
