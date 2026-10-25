@@ -123,8 +123,8 @@ export function UsersView({ me }: { me: Me }) {
 
       {msg ? <div className={`adm-alert ${msg.ok ? "adm-alert--ok" : "adm-alert--error"}`} style={{ marginBottom: 14 }}>{msg.text}</div> : null}
 
-      <div className="adm-table-wrap">
-        <table className="adm-table">
+      <div className="adm-table-wrap adm-users-wrap">
+        <table className="adm-table adm-users-table">
           <thead>
             <tr>
               <th scope="col">משתמש</th>
@@ -154,8 +154,8 @@ export function UsersView({ me }: { me: Me }) {
                   {u.roles.some((r) => ROLE_SCOPE[r]) ? <div className="muted" style={{ fontSize: "0.85rem", marginTop: 4 }}>{scopeText(u.roles, u.scope, org)}</div> : null}
                 </td>
                 <td>{fmtDateTime(u.lastLoginAt)}</td>
-                <td>
-                  <div className="adm-item__actions">
+                <td className="adm-users-actions-cell">
+                  <div className="adm-item__actions adm-users-actions">
                     {me.canImpersonate && u.email !== me.user.email ? (
                       <button type="button" className="adm-icon-btn" title="כניסה כ..." aria-label={`כניסה בשם ${u.name || u.email}`} onClick={() => enterAs(u.email).catch((e) => setMsg({ ok: false, text: e.message }))}>
                         <Icon name="eye" />
