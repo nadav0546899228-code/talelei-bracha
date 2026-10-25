@@ -7,11 +7,16 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { isPrivileged } from "./roles.mjs";
 import { branchScope, loadOrg } from "./org.mjs";
 import { normalizePhone, validPhone } from "./phoneAuth.mjs";
+import {
+  DEFAULT_STAGES,
+  enrichMitchRows,
+  loadMitchConfig,
+  monthStats,
+  normalizeMitchConfig,
+  summarizeAttention,
+} from "./mitchWorkflow.mjs";
 
-export const STAGES = {
-  kollel: ["היכרות", "לומד בחברותא", "לומד בקביעות", "מתקדם", "שומר תו״מ"],
-  bnot: ["השתתפה בהפרשת חלה", "בקשר", "משתתפת בפעילות", "בקשר קבוע", "שומרת תו״מ"],
-};
+export const STAGES = DEFAULT_STAGES;
 const CONTACT_TYPES = ["שיחה", "פגישה", "הודעה", "שיעור", "אירוע"];
 const today = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 const tokenHash = (token) => createHash("sha256").update(String(token || "")).digest("hex");
@@ -29,12 +34,19 @@ export async function handleMitch(req, res, url, ctx) {
     const s = scopeOf(domain);
     return s === null || s.has(branchId);
   };
+  const canManageWorkflow = (domain) =>
+    isPrivileged(user.roles) ||
+    user.roles.includes("chief_coordinator") ||
+    user.roles.includes(`${domain}_region`) ||
+    user.roles.includes(`${domain}_city`);
 
   /* ---------------- מתחזקים / מתחזקות */
   if (pathname === "/api/mitch" && method === "GET") {
     const domain = url.searchParams.get("domain") === "bnot" ? "bnot" : "kollel";
     if (!can(domain)) return send(403, { error: "אין הרשאה" }), true;
-    const rows = (await store.list("mitchazkim", 20000)).filter((m) => m.domain === domain && inScope(domain, m.branchId));
+    const config = await loadMitchConfig(store, domain);
+    const baseRows = (await store.list("mitchazkim", 20000)).filter((m) => m.domain === domain && inScope(domain, m.branchId));
+    const rows = await enrichMitchRows(store, baseRows, domain, config);
     const rowIds = new Set(rows.map((m) => m.id));
     const pendingByMitch = {};
     for (const u of await store.list("mitchUpdates", 5000)) {
@@ -44,7 +56,40 @@ export async function handleMitch(req, res, url, ctx) {
     const cities = org.cities.filter((c) => c.domain === domain && branches.some((b) => b.parentId === c.id));
     let avrechim = [];
     if (domain === "kollel") avrechim = (await store.list("avrechim", 20000)).filter((a) => a.active !== false && inScope("kollel", a.branchId)).map((a) => ({ id: a.id, name: a.name, branchId: a.branchId }));
-    return send(200, { mitch: rows.sort((a, b) => String(a.name).localeCompare(String(b.name), "he")), branches, cities, avrechim, stages: STAGES[domain], contactTypes: CONTACT_TYPES, today: today(), pendingByMitch }), true;
+    return send(200, {
+      mitch: rows.sort((a, b) => String(a.name).localeCompare(String(b.name), "he")),
+      branches,
+      cities,
+      avrechim,
+      stages: config.stages,
+      workflow: config,
+      canManageWorkflow: canManageWorkflow(domain),
+      attentionSummary: summarizeAttention(rows),
+      monthStats: monthStats(rows),
+      contactTypes: CONTACT_TYPES,
+      today: today(),
+      pendingByMitch,
+    }), true;
+  }
+
+  if (pathname === "/api/mitch/settings" && method === "PUT") {
+    const domain = url.searchParams.get("domain") === "bnot" ? "bnot" : "kollel";
+    if (!can(domain) || !canManageWorkflow(domain)) return send(403, { error: "אין הרשאה לשנות הגדרות מעקב" }), true;
+    const body = await readBody(req);
+    const next = normalizeMitchConfig(domain, body);
+    await store.put("settings", `mitchWorkflow:${domain}`, next);
+    await audit(user, "עדכון הגדרות מעקב מתחזקים", domain === "bnot" ? "בנות צילה" : "כולל ערב");
+    return send(200, { ok: true, workflow: next }), true;
+  }
+
+  // היסטוריית העברה בין אברכים - מתכנת בלבד. אין endpoint מקביל למשתמשים אחרים.
+  if (pathname === "/api/mitch/transfers" && method === "GET") {
+    if (!user.roles.includes("developer")) return send(403, { error: "מתכנת בלבד" }), true;
+    const mitchId = String(url.searchParams.get("mitchId") || "");
+    const rows = (await store.list("mitchTransfers", 5000))
+      .filter((x) => !mitchId || x.mitchId === mitchId)
+      .sort((a, b) => String(b.at || b.createdAt || "").localeCompare(String(a.at || a.createdAt || "")));
+    return send(200, { transfers: rows }), true;
   }
 
   // קישור אישי לכתיבת עדכונים: יצירת קישור חדש מבטלת קישורים קודמים לאותו מתחזק/ת.
@@ -128,11 +173,21 @@ export async function handleMitch(req, res, url, ctx) {
     const id = b.id ? String(b.id) : randomUUID();
     const prev = await store.get("mitchazkim", id);
     if (prev && !inScope(prev.domain, prev.branchId)) return send(403, { error: "אין הרשאה" }), true;
+    const config = await loadMitchConfig(store, domain);
     let avrechId = null;
     if (domain === "kollel" && b.avrechId) {
       const av = await store.get("avrechim", String(b.avrechId));
       if (av && av.branchId === branchId) avrechId = av.id;
     }
+    const now = new Date().toISOString();
+    const stage = config.stages.includes(b.stage) ? b.stage : prev?.stage || config.stages[0];
+    const stageChanged = Boolean(prev && prev.stage !== stage);
+    const stageEntry = stageChanged
+      ? { id: randomUUID().slice(0, 8), date: today(), type: "שינוי שלב", note: `${prev.stage || "ללא שלב"} → ${stage}`, by: user.name || user.email || user.phone || "" }
+      : null;
+    const stageHistory = stageChanged
+      ? [{ stage, at: now, by: user.name || user.email || user.phone || "" }, ...(prev?.stageHistory || [])].slice(0, 100)
+      : prev?.stageHistory || (!prev ? [{ stage, at: now, by: user.name || user.email || user.phone || "" }] : []);
     const doc = {
       ...(prev || { log: [], domain }),
       domain,
@@ -141,7 +196,10 @@ export async function handleMitch(req, res, url, ctx) {
       branchId,
       avrechId,
       mentor: clean(b.mentor, 80),
-      stage: STAGES[domain].includes(b.stage) ? b.stage : prev?.stage || STAGES[domain][0],
+      stage,
+      stageChangedAt: stageChanged ? now : prev?.stageChangedAt || prev?.startDate || now,
+      stageHistory,
+      log: stageEntry ? [stageEntry, ...(prev?.log || [])].slice(0, 300) : prev?.log || [],
       status: ["active", "paused", "left"].includes(b.status) ? b.status : "active",
       nextFollowUp: /^\d{4}-\d{2}-\d{2}$/.test(String(b.nextFollowUp || "")) ? b.nextFollowUp : null,
       source: clean(b.source, 120) || prev?.source || "",
@@ -149,6 +207,28 @@ export async function handleMitch(req, res, url, ctx) {
       startDate: prev?.startDate || today(),
     };
     await store.put("mitchazkim", id, doc);
+
+    if (domain === "kollel" && prev && (prev.avrechId || null) !== (avrechId || null)) {
+      const [fromAvrech, toAvrech] = await Promise.all([
+        prev.avrechId ? store.get("avrechim", prev.avrechId) : null,
+        avrechId ? store.get("avrechim", avrechId) : null,
+      ]);
+      await store.put("mitchTransfers", randomUUID(), {
+        mitchId: id,
+        mitchName: name,
+        branchId,
+        fromAvrechId: prev.avrechId || null,
+        fromAvrechName: fromAvrech?.name || "",
+        toAvrechId: avrechId || null,
+        toAvrechName: toAvrech?.name || "",
+        reason: clean(b.transferReason, 300),
+        at: now,
+        by: user.id,
+        byName: user.name || user.email || user.phone || "",
+      });
+      await audit(user, "שינוי שיוך מתחזק", name);
+    }
+
     await audit(user, prev ? "עדכון מתחזק" : "הוספת מתחזק", `${domain === "bnot" ? "בנות צילה" : "כולל"} · ${name}`);
     return send(200, { ok: true, id }), true;
   }
@@ -166,7 +246,25 @@ export async function handleMitch(req, res, url, ctx) {
       by: user.name || user.email || user.phone,
     };
     const next = /^\d{4}-\d{2}-\d{2}$/.test(String(b.nextFollowUp || "")) ? b.nextFollowUp : m.nextFollowUp;
-    await store.put("mitchazkim", m.id, { ...m, log: [entry, ...(m.log || [])].slice(0, 300), lastContact: entry.date, nextFollowUp: next, stage: STAGES[m.domain].includes(b.stage) ? b.stage : m.stage });
+    const config = await loadMitchConfig(store, m.domain);
+    const stage = config.stages.includes(b.stage) ? b.stage : m.stage;
+    const stageChanged = stage !== m.stage;
+    const now = new Date().toISOString();
+    const stageEntry = stageChanged
+      ? { id: randomUUID().slice(0, 8), date: today(), type: "שינוי שלב", note: `${m.stage || "ללא שלב"} → ${stage}`, by: user.name || user.email || user.phone || "" }
+      : null;
+    const nextLog = [entry, ...(stageEntry ? [stageEntry] : []), ...(m.log || [])].slice(0, 300);
+    await store.put("mitchazkim", m.id, {
+      ...m,
+      log: nextLog,
+      lastContact: entry.date,
+      nextFollowUp: next,
+      stage,
+      stageChangedAt: stageChanged ? now : m.stageChangedAt || m.startDate || now,
+      stageHistory: stageChanged
+        ? [{ stage, at: now, by: user.name || user.email || user.phone || "" }, ...(m.stageHistory || [])].slice(0, 100)
+        : m.stageHistory || [],
+    });
     return send(200, { ok: true }), true;
   }
 
