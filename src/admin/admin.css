@@ -2980,3 +2980,131 @@
   }
   .adm-tabs .adm-bar .adm-tab > span:not(.adm-badge){font-size:.62rem}
 }
+
+
+/* ===== Users & access: compact actions, readable details ===== */
+.adm-users-actions,.adm-access-actions{
+  display:flex;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:5px;
+}
+.adm-users-actions .adm-icon-btn,
+.adm-access-actions .adm-icon-btn{
+  width:32px!important;
+  height:32px!important;
+  min-width:32px!important;
+  min-height:32px!important;
+  border-radius:9px;
+  flex:0 0 32px;
+}
+.adm-users-actions .adm-icon-btn svg,
+.adm-access-actions .adm-icon-btn svg{
+  width:15px!important;
+  height:15px!important;
+  min-width:15px!important;
+  min-height:15px!important;
+  max-width:15px!important;
+  max-height:15px!important;
+}
+.adm-users-actions-cell{white-space:normal!important}
+.adm-access-row{padding-inline-end:12px!important}
+.adm-access-row .adm-row__title,
+.adm-access-row .adm-row__sub{
+  min-width:0;
+  padding-inline-end:0;
+  overflow-wrap:anywhere;
+}
+.adm-access-actions{
+  position:static!important;
+  transform:none!important;
+  margin-top:8px;
+  width:100%;
+  justify-content:flex-start;
+}
+.adm-access-actions .btn{min-height:32px;padding:5px 9px;font-size:.72rem}
+
+@media(max-width:719px){
+  .adm-users-wrap{
+    border:0!important;
+    background:transparent!important;
+    overflow:visible!important;
+    box-shadow:none!important;
+  }
+  .adm-users-table{
+    display:block;
+    min-width:0!important;
+    width:100%!important;
+  }
+  .adm-users-table thead{display:none}
+  .adm-users-table tbody{display:grid;gap:9px}
+  .adm-users-table tr{
+    display:grid;
+    grid-template-columns:minmax(0,1fr) auto;
+    grid-template-areas:
+      "person actions"
+      "roles roles"
+      "last last";
+    gap:8px 10px;
+    padding:13px;
+    border:1px solid rgba(18,58,62,.10);
+    border-radius:16px;
+    background:#fff;
+    box-shadow:0 5px 16px rgba(18,58,62,.045);
+  }
+  .adm-users-table td{
+    display:block;
+    min-width:0;
+    padding:0!important;
+    border:0!important;
+    white-space:normal!important;
+  }
+  .adm-users-table td:nth-child(1){grid-area:person}
+  .adm-users-table td:nth-child(2){grid-area:roles}
+  .adm-users-table td:nth-child(3){
+    grid-area:last;
+    color:#859294;
+    font-size:.73rem;
+  }
+  .adm-users-table td:nth-child(3)::before{
+    content:"כניסה אחרונה: ";
+    font-weight:750;
+    color:#66787a;
+  }
+  .adm-users-table td:nth-child(4){grid-area:actions;align-self:start}
+  .adm-users-actions{justify-content:flex-end;width:auto}
+  .adm-users-actions .adm-icon-btn,
+  .adm-access-actions .adm-icon-btn{
+    width:30px!important;
+    height:30px!important;
+    min-width:30px!important;
+    min-height:30px!important;
+    flex-basis:30px;
+  }
+  .adm-users-actions .adm-icon-btn svg,
+  .adm-access-actions .adm-icon-btn svg{
+    width:14px!important;
+    height:14px!important;
+    min-width:14px!important;
+    min-height:14px!important;
+  }
+  .adm-users-table .adm-roles{margin-top:2px}
+  .adm-users-table .adm-role{
+    font-size:.69rem;
+    padding:3px 7px;
+    line-height:1.25;
+  }
+  .adm-access-row{
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr)!important;
+    gap:4px!important;
+    padding:12px!important;
+  }
+  .adm-access-row .adm-row__title{font-size:.88rem}
+  .adm-access-row .adm-row__sub{font-size:.72rem;line-height:1.45}
+  .adm-access-actions{
+    margin-top:7px;
+    justify-content:flex-start;
+    gap:4px;
+  }
+}
