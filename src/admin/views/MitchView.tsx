@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Icon } from "../../components/Icon";
 import { api, del, post, type OrgUnit } from "../api";
-import { Chips, Combo, ExportBtn, Fab, IconActions, SwipeRow } from "../components";
+import { Chips, Combo, ExportBtn, Fab, IconActions, SwipeRow, waLink } from "../components";
 import { useLive } from "../live";
 import { buildXlsx, downloadBlob } from "../xlsx";
 
@@ -21,7 +21,16 @@ export type Mitch = {
   source: string;
   notes: string;
   startDate: string;
-  log: { id: string; date: string; type: string; note: string; by: string }[];
+  log: { id: string; date: string; type: string; note: string; by: string; updateId?: string }[];
+};
+type SelfUpdate = {
+  id: string;
+  text: string;
+  photos: string[];
+  status: "pending" | "approved" | "rejected";
+  submittedAt: string;
+  reviewedAt?: string;
+  reviewedBy?: string;
 };
 type Data = { mitch: Mitch[]; branches: OrgUnit[]; cities: OrgUnit[]; avrechim: { id: string; name: string; branchId: string }[]; stages: string[]; contactTypes: string[]; today: string };
 
@@ -147,8 +156,50 @@ function MitchCard({ d, m: initial, domain, word, onClose, onSaved }: { d: Data;
   const [m, setM] = useState<Mitch>(initial);
   const [log, setLog] = useState({ type: d.contactTypes[0], note: "", next: "" });
   const [err, setErr] = useState<string | null>(null);
+  const [updates, setUpdates] = useState<SelfUpdate[]>([]);
+  const [linkBusy, setLinkBusy] = useState(false);
   const live = d.mitch.find((x) => x.id === m.id);
   const entries = live?.log ?? m.log ?? [];
+
+  const loadUpdates = useCallback(() => {
+    if (!m.id) return Promise.resolve();
+    return api<{ updates: SelfUpdate[] }>(`/api/mitch/${m.id}/updates`).then((r) => setUpdates(r.updates));
+  }, [m.id]);
+  useEffect(() => {
+    loadUpdates().catch(() => undefined);
+  }, [loadUpdates]);
+  useLive(["mitchUpdates"], loadUpdates);
+
+  const sendPersonalLink = async () => {
+    if (!m.id) return;
+    if (!m.phone) {
+      setErr("חסר מספר טלפון לשליחת הקישור");
+      return;
+    }
+    setLinkBusy(true);
+    setErr(null);
+    try {
+      const r = await post<{ token: string }>(`/api/mitch/${m.id}/access-link`, {});
+      const url = `${window.location.origin}/share?t=${encodeURIComponent(r.token)}`;
+      const who = domain === "bnot" ? "מתחזקת" : "מתחזק";
+      const msg = `שלום ${m.name}, זה הקישור האישי שלך לעדכונים במערכת. אפשר לכתוב ולצרף תמונות בלבד. הקישור אישי ואין להעביר אותו לאחרים:\n${url}`;
+      window.open(waLink(m.phone, msg), "_blank", "noopener,noreferrer");
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "לא ניתן ליצור קישור");
+    } finally {
+      setLinkBusy(false);
+    }
+  };
+
+  const reviewUpdate = async (id: string, action: "approve" | "reject") => {
+    try {
+      await post(`/api/mitch/updates/${id}/${action}`, {});
+      await loadUpdates();
+      onSaved();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "הפעולה נכשלה");
+    }
+  };
 
   const save = async () => {
     setErr(null);
@@ -182,7 +233,45 @@ function MitchCard({ d, m: initial, domain, word, onClose, onSaved }: { d: Data;
       {err ? <div className="adm-alert adm-alert--error">{err}</div> : null}
 
       {m.id ? (
-        <div className="adm-quicklog">
+        <>
+          <div className="adm-mitch-share-tools">
+            <div>
+              <strong>קישור אישי לעדכונים</strong>
+              <small>כניסה בלי סיסמה · טקסט ותמונות בלבד · כל עדכון דורש אישור</small>
+            </div>
+            <button type="button" className="btn btn--ghost btn--sm" disabled={linkBusy} onClick={sendPersonalLink}>
+              <Icon name="whatsapp" /> {linkBusy ? "יוצר קישור…" : "שליחת קישור אישי"}
+            </button>
+          </div>
+
+          {updates.filter((u) => u.status === "pending").length ? (
+            <section className="adm-mitch-pending">
+              <div className="adm-mitch-pending__head">
+                <strong>ממתין לאישור</strong>
+                <span>{updates.filter((u) => u.status === "pending").length}</span>
+              </div>
+              {updates.filter((u) => u.status === "pending").map((u) => (
+                <article key={u.id} className="adm-mitch-update">
+                  <div className="adm-mitch-update__meta">
+                    <Icon name="clock" />
+                    {new Intl.DateTimeFormat("he-IL", { dateStyle: "short", timeStyle: "short" }).format(new Date(u.submittedAt))}
+                  </div>
+                  {u.text ? <p>{u.text}</p> : null}
+                  {u.photos?.length ? (
+                    <div className="adm-mitch-update__photos">
+                      {u.photos.map((src, i) => <img key={i} src={src} alt={`תמונה שצורפה ${i + 1}`} />)}
+                    </div>
+                  ) : null}
+                  <div className="btn-row">
+                    <button type="button" className="btn btn--sm" onClick={() => reviewUpdate(u.id, "approve")}><Icon name="check" /> אישור והכנסה למעקב</button>
+                    <button type="button" className="btn btn--ghost btn--sm" onClick={() => reviewUpdate(u.id, "reject")}><Icon name="close" /> דחייה</button>
+                  </div>
+                </article>
+              ))}
+            </section>
+          ) : null}
+
+          <div className="adm-quicklog">
           <Chips<string> value={log.type} onChange={(type) => setLog({ ...log, type })} items={d.contactTypes.map((t) => ({ id: t, label: t }))} />
           <textarea className="textarea" style={{ minHeight: 60 }} placeholder="מה היה? (לא חובה)" value={log.note} onChange={(e) => setLog({ ...log, note: e.target.value })} />
           <div className="adm-toolbar" style={{ marginBottom: 0 }}>
@@ -195,6 +284,7 @@ function MitchCard({ d, m: initial, domain, word, onClose, onSaved }: { d: Data;
             </button>
           </div>
         </div>
+        </>
       ) : null}
 
       <div className="adm-fields adm-fields--2" style={{ marginTop: 12 }}>
@@ -274,6 +364,14 @@ function MitchCard({ d, m: initial, domain, word, onClose, onSaved }: { d: Data;
               </strong>
               <span className="muted"> · {e.by}</span>
               {e.note ? <div>{e.note}</div> : null}
+              {e.updateId ? (() => {
+                const u = updates.find((x) => x.id === e.updateId && x.status === "approved");
+                return u?.photos?.length ? (
+                  <div className="adm-mitch-update__photos adm-mitch-update__photos--history">
+                    {u.photos.map((src, i) => <img key={i} src={src} alt={`תמונה מאושרת ${i + 1}`} />)}
+                  </div>
+                ) : null;
+              })() : null}
             </div>
           ))}
         </div>
