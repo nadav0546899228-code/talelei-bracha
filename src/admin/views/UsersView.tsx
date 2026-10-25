@@ -88,7 +88,7 @@ export function UsersView({ me }: { me: Me }) {
               </legend>
               <div className="adm-fields adm-fields--2">
                 {me.assignableRoles.map((r) => (
-                  <label key={r} className="adm-toggle">
+                  <label key={r} className="adm-toggle adm-role-option">
                     <input
                       type="checkbox"
                       checked={editing.roles.includes(r)}
@@ -144,7 +144,7 @@ export function UsersView({ me }: { me: Me }) {
                   {!u.active ? <span className="adm-status adm-status--archived">חסום</span> : null}
                 </td>
                 <td>
-                  <div className="adm-roles">
+                  <div className="adm-roles adm-roles--wrap">
                     {u.roles.map((r) => (
                       <span key={r} className={`adm-role adm-role--${r}`}>
                         {me.roleLabels[r]}
