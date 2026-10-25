@@ -16,8 +16,8 @@ const KIND: Record<string, { label: string; icon: IconName }> = {
   activity: { label: "פעילות", icon: "calendar" },
 };
 
-export function SearchModal({ onClose, onGo }: { onClose: () => void; onGo: (v: View, tab?: string) => void }) {
-  const [q, setQ] = useState("");
+export function SearchModal({ onClose, onGo, initialQuery = "" }: { onClose: () => void; onGo: (v: View, tab?: string) => void; initialQuery?: string }) {
+  const [q, setQ] = useState(initialQuery);
   const [res, setRes] = useState<Result[] | null>(null);
   const [person, setPerson] = useState<{ kind: PersonKind; id: string } | null>(null);
   const seq = useRef(0);
