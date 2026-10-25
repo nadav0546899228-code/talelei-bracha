@@ -92,6 +92,25 @@ export async function handleActivityCenter(req, res, url, ctx) {
   }
 
   const contentDoc = await store.get("content", "site");
+  for (const l of contentDoc?.content?.lessons || []) {
+    const start = String(l.date || "");
+    if (!start) continue;
+    const d = new Date(start);
+    if (Number.isNaN(d.getTime())) continue;
+    const domain = l.brand === "bz" ? "bnot" : "kollel";
+    if ((domain === "bnot" && !canB) || (domain === "kollel" && !canK)) continue;
+    const locationText = `${l.location || ""} ${l.address || ""}`;
+    const city = Object.keys(CITY_COORDS).find((c) => locationText.includes(c)) || "";
+    const coords = coordFor(city);
+    push({
+      id: `lesson:${l.id}`, source: "scheduledLesson", sourceLabel: "שיעור", domain,
+      title: l.title || "שיעור", start, date: start,
+      time: new Intl.DateTimeFormat("he-IL",{hour:"2-digit",minute:"2-digit",hour12:false,timeZone:"Asia/Jerusalem"}).format(d),
+      place: l.location || "", address: l.address || "", branchId:null, branch:"", city,
+      lat:coords?.[0] ?? null, lng:coords?.[1] ?? null, participants:null, demo:Boolean(l.demo)
+    });
+  }
+
   for (const e of contentDoc?.content?.events || []) {
     const domain = e.brand === "bz" ? "bnot" : "kollel";
     if ((domain === "bnot" && !canB) || (domain === "kollel" && !canK)) continue;
