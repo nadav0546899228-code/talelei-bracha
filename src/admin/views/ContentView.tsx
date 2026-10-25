@@ -323,14 +323,22 @@ export function ContentView({ initialSection }: { initialSection?: string } = {}
 
   return (
     <>
-      <div className="adm-head">
+      <div className="adm-head adm-content-head">
         <div>
           <h1>תוכן האתר</h1>
+          <small className={`adm-content-state${dirty ? " is-dirty" : ""}`}>
+            {dirty ? "יש שינויים שלא נשמרו" : msg?.ok ? msg.text : "הכל שמור"}
+          </small>
         </div>
-        <a className="btn btn--ghost btn--sm" href="/" target="_blank" rel="noopener noreferrer">
-          <Icon name="eye" />
-          צפייה באתר
-        </a>
+        <div className="adm-content-actions">
+          <button type="button" className="btn btn--flame btn--sm" disabled={!dirty || saving} onClick={save}>
+            <Icon name="check" /> {saving ? "שומר…" : "שמירה"}
+          </button>
+          <a className="btn btn--ghost btn--sm" href="/" target="_blank" rel="noopener noreferrer">
+            <Icon name="eye" />
+            צפייה באתר
+          </a>
+        </div>
       </div>
 
       <div className="adm-sections" role="group" aria-label="חלקי התוכן">
@@ -373,12 +381,6 @@ export function ContentView({ initialSection }: { initialSection?: string } = {}
         )}
       </section>
 
-      <div className="adm-savebar">
-        <span>{dirty ? "יש שינויים שלא נשמרו" : msg?.text ?? "כל השינויים שמורים"}</span>
-        <button type="button" className="btn btn--flame btn--sm" disabled={!dirty || saving} onClick={save}>
-          {saving ? "שומר…" : "שמירה"}
-        </button>
-      </div>
       {msg && !msg.ok ? (
         <div className="adm-alert adm-alert--error" role="alert">
           {msg.text}
