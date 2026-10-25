@@ -26,7 +26,7 @@ function tree(mode: Mode): NavHub[] {
     label: "ניהול",
     icon: "shield",
     items: [
-      leaf("content", "תוכן האתר", "edit", "content", { hint: "טקסטים, תמונות, פרטי קשר ותרומות" }),
+      leaf("content", "תוכן האתר", "edit", "content", { hint: "טקסטים, תמונות ופרטי קשר" }),
       leaf("events", "אירועים ושיעורים", "calendar", "content", { tab: "events", hint: "מתעדכן מיד באתר הציבורי" }),
       leaf("users", "משתמשים והרשאות", "users", "users", { hint: "מי נכנס ומה כל אחד רואה" }),
       leaf("audit", "יומן פעולות", "list", "audit", { hint: "כל פעולה במערכת" }),
@@ -36,6 +36,7 @@ function tree(mode: Mode): NavHub[] {
   };
   const common = {
     home: { id: "home", label: "בית", icon: "grid" as IconName, items: [leaf("dashboard", "לוח בקרה", "grid", "dashboard")] },
+    smart: { id: "smart-center", label: "ניהול חכם", icon: "sparkle" as IconName, items: [leaf("smart", "ניהול חכם", "sparkle", "smart", { hint: "משימות, אישורים, משפכים, בריאות סניפים ופעולות מרוכזות" })] },
     activity: { id: "activity-center", label: "פעילות", icon: "calendar" as IconName, items: [leaf("activity", "לוח פעילות ארצי", "calendar", "activity", { hint: "לוח שנה, שעות ומפת הפעילות בארץ" })] },
     /** תקשורת: הודעות פנימיות + תפוצה + פניות מהאתר - כפתור אחד */
     comm: { id: "comm", label: "תקשורת", icon: "chat" as IconName, items: [
@@ -49,6 +50,7 @@ function tree(mode: Mode): NavHub[] {
   if (mode === "boys") {
     return [
       common.home,
+      common.smart,
       common.activity,
       {
         id: "kollel",
