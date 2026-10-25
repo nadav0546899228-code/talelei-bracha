@@ -35,11 +35,16 @@ export async function handleMitch(req, res, url, ctx) {
     const domain = url.searchParams.get("domain") === "bnot" ? "bnot" : "kollel";
     if (!can(domain)) return send(403, { error: "אין הרשאה" }), true;
     const rows = (await store.list("mitchazkim", 20000)).filter((m) => m.domain === domain && inScope(domain, m.branchId));
+    const rowIds = new Set(rows.map((m) => m.id));
+    const pendingByMitch = {};
+    for (const u of await store.list("mitchUpdates", 5000)) {
+      if (u.status === "pending" && rowIds.has(u.mitchId)) pendingByMitch[u.mitchId] = (pendingByMitch[u.mitchId] || 0) + 1;
+    }
     const branches = org.branches.filter((b) => b.domain === domain && inScope(domain, b.id));
     const cities = org.cities.filter((c) => c.domain === domain && branches.some((b) => b.parentId === c.id));
     let avrechim = [];
     if (domain === "kollel") avrechim = (await store.list("avrechim", 20000)).filter((a) => a.active !== false && inScope("kollel", a.branchId)).map((a) => ({ id: a.id, name: a.name, branchId: a.branchId }));
-    return send(200, { mitch: rows.sort((a, b) => String(a.name).localeCompare(String(b.name), "he")), branches, cities, avrechim, stages: STAGES[domain], contactTypes: CONTACT_TYPES, today: today() }), true;
+    return send(200, { mitch: rows.sort((a, b) => String(a.name).localeCompare(String(b.name), "he")), branches, cities, avrechim, stages: STAGES[domain], contactTypes: CONTACT_TYPES, today: today(), pendingByMitch }), true;
   }
 
   // קישור אישי לכתיבת עדכונים: יצירת קישור חדש מבטלת קישורים קודמים לאותו מתחזק/ת.
@@ -347,6 +352,9 @@ export async function publicMitchShare(req, res, url, { store, json, readBody, c
       domain: m.domain,
       branchId: m.branchId,
       text,
+      rawText: text,
+      cleanText: null,
+      aiStatus: "not_processed",
       photos,
       status: "pending",
       submittedAt,
