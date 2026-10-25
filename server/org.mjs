@@ -104,17 +104,19 @@ export async function handleOrg(req, res, url, ctx) {
     const name = clean(b.name, 80).trim();
     if (!name) return send(400, { error: "חסר שם" }), true;
     let parentId = null;
+    let region = null;
     if (type === "branch") {
       const city = org.cities.find((c) => c.id === b.parentId && c.domain === domain);
       if (!city) return send(400, { error: "יש לבחור עיר" }), true;
       parentId = city.id;
+      region = ["north", "center", "south"].includes(String(b.region)) ? String(b.region) : null;
     }
     const cities = cityScope(user, domain);
     if (cities !== null && (type === "city" || !cities.has(parentId))) return send(403, { error: "אפשר להוסיף סניפים רק בעיר שלך" }), true;
     const id = b.id ? String(b.id) : randomUUID();
     const prev = await store.get("orgUnits", id);
     if (prev && cities !== null && !(prev.type === "branch" && cities.has(prev.parentId))) return send(403, { error: "אין הרשאה" }), true;
-    await store.put("orgUnits", id, { type, domain, name, parentId });
+    await store.put("orgUnits", id, { type, domain, name, parentId, ...(type === "branch" ? { region } : {}) });
     await audit(user, prev ? "עדכון יחידה במבנה" : type === "city" ? "הוספת עיר" : "הוספת סניף", `${DOMAINS[domain]} · ${name}`);
     return send(200, { ok: true, id }), true;
   }
