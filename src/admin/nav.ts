@@ -1,0 +1,168 @@
+/**
+ * ניווט במערכת הניהול: שני מצבים (טללי ברכה - בנים / בנות צילה - בנות),
+ * כפתורי-על שנכנסים פנימה, ושורה תחתונה שאפשר לערוך.
+ */
+import type { IconName } from "../components/Icon";
+import type { FormKey, Me, View } from "./api";
+
+export type Mode = "boys" | "girls";
+export const MODE_LABELS: Record<Mode, string> = { boys: "טללי ברכה", girls: "בנות צילה" };
+
+/** מסך = תצוגה + לשונית פנימית אופציונלית, או מסך כפתור-על */
+export type Screen = { view: View; tab?: string } | { hub: string };
+
+export type NavLeaf = { id: string; label: string; icon: IconName; view: View; tab?: string; hint?: string; badgeForms?: FormKey[] };
+export type NavHub = { id: string; label: string; icon: IconName; items: NavLeaf[] };
+export type NavEntry = { id: string; label: string; icon: IconName; hub?: NavHub; leaf?: NavLeaf };
+
+const INQ: FormKey[] = ["contact", "volunteer", "updates", "assistance"];
+
+const leaf = (id: string, label: string, icon: IconName, view: View, extra: Partial<NavLeaf> = {}): NavLeaf => ({ id, label, icon, view, ...extra });
+
+/** כל המבנה לפי מצב. פריטים שאין למשתמש הרשאה אליהם מסוננים אחר כך */
+function tree(mode: Mode): NavHub[] {
+  const manage: NavHub = {
+    id: "manage",
+    label: "ניהול",
+    icon: "shield",
+    items: [
+      leaf("content", "תוכן האתר", "edit", "content", { hint: "טקסטים, תמונות, פרטי קשר ותרומות" }),
+      leaf("users", "משתמשים והרשאות", "users", "users", { hint: "מי נכנס ומה כל אחד רואה" }),
+      leaf("audit", "יומן פעולות", "list", "audit", { hint: "כל פעולה במערכת" }),
+      leaf("developer", "מתכנת", "code", "developer", { hint: "בדיקות מערכת, גיבוי וכניסה כ..." }),
+    ],
+  };
+  const common = {
+    home: { id: "home", label: "בית", icon: "grid" as IconName, items: [leaf("dashboard", "לוח בקרה", "grid", "dashboard")] },
+    inquiries: { id: "inquiries", label: "פניות", icon: "inbox" as IconName, items: [leaf("inquiries", "פניות מהאתר", "inbox", "inquiries", { badgeForms: INQ })] },
+    broadcast: { id: "broadcast", label: "הודעות", icon: "phone" as IconName, items: [
+      leaf("bc-send", "שליחת הודעה", "phone", "broadcast", { tab: "send", hint: "קולית, צינתוק, SMS, וואטסאפ, מייל" }),
+      leaf("bc-history", "היסטוריית שליחות", "clock", "broadcast", { tab: "history" }),
+      leaf("bc-contacts", "אנשי קשר", "users", "broadcast", { tab: "contacts" }),
+    ] },
+  };
+  if (mode === "boys") {
+    return [
+      common.home,
+      {
+        id: "kollel",
+        label: "כולל ערב",
+        icon: "book",
+        items: [
+          leaf("avrechim", "אברכים", "users", "kollel", { tab: "avrechim", hint: "לפי ערים וסניפים" }),
+          leaf("entries", "נסיעות והוצאות", "file", "kollel", { tab: "entries", hint: "דיווח ואישור בחודש הפתוח" }),
+          leaf("payroll", "משכורות", "file", "payroll", { hint: "טבלת החודש, שמחות, ייצוא לאקסל" }),
+          leaf("org-kollel", "ערים, סניפים ורכזים", "pin", "org", { hint: "מבנה הכולל ומי אחראי על מה" }),
+        ],
+      },
+      common.broadcast,
+      common.inquiries,
+      manage,
+    ];
+  }
+  return [
+    common.home,
+    {
+      id: "bnot",
+      label: "בנות צילה",
+      icon: "heart",
+      items: [
+        leaf("isha-req", "בקשות שיחה", "chat", "isha", { tab: "ishaRequest", badgeForms: ["ishaRequest"], hint: "אישה לאישה - שיבוץ מלווה" }),
+        leaf("isha-mentors", "מלוות", "hands", "isha", { tab: "ishaMentor", badgeForms: ["ishaMentor"], hint: "מתנדבות שנרשמו ואושרו" }),
+        leaf("org-bnot", "ערים, סניפים ורכזות", "pin", "org", { hint: "מבנה בנות צילה ומי אחראית על מה" }),
+      ],
+    },
+    common.broadcast,
+    common.inquiries,
+    manage,
+  ];
+}
+
+/** המצבים שהמשתמש רשאי להם */
+export function modesFor(me: Me): Mode[] {
+  const v = me.user.views;
+  const r = me.user.roles;
+  const out: Mode[] = [];
+  if (v.includes("kollel") || v.includes("payroll") || r.some((x) => x.startsWith("kollel_"))) out.push("boys");
+  if (v.includes("isha") || r.some((x) => x.startsWith("bnot_"))) out.push("girls");
+  return out.length ? out : ["boys"];
+}
+
+/** כפתורי-העל של המשתמש במצב הנוכחי, אחרי סינון הרשאות */
+export function hubsFor(me: Me, mode: Mode): NavHub[] {
+  const v = me.user.views;
+  return tree(mode)
+    .map((h) => ({ ...h, items: h.items.filter((i) => v.includes(i.view)) }))
+    .filter((h) => h.items.length);
+}
+
+/** כל מה שאפשר לשים בשורה התחתונה: כפתורי-על, וגם קיצורים ישירים */
+export function entriesFor(hubs: NavHub[]): NavEntry[] {
+  const out: NavEntry[] = [];
+  for (const h of hubs) {
+    if (h.items.length === 1) out.push({ id: h.id, label: h.label, icon: h.icon, leaf: h.items[0] });
+    else out.push({ id: h.id, label: h.label, icon: h.icon, hub: h });
+  }
+  for (const h of hubs) {
+    if (h.items.length > 1) for (const i of h.items) out.push({ id: `leaf:${i.id}`, label: i.label, icon: i.icon, leaf: i });
+  }
+  return out;
+}
+
+export const defaultBar = (entries: NavEntry[]) => entries.filter((e) => !e.id.startsWith("leaf:")).map((e) => e.id);
+
+/** שמירת השורה התחתונה לכל משתמש ולכל מצב בנפרד (במכשיר) */
+const key = (me: Me, mode: Mode) => `tb-bar:${me.user.impersonatedBy ? "as:" : ""}${me.user.id}:${mode}`;
+export function loadBar(me: Me, mode: Mode, entries: NavEntry[]): string[] {
+  try {
+    const raw = localStorage.getItem(key(me, mode));
+    if (raw) {
+      const ids = (JSON.parse(raw) as string[]).filter((id) => entries.some((e) => e.id === id));
+      if (ids.length) return ids;
+    }
+  } catch {
+    /* אין אחסון - ברירת מחדל */
+  }
+  return defaultBar(entries);
+}
+export function saveBar(me: Me, mode: Mode, ids: string[] | null) {
+  try {
+    if (ids) localStorage.setItem(key(me, mode), JSON.stringify(ids));
+    else localStorage.removeItem(key(me, mode));
+  } catch {
+    /* לא נשמר - לא קריטי */
+  }
+}
+
+export function loadMode(me: Me, modes: Mode[]): Mode {
+  try {
+    const m = localStorage.getItem(`tb-mode:${me.user.id}`) as Mode | null;
+    if (m && modes.includes(m)) return m;
+  } catch {
+    /* ברירת מחדל */
+  }
+  return modes[0];
+}
+export function saveMode(me: Me, mode: Mode) {
+  try {
+    localStorage.setItem(`tb-mode:${me.user.id}`, mode);
+  } catch {
+    /* לא קריטי */
+  }
+}
+
+/** האם מסך שייך לכפתור (להדגשה בשורה) */
+export function entryActive(e: NavEntry, screen: Screen): boolean {
+  if ("hub" in screen) return Boolean(e.hub && e.hub.id === screen.hub);
+  if (e.leaf) return e.leaf.view === screen.view && (!e.leaf.tab || !screen.tab || e.leaf.tab === screen.tab);
+  return Boolean(e.hub?.items.some((i) => i.view === screen.view));
+}
+
+/** קבוצות תפוצה ששייכות למצב */
+export function groupInMode(id: string, mode: Mode): boolean {
+  const boys = id.startsWith("avrechim") || id.startsWith("staff:kollel");
+  const girls = id === "mentors" || id === "updates" || id.startsWith("staff:bnot");
+  if (boys) return mode === "boys";
+  if (girls) return mode === "girls";
+  return true;
+}

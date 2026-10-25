@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /api/
+
+# TODO: לעדכן לכתובת הסופית של האתר לאחר רכישת דומיין
+Sitemap: /sitemap.xml

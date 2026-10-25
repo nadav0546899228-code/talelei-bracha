@@ -1,0 +1,19 @@
+{
+  "id": "/",
+  "name": "קרן טללי ברכה · בנות צילה",
+  "short_name": "טללי ברכה",
+  "description": "קרן טללי ברכה ובנות צילה - אתר ומערכת ניהול",
+  "lang": "he",
+  "dir": "rtl",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FBF8F3",
+  "theme_color": "#0E5A60",
+  "icons": [
+    { "src": "/brand/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/brand/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/brand/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
