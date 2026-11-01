@@ -578,6 +578,11 @@ async function api(req, res, url) {
     if (await publicMitchShare(req, res, url, { store, json, readBody, clean, rateLimited, clientIp, notify })) return;
   }
 
+  // אבחון: איך כתובת הגולש מגיעה דרך השרתים של Replit (מחזיר רק את הכתובת של מי ששואל - לכיול הגבלת הקצב)
+  if (pathname === "/api/public/ip-check" && method === "GET") {
+    return json(res, 200, { forwardedFor: String(req.headers["x-forwarded-for"] || ""), realIp: String(req.headers["x-real-ip"] || ""), remote: String(req.socket.remoteAddress || "") });
+  }
+
   if (pathname === "/api/public/live-impact" && method === "GET") {
     // נתוני "הפעילות שלנו" לדף הבית - מחושבים לכל היותר פעם בדקה ולא בכל כניסה של גולש
     if (!impactCache || Date.now() - impactCache.at > 60_000) impactCache = { at: Date.now(), data: await publicImpact(store) };
