@@ -1,5 +1,6 @@
 /** מתחזקים (כולל ערב - לפי אברך) ומתחזקות (בנות צילה - קשר מתמשך): כרטיס, שלב, יומן קשר ומעקב הבא */
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { ilDayPlus } from "../dates";
 import { Icon } from "../../components/Icon";
 import { api, apiCached, del, post, put, type OrgUnit } from "../api";
 import { Chips, Combo, IconActions, SwipeRow, waLink } from "../components";
@@ -124,12 +125,25 @@ export function MitchPanel({ domain, initialQ = "", initialTab = "" }: { domain:
       return m.stage === filter && m.status !== "left";
     }).sort((a, b) => Number(isDue(b)) - Number(isDue(a)) || Number(b.attentionLevel === "high") - Number(a.attentionLevel === "high"));
   }, [d, q, filter, isDue]);
+  // חיפושי שמות וספירות - פעם אחת לכל טעינה, לא לכל שורה בכל הקלדה
+  const lookups = useMemo(() => {
+    const av = new Map((d?.avrechim ?? []).map((a) => [a.id, a.name]));
+    const br = new Map((d?.branches ?? []).map((b) => [b.id, b.name]));
+    const stageCount = new Map<string, number>();
+    let active = 0;
+    for (const m of d?.mitch ?? []) {
+      if (m.status === "left") continue;
+      active++;
+      stageCount.set(m.stage, (stageCount.get(m.stage) || 0) + 1);
+    }
+    return { av, br, stageCount, active };
+  }, [d]);
 
   if (err) return <div className="adm-alert adm-alert--error">{err}</div>;
   if (!d) return <p className="muted">טוען…</p>;
   if (!d.branches.length) return <div className="adm-panel adm-empty">אין סניפים באחריותך.</div>;
-  const avName = (id: string | null) => d.avrechim.find((a) => a.id === id)?.name ?? "";
-  const bName = (id: string) => d.branches.find((b) => b.id === id)?.name ?? "";
+  const avName = (id: string | null) => (id ? lookups.av.get(id) ?? "" : "");
+  const bName = (id: string) => lookups.br.get(id) ?? "";
   const dueCount = d.mitch.filter(isDue).length;
   const pendingCount = Object.values(d.pendingByMitch || {}).reduce((a, b) => a + b, 0);
   const blank = (): Mitch => ({
@@ -182,14 +196,14 @@ export function MitchPanel({ domain, initialQ = "", initialTab = "" }: { domain:
         <button type="button" className={dueCount ? "is-red" : ""} onClick={() => setFilter("due")}><b>{dueCount}</b> לחזור היום</button>
       </div>
       <div className="adm-mp-filters">
-        {([["due", "לחזור היום", dueCount], ["attention", "לטיפול", d.attentionSummary.total], ["all", "כולם", d.mitch.filter((m) => m.status !== "left").length], ...(pendingCount ? [["pending", "ממתינים לאישור", pendingCount]] : [])] as [string, string, number][]).map(([id, label, n]) => (
+        {([["due", "לחזור היום", dueCount], ["attention", "לטיפול", d.attentionSummary.total], ["all", "כולם", lookups.active], ...(pendingCount ? [["pending", "ממתינים לאישור", pendingCount]] : [])] as [string, string, number][]).map(([id, label, n]) => (
           <button key={id} type="button" className={filter === id ? "is-on" : ""} onClick={() => setFilter(id)}>
             {label} <small>{n}</small>
           </button>
         ))}
         <select className={d.stages.includes(filter) || filter === "left" ? "is-on" : ""} value={d.stages.includes(filter) || filter === "left" ? filter : ""} onChange={(e) => setFilter(e.target.value || "all")} aria-label="סינון לפי שלב">
           <option value="">לפי שלב…</option>
-          {d.stages.map((st) => <option key={st} value={st}>{st} ({d.mitch.filter((m) => m.stage === st && m.status !== "left").length})</option>)}
+          {d.stages.map((st) => <option key={st} value={st}>{st} ({lookups.stageCount.get(st) ?? 0})</option>)}
           <option value="left">עזבו</option>
         </select>
       </div>
@@ -281,7 +295,7 @@ export function MitchPanel({ domain, initialQ = "", initialTab = "" }: { domain:
           onPick={async (note, next) => {
             const id = pendingCall.id;
             setPendingCall(null);
-            const plus = (n: number) => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
+            const plus = (n: number) => ilDayPlus(n);
             await post(`/api/mitch/${id}/log`, { type: pendingCall.type, note, nextFollowUp: next ? plus(next) : undefined }).catch((e) => setErr(e.message));
             load();
           }}

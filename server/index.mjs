@@ -514,7 +514,8 @@ async function api(req, res, url) {
     // החודש העברי של היום (למשל "חשוון תשפ״ז"); אם לא נפתח - החודש הפתוח הוותיק ביותר (לא החודש הבא שנפתח מוקדם)
     const openMonths = (await store.list("kollelMonths")).filter((m) => !m.locked).sort((a, b) => (a.order || 0) - (b.order || 0));
     const nowLabel = hebrewMonthLabelNow();
-    const month = openMonths.find((m) => String(m.label || "").trim() === nowLabel) || openMonths[0];
+    const norm = (t) => String(t || "").trim().replace(/^מ?רחשו?ון|^חשו?ון/, "חשוון").replace(/^סיו?ון/, "סיוון").replace(/["']/g, "״");
+    const month = openMonths.find((m) => norm(m.label) === norm(nowLabel)) || openMonths[0];
     if (!month) return say("אין כרגע חודש פתוח לדיווח");
     const date = israelDate();
     const id = `${av.branchId}_${date}`;
@@ -960,8 +961,8 @@ async function api(req, res, url) {
   if (pathname === "/api/donations" && method === "POST") {
     if (!can("donations")) return send(403, { error: "אין הרשאה" });
     const b = await readBody(req);
-    const amount = Number(b.amount);
-    if (!amount) return send(400, { error: "חסר סכום" });
+    const amount = Math.round(Number(b.amount) * 100) / 100;
+    if (!(amount > 0)) return send(400, { error: "סכום חייב להיות גדול מאפס" });
     const id = b.id ? String(b.id) : `m-${randomUUID()}`;
     await store.put("donations", id, { amount, name: clean(b.name, 120), phone: phone.normalizePhone(b.phone), email: clean(b.email, 120), comments: clean(b.comments, 300), method: clean(b.method, 40), date: clean(b.date, 10), source: "manual", byName: user.name || user.email });
     await audit(user, "רישום תרומה", `${clean(b.name, 60)} · ${amount}`);

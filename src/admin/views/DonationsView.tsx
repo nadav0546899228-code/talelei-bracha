@@ -1,5 +1,6 @@
 /** תרומות: נכנסות אוטומטית מהסליקה (נדרים פלוס) או נרשמות ידנית */
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { ilDay, ilDayOf } from "../dates";
 import { Icon } from "../../components/Icon";
 import { api, del, fmtDateTime, post, type Me } from "../api";
 import { Chips, ExportBtn, Fab, IconActions, money, SwipeRow } from "../components";
@@ -25,7 +26,8 @@ export function DonationsView({ me }: { me: Me }) {
   }, [load]);
   useLive(["donations"], load);
 
-  const dateOf = (d: Donation) => d.date || d.createdAt;
+  // תאריך לפי שעון ישראל - תרומה מ-01:00 בלילה של ה-1 בחודש שייכת לחודש הנכון
+  const dateOf = (d: Donation) => ilDayOf(d.date || d.createdAt);
   const months = useMemo(() => Array.from(new Set((list ?? []).map((d) => monthKey(dateOf(d))))).sort().reverse(), [list]);
   const rows = (list ?? []).filter((d) => (month === "all" || monthKey(dateOf(d)) === month) && (!q.trim() || `${d.name} ${d.phone} ${d.email}`.includes(q.trim())));
   const total = rows.reduce((t, d) => t + d.amount, 0);
@@ -105,7 +107,7 @@ export function DonationsView({ me }: { me: Me }) {
             </label>
           </div>
           <div className="btn-row" style={{ marginTop: 10 }}>
-            <button type="button" className="btn btn--sm" disabled={!Number(add.amount)} onClick={save}>
+            <button type="button" className="btn btn--sm" disabled={!(Number(add.amount) > 0)} onClick={save}>
               <Icon name="check" /> שמירה
             </button>
             <button type="button" className="btn btn--ghost btn--sm" onClick={() => setAdd(null)}>
@@ -150,7 +152,7 @@ export function DonationsView({ me }: { me: Me }) {
         ))}
         {list && !rows.length ? <div className="adm-panel adm-empty">אין תרומות להצגה. תרומות מהסליקה נכנסות לכאן לבד אחרי חיבור (מסך מתכנת).</div> : null}
       </div>
-      {!add ? <Fab label="רישום תרומה" onClick={() => setAdd({ name: "", phone: "", amount: "", method: "מזומן", date: new Date().toISOString().slice(0, 10), comments: "" })} /> : null}
+      {!add ? <Fab label="רישום תרומה" onClick={() => setAdd({ name: "", phone: "", amount: "", method: "מזומן", date: ilDay(), comments: "" })} /> : null}
     </>
   );
 }

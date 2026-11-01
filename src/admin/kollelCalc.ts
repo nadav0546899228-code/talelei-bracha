@@ -9,6 +9,15 @@
  * - בעמודת "פירוט" רושמים רק תוספות מיוחדות. לעולם לא את המילה "מלא".
  */
 
+/** פורמט תאריך נוצר פעם אחת ונשמר (יצירה היא פעולה יקרה) */
+const fmtCache = new Map<string, Intl.DateTimeFormat>();
+const dtf = (locale: string, opts: Intl.DateTimeFormatOptions = {}) => {
+  const k = `${locale}|${JSON.stringify(opts)}`;
+  let f = fmtCache.get(k);
+  if (!f) fmtCache.set(k, (f = new Intl.DateTimeFormat(locale, opts)));
+  return f;
+};
+
 export type Avrech = {
   id: string;
   name: string;
@@ -121,15 +130,29 @@ export function computePayroll(avrechimNow: Avrech[], month: MonthDoc | null, en
   });
 }
 
-/** תווית חודש עברי לתאריך, למשל "חשון תשפ״ז" */
+/** שמות חודשים אחידים - דפדפנים שונים כותבים "חשון"/"חשוון", "סיון"/"סיוון", "אדר א'"/"אדר א׳",
+    ובלי האחדה אותו חודש היה נפתח פעמיים בשני שמות */
+export function normalizeMonthLabel(label: string): string {
+  return String(label || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .replace(/^חשו?ון/, "חשוון")
+    .replace(/^מרחשו?ון/, "חשוון")
+    .replace(/^סיו?ון/, "סיוון")
+    .replace(/^אדר\s*([אב])['׳`]?/, "אדר $1׳")
+    .replace(/["״]/g, "״")
+    .replace(/(\s[א-ת]+)'([א-ת])$/, "$1״$2");
+}
+
+/** תווית חודש עברי לתאריך, למשל "חשוון תשפ״ז" */
 export function hebrewMonthLabel(d = new Date()): string {
   try {
-    const parts = new Intl.DateTimeFormat("he-u-ca-hebrew", { month: "long", year: "numeric" }).formatToParts(d);
+    const parts = dtf("he-u-ca-hebrew", { month: "long", year: "numeric" }).formatToParts(d);
     const month = parts.find((p) => p.type === "month")?.value ?? "";
     const year = Number(parts.find((p) => p.type === "year")?.value);
-    return `${month} ${gem(year % 1000)}`;
+    return normalizeMonthLabel(`${month} ${gem(year % 1000)}`);
   } catch {
-    return new Intl.DateTimeFormat("he-IL", { month: "long", year: "numeric" }).format(d);
+    return dtf("he-IL", { month: "long", year: "numeric" }).format(d);
   }
 }
 
@@ -145,7 +168,7 @@ function gem(n: number): string {
 
 /** מספר השנה העברית (למשל 5787) */
 export function hebrewYearNum(d = new Date()): number {
-  return Number(new Intl.DateTimeFormat("en-US-u-ca-hebrew", { year: "numeric" }).formatToParts(d).find((p) => p.type === "year")?.value || 0);
+  return Number(dtf("en-US-u-ca-hebrew", { year: "numeric" }).formatToParts(d).find((p) => p.type === "year")?.value || 0);
 }
 /** "תשפ״ז" משנה עברית מלאה */
 export const hebrewYearLabel = (y: number) => gem(y % 1000);

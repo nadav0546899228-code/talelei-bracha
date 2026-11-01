@@ -1,3 +1,4 @@
+import { dtf } from "./dates";
 /** קריאות למערכת הניהול בשרת */
 
 export class ApiError extends Error {
@@ -9,7 +10,37 @@ export class ApiError extends Error {
   }
 }
 
+/** אותה פעולת שמירה שנשלחה פעמיים ברצף (לחיצה כפולה) - נשלחת לשרת פעם אחת בלבד */
+const inflightWrites = new Map<string, Promise<unknown>>();
+
 export async function api<T = unknown>(path: string, init: RequestInit & { body?: BodyInit | null } = {}): Promise<T> {
+  const method = (init.method || "GET").toUpperCase();
+  if (method !== "GET") {
+    const k = `${method} ${path} ${typeof init.body === "string" ? init.body : ""}`;
+    const running = inflightWrites.get(k);
+    if (running) return running as Promise<T>;
+    const p = apiRaw<T>(path, init).finally(() => inflightWrites.delete(k));
+    inflightWrites.set(k, p);
+    return p;
+  }
+  // כמה מסכים שמבקשים את אותם נתונים באותו רגע (למשל אחרי עדכון חי) - בקשה אחת לשרת
+  if (init.body || init.signal) return apiRaw<T>(path, init);
+  let scope = "";
+  try {
+    scope = localStorage.getItem("tb-active-org-scope") || "";
+  } catch {
+    /* */
+  }
+  const k = `GET ${scope} ${path}`;
+  const running = inflightGets.get(k);
+  if (running) return running as Promise<T>;
+  const p = apiRaw<T>(path, init).finally(() => inflightGets.delete(k));
+  inflightGets.set(k, p);
+  return p;
+}
+const inflightGets = new Map<string, Promise<unknown>>();
+
+async function apiRaw<T>(path: string, init: RequestInit & { body?: BodyInit | null }): Promise<T> {
   let orgScope = "";
   try { orgScope = localStorage.getItem("tb-active-org-scope") || ""; } catch { /* localStorage לא זמין */ }
   const res = await fetch(path, {
@@ -48,9 +79,46 @@ const cacheKey = (path: string) => {
   try { scope = localStorage.getItem("tb-active-org-scope") || ""; } catch { /* */ }
   return `tbc:${cacheOwner}:${scope}:${path}`;
 };
+/* מטמון במכשיר מוגבל בגודל: עד 8 מסכים אחרונים ו-3MB, הוותיקים נמחקים (אחרת הזיכרון במכשיר מתמלא תוך ימים) */
+const INDEX_KEY = "tbc:index";
+const MAX_ENTRIES = 8;
+const MAX_TOTAL = 3_000_000;
+function remember(key: string, raw: string) {
+  try {
+    let idx: { k: string; n: number }[] = [];
+    try {
+      idx = JSON.parse(localStorage.getItem(INDEX_KEY) || "[]");
+    } catch {
+      idx = [];
+    }
+    idx = idx.filter((x) => x.k !== key);
+    idx.push({ k: key, n: raw.length });
+    let total = idx.reduce((t, x) => t + x.n, 0);
+    while (idx.length > MAX_ENTRIES || total > MAX_TOTAL) {
+      const old = idx.shift();
+      if (!old) break;
+      total -= old.n;
+      localStorage.removeItem(old.k);
+    }
+    // ניקוי רשומות ישנות שלא במפתח (מגרסאות קודמות)
+    const keep = new Set(idx.map((x) => x.k));
+    for (const k of Object.keys(localStorage)) if (k.startsWith("tbc:") && k !== INDEX_KEY && !keep.has(k) && k !== key) localStorage.removeItem(k);
+    localStorage.setItem(key, raw);
+    localStorage.setItem(INDEX_KEY, JSON.stringify(idx));
+  } catch {
+    /* מקום מלא - נשאר רק בזיכרון */
+  }
+}
+/** מפתח קבוע למסכים שהכתובת שלהם משתנה כל יום (טווח תאריכים) */
+const stableKey = (path: string) => path.replace(/([?&])(from|to)=\d{4}-\d{2}-\d{2}/g, "$1$2=*");
+const inflightReads = new Map<string, { p: Promise<unknown>; started: number }>();
+const appliedAt = new Map<string, number>();
+let reqCounter = 0;
+const lastRaw = new Map<string, string>();
+
 /** קורא ל-onData מיד עם מה ששמור (אם יש), ואחר כך שוב עם הנתונים העדכניים מהשרת */
 export async function apiCached<T>(path: string, onData: (d: T) => void): Promise<T> {
-  const key = cacheKey(path);
+  const key = cacheKey(stableKey(path));
   if (cacheOwner) {
     let hit = mem.get(key) as T | undefined;
     if (hit === undefined) {
@@ -63,16 +131,35 @@ export async function apiCached<T>(path: string, onData: (d: T) => void): Promis
     }
     if (hit !== undefined) onData(hit);
   }
-  const fresh = await api<T>(path);
-  onData(fresh);
+  // כמה מסכים שמבקשים את אותם נתונים באותו רגע - בקשה אחת לשרת
+  let entry = inflightReads.get(path);
+  if (!entry) {
+    const started = ++reqCounter;
+    entry = { started, p: api<T>(path).finally(() => inflightReads.delete(path)) };
+    inflightReads.set(path, entry);
+  }
+  const fresh = (await entry.p) as T;
+  // תשובה לבקשה ישנה שהגיעה אחרי תשובה חדשה יותר - לא דורסת את המסך
+  if (entry.started >= (appliedAt.get(key) || 0)) {
+    appliedAt.set(key, entry.started);
+    onData(fresh);
+  }
   if (cacheOwner) {
     mem.set(key, fresh);
-    try {
-      const raw = JSON.stringify(fresh);
-      if (raw.length < 1_500_000) localStorage.setItem(key, raw);
-    } catch {
-      /* מקום מלא - נשאר רק בזיכרון */
-    }
+    const write = () => {
+      try {
+        const raw = JSON.stringify(fresh);
+        if (raw === lastRaw.get(key)) return;
+        lastRaw.set(key, raw);
+        if (raw.length < 1_500_000) remember(key, raw);
+      } catch {
+        /* */
+      }
+    };
+    // שמירה במכשיר כשהדפדפן פנוי - לא מעכב את המסך
+    const w = window as Window & { requestIdleCallback?: (cb: () => void) => void };
+    if (w.requestIdleCallback) w.requestIdleCallback(write);
+    else window.setTimeout(write, 200);
   }
   return fresh;
 }
@@ -221,7 +308,7 @@ export function displayName(s: Submission): string {
 
 export function fmtDateTime(iso: string | null | undefined): string {
   if (!iso) return "-";
-  return new Intl.DateTimeFormat("he-IL", { day: "numeric", month: "numeric", year: "2-digit", hour: "2-digit", minute: "2-digit" }).format(new Date(iso));
+  return dtf("he-IL", { day: "numeric", month: "numeric", year: "2-digit", hour: "2-digit", minute: "2-digit" }).format(new Date(iso));
 }
 
 export function valueText(v: unknown): string {

@@ -1,5 +1,6 @@
 /** תצוגת פניות - משמשת גם את "אישה לאישה" וגם את "פניות" */
 import { useMemo, useState } from "react";
+import { ilDay } from "../dates";
 import { Icon } from "../../components/Icon";
 import {
   del,
@@ -121,13 +122,17 @@ export function SubmissionsView({ me, subs, refreshSubs, forms, title, initialFo
 
   const remove = async () => {
     if (!selected || !window.confirm("למחוק את הפנייה לצמיתות? לא ניתן לשחזר.")) return;
-    await del(`/api/admin/submissions/${selected.id}`);
-    setSelectedId(null);
-    await refreshSubs();
+    try {
+      await del(`/api/admin/submissions/${selected.id}`);
+      setSelectedId(null);
+      await refreshSubs();
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "המחיקה נכשלה");
+    }
   };
 
   const exportCsv = () => {
-    downloadBlob(buildXlsx([toSheet(rows, FORM_LABELS[form])]), `${FORM_LABELS[form]}-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    downloadBlob(buildXlsx([toSheet(rows, FORM_LABELS[form])]), `${FORM_LABELS[form]}-${ilDay()}.xlsx`);
   };
 
   const countNew = (f: FormKey) => all.filter((s) => s.form === f && s.status === "new").length;

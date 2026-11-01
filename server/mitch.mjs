@@ -44,6 +44,15 @@ export async function handleMitch(req, res, url, ctx) {
     const config = await loadMitchConfig(store, domain);
     const baseRows = (await store.list("mitchazkim", 20000)).filter((m) => m.domain === domain && inScope(domain, m.branchId));
     const rows = await enrichMitchRows(store, baseRows, domain, config);
+    // סיכום בלבד (לתג ההתראות) - בלי לשלוח את כל הרשימה עם היומנים
+    if (url.searchParams.get("summary") === "1") {
+      const t = today();
+      return send(200, {
+        due: rows.filter((m) => m.status === "active" && m.nextFollowUp && m.nextFollowUp <= t).length,
+        attentionSummary: summarizeAttention(rows),
+        today: t,
+      }), true;
+    }
     const rowIds = new Set(rows.map((m) => m.id));
     const pendingByMitch = {};
     for (const u of await store.listLight("mitchUpdates", ["photos"], 5000)) {

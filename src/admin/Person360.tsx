@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { dtf } from "./dates";
 import { Icon } from "../components/Icon";
 import { api, post, type View } from "./api";
 import { ContactActions } from "./components";
@@ -14,7 +15,7 @@ type Ai = { provider:"openai"|"rules"; summary:string; suggestions:string[]; cle
 
 const fmt=(x:string)=>{
   const d=new Date(x.length===10?`${x}T12:00:00`:x);
-  return Number.isNaN(d.getTime())?x:new Intl.DateTimeFormat("he-IL",{dateStyle:"medium",...(x.length>10?{timeStyle:"short" as const}:{})}).format(d);
+  return Number.isNaN(d.getTime())?x:dtf("he-IL",{dateStyle:"medium",...(x.length>10?{timeStyle:"short" as const}:{})}).format(d);
 };
 
 export function Person360({kind,id,onClose,onGo}:{kind:PersonKind;id:string;onClose:()=>void;onGo:(v:View,tab?:string)=>void}){

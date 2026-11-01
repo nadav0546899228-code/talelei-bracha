@@ -1,5 +1,5 @@
 /** כולל ערב: אברכים לפי ערים וסניפים, דיווח נסיעות והוצאות */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "../../components/Icon";
 import { apiCached, api, del, post, put, type Me, type OrgUnit } from "../api";
 import { Chips, Combo, ContactActions, ExportBtn, Fab, money, ToneLegend, waLink } from "../components";
@@ -361,9 +361,23 @@ function EntriesTab({ ov }: { ov: Overview }) {
   const locked = ov.months.find((m) => m.id === month)?.locked ?? false;
   const avs = ov.avrechim.filter((a) => a.active && (!q.trim() || a.name.includes(q.trim())));
 
+  // תשובה של חודש קודם (מעבר מהיר בין חודשים) לא נכנסת למסך של החודש החדש
+  const entriesMonth = useRef(month);
+  entriesMonth.current = month;
+  const [entriesErr, setEntriesErr] = useState("");
   const load = useCallback(() => {
     if (!month) return;
-    api<{ entries: Entry[] }>(`/api/kollel/entries?month=${encodeURIComponent(month)}`).then((r) => setEntries(r.entries));
+    api<{ entries: Entry[] }>(`/api/kollel/entries?month=${encodeURIComponent(month)}`)
+      .then((r) => {
+        if (entriesMonth.current === month) {
+          setEntries(r.entries);
+          setEntriesErr("");
+        }
+      })
+      .catch((e) => entriesMonth.current === month && setEntriesErr(e instanceof Error ? e.message : "שגיאה בטעינה"));
+  }, [month]);
+  useEffect(() => {
+    setEntries(null);
   }, [month]);
   useEffect(() => {
     load();
@@ -489,6 +503,7 @@ function EntriesTab({ ov }: { ov: Overview }) {
 
       <BranchExpenses ov={ov} month={month} locked={locked} />
 
+      {entriesErr ? <div className="adm-alert adm-alert--error">{entriesErr}</div> : null}
       <section className="adm-panel">
         <div className="adm-panel__head">
           <h2>
@@ -549,9 +564,13 @@ function AttendanceTab({ ov }: { ov: Overview }) {
   const [msg, setMsg] = useState<string | null>(null);
   const locked = ov.months.find((m) => m.id === month)?.locked ?? false;
 
+  const sessMonth = useRef(month);
+  sessMonth.current = month;
   const load = useCallback(() => {
     if (!month) return;
-    api<{ sessions: Session[] }>(`/api/kollel/attendance?month=${encodeURIComponent(month)}`).then((r) => setSessions(r.sessions));
+    api<{ sessions: Session[] }>(`/api/kollel/attendance?month=${encodeURIComponent(month)}`)
+      .then((r) => sessMonth.current === month && setSessions(r.sessions))
+      .catch((e) => sessMonth.current === month && setMsg(e instanceof Error ? e.message : "שגיאה בטעינה"));
   }, [month]);
   useEffect(() => {
     load();
@@ -559,7 +578,12 @@ function AttendanceTab({ ov }: { ov: Overview }) {
   useLive(["kollelAttendance"], load);
   // שליחת סימונים שנשמרו בלי חיבור
   useEffect(() => {
-    const flush = () => flushAttendance().then((n) => n && (setMsg(null), load()));
+    const flush = () =>
+      flushAttendance().then(({ sent, rejected }) => {
+        if (rejected.length) setMsg(`סימוני נוכחות שנשמרו במכשיר לא נקלטו - ${rejected.join(" · ")}`);
+        else if (sent) setMsg(null);
+        if (sent || rejected.length) load();
+      });
     flush();
     window.addEventListener("online", flush);
     return () => window.removeEventListener("online", flush);
@@ -590,8 +614,8 @@ function AttendanceTab({ ov }: { ov: Overview }) {
     } catch (e) {
       if (e instanceof TypeError || !navigator.onLine) {
         // אין קליטה - שומרים במכשיר ושולחים כשהחיבור חוזר
-        queueAttendance(body);
-        setMsg("אין חיבור כרגע. הסימון נשמר במכשיר ויישלח לבד כשהקליטה תחזור.");
+        if (queueAttendance(body)) setMsg("אין חיבור כרגע. הסימון נשמר במכשיר ויישלח לבד כשהקליטה תחזור.");
+        else setMsg("אין חיבור, ואין מקום לשמור את הסימון במכשיר. יש לסמן שוב כשהקליטה תחזור.");
         return;
       }
       setMsg(e instanceof Error ? e.message : "שגיאה");
@@ -787,24 +811,32 @@ function AvrechHistory({ ov, av }: { ov: Overview; av: Avrech }) {
 /* ------------------------------------------------------------------ נוכחות בלי חיבור */
 
 const QKEY = "tb-att-queue";
-type QItem = { branchId: string; date: string; month: string; present: string[] };
-function queueAttendance(x: QItem) {
+type QItem = { branchId: string; date: string; month: string; present: string[]; basePresent?: string[]; basemPresent?: string[] };
+/** שומר במכשיר סימון שלא נשלח. מחזיר false אם אין מקום במכשיר */
+function queueAttendance(x: QItem): boolean {
   try {
-    const list = (JSON.parse(localStorage.getItem(QKEY) || "[]") as QItem[]).filter((q) => !(q.branchId === x.branchId && q.date === x.date));
-    localStorage.setItem(QKEY, JSON.stringify([...list, x]));
+    const all = JSON.parse(localStorage.getItem(QKEY) || "[]") as QItem[];
+    const prev = all.find((q) => q.branchId === x.branchId && q.date === x.date);
+    const list = all.filter((q) => q !== prev);
+    // כמה סימונים בלי קליטה לאותו מפגש: נשמר המצב האחרון מול מה שהיה בשרת לפני הסימון הראשון
+    const item = prev ? { ...x, basePresent: prev.basePresent ?? x.basePresent, basemPresent: prev.basemPresent ?? x.basemPresent } : x;
+    localStorage.setItem(QKEY, JSON.stringify([...list, item]));
+    return true;
   } catch {
-    /* אין אחסון במכשיר */
+    return false;
   }
 }
-async function flushAttendance(): Promise<number> {
+/** שולח סימונים שנשמרו במכשיר. מחזיר כמה נשלחו וכמה נדחו (למשל כי החודש נסגר בינתיים) */
+async function flushAttendance(): Promise<{ sent: number; rejected: string[] }> {
   let list: QItem[] = [];
   try {
     list = JSON.parse(localStorage.getItem(QKEY) || "[]");
   } catch {
-    return 0;
+    return { sent: 0, rejected: [] };
   }
-  if (!list.length || !navigator.onLine) return 0;
+  if (!list.length || !navigator.onLine) return { sent: 0, rejected: [] };
   const left: QItem[] = [];
+  const rejected: string[] = [];
   let sent = 0;
   for (const x of list) {
     try {
@@ -812,6 +844,7 @@ async function flushAttendance(): Promise<number> {
       sent++;
     } catch (e) {
       if (e instanceof TypeError) left.push(x); // עדיין אין חיבור
+      else rejected.push(`${x.date.split("-").reverse().join("/")}: ${e instanceof Error ? e.message : "נדחה"}`);
     }
   }
   try {
@@ -819,7 +852,7 @@ async function flushAttendance(): Promise<number> {
   } catch {
     /* לא קריטי */
   }
-  return sent;
+  return { sent, rejected };
 }
 
 /* ------------------------------------------------------------------ תזכורת נוכחות אוטומטית */

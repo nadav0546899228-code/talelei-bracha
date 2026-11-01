@@ -40,9 +40,10 @@ export function useAlerts(me: Me | null, mode: Mode, subs: Submission[] | null) 
   const mDomain = mode === "boys" ? "kollel" : "bnot";
   const loadDue = useCallback(() => {
     if (!me?.user.views.includes(mDomain)) return setDue(0);
-    api<{ mitch: { status: string; nextFollowUp: string | null }[]; today: string; attentionSummary?: { total: number; high: number; unassigned: number } }>(`/api/mitch?domain=${mDomain}`)
+    // רק הסיכום - לא כל רשימת המתחזקים
+    api<{ due: number; today: string; attentionSummary?: { total: number; high: number; unassigned: number } }>(`/api/mitch?domain=${mDomain}&summary=1`)
       .then((r) => {
-        setDue(r.mitch.filter((m) => m.status === "active" && m.nextFollowUp && m.nextFollowUp <= r.today).length);
+        setDue(r.due);
         setMitchAttention(r.attentionSummary ?? { total: 0, high: 0, unassigned: 0 });
       })
       .catch(() => {

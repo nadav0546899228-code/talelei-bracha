@@ -1,5 +1,6 @@
 /** אירועי הפרשת חלה: הרשמה (קישור לשיתוף), אישור הגעה, תיעוד והעברה למעקב מתחזקות */
 import { useCallback, useEffect, useState } from "react";
+import { ilDay, ilDayOf } from "../dates";
 import { Icon } from "../../components/Icon";
 import { api, del, post, type OrgUnit } from "../api";
 import { Chips, Combo, ExportBtn, Fab, waLink } from "../components";
@@ -11,7 +12,7 @@ type Ev = { id: string; title: string; date: string; time: string; place: string
 type Data = { events: Ev[]; branches: OrgUnit[]; cities: OrgUnit[] };
 
 const dayLabel = (iso: string) => new Intl.DateTimeFormat("he-IL", { weekday: "short", day: "numeric", month: "numeric" }).format(new Date(`${iso}T12:00:00`));
-const todayIso = () => new Date().toISOString().slice(0, 10);
+const todayIso = () => ilDay();
 
 export function ChallahPanel() {
   const [d, setD] = useState<Data | null>(null);
@@ -24,7 +25,7 @@ export function ChallahPanel() {
   }, [load]);
   useLive(["challahEvents"], load);
 
-  if (!d) return <p className="muted">טוען…</p>;
+  if (!d) return msg && !msg.ok ? <div className="adm-alert adm-alert--error">{msg.text}</div> : <p className="muted">טוען…</p>;
   if (!d.branches.length) return <div className="adm-panel adm-empty">אין סניפים באחריותך.</div>;
   const ev = d.events.find((e) => e.id === openId) ?? null;
   const bName = (id: string) => d.branches.find((b) => b.id === id)?.name ?? "";
@@ -111,7 +112,7 @@ function EventCard({ ev, bName, link, onSave, onEdit, reload, setMsg }: { ev: Ev
   const setRegs = (registrations: Reg[]) => onSave({ ...ev, registrations });
   const shareText = `נשמח לראותך ב${ev.title} - ${dayLabel(ev.date)}${ev.time ? ` ${ev.time}` : ""}${ev.place ? `, ${ev.place}` : ""}.\nלהרשמה: ${link}`;
   const exportXlsx = () => {
-    const rows = [["שם", "טלפון", "הגיעה", "נרשמה"], ...ev.registrations.map((r) => [r.name, r.phone, r.arrived ? "כן" : "לא", r.at.slice(0, 10)])];
+    const rows = [["שם", "טלפון", "הגיעה", "נרשמה"], ...ev.registrations.map((r) => [r.name, r.phone, r.arrived ? "כן" : "לא", ilDayOf(r.at)])];
     downloadBlob(buildXlsx([{ name: "נרשמות", rows, widths: [22, 14, 8, 12] }]), `${ev.title} ${ev.date}.xlsx`);
   };
   return (

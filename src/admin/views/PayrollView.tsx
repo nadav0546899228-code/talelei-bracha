@@ -24,6 +24,7 @@ import {
 } from "../kollelCalc";
 import { buildXlsx, downloadBlob, type Sheet } from "../xlsx";
 import { buildMasav } from "../masav";
+import { normalizeMonthLabel } from "../kollelCalc";
 import type { Overview } from "./KollelView";
 import { useLive } from "../live";
 
@@ -71,7 +72,8 @@ export function PayrollView({ me }: { me: Me }) {
         else if (r.height > vh * 0.5 && r.left < 4) left = Math.max(left, r.right);
         else if (r.height > vh * 0.5 && r.right > vw - 4) right = Math.max(right, vw - r.left);
       });
-      setTabsPos({ bottom, left, right });
+      // מעדכנים רק כשמשהו השתנה - אחרת כל הטבלה מצוירת מחדש כל שנייה וחצי
+      setTabsPos((p) => (p.bottom === bottom && p.left === left && p.right === right ? p : { bottom, left, right }));
     };
     place();
     const t = window.setInterval(place, 1500);
@@ -85,14 +87,21 @@ export function PayrollView({ me }: { me: Me }) {
   const bx = useBranchExpenses(key);
   const privileged = me.user.roles.includes("ceo") || me.user.roles.includes("developer");
 
+  const [loadErr, setLoadErr] = useState("");
   const loadOv = useCallback(async () => {
-    const o = await api<Overview>("/api/kollel/overview");
-    setOv(o);
-    return o;
+    try {
+      const o = await api<Overview>("/api/kollel/overview");
+      setOv(o);
+      setLoadErr("");
+      return o;
+    } catch (e) {
+      setLoadErr(e instanceof Error ? e.message : "שגיאה בטעינה");
+      return null;
+    }
   }, []);
 
   useEffect(() => {
-    loadOv().then((o) => setKey((k) => k || (o.months.some((m) => m.id === hebrewMonthLabel()) ? hebrewMonthLabel() : o.months[0]?.id || "")));
+    loadOv().then((o) => o && setKey((k) => k || o.months.find((m) => normalizeMonthLabel(m.id) === hebrewMonthLabel())?.id || o.months[0]?.id || ""));
   }, [loadOv]);
 
   // עדכון חי - בלי לדרוס עריכה שלא נשמרה
@@ -104,18 +113,36 @@ export function PayrollView({ me }: { me: Me }) {
   const dirtyRef = useRef(false);
   dirtyRef.current = dirty;
 
+  // החודש שהנתונים שעל המסך שייכים אליו - מונע שמירה של חודש אחד בשם של חודש אחר
+  const [loadedKey, setLoadedKey] = useState("");
+  const lastKeyRef = useRef("");
   useEffect(() => {
     if (!key) return;
-    setDirty(false);
+    let alive = true;
+    const switched = lastKeyRef.current !== key;
+    lastKeyRef.current = key;
+    if (switched) {
+      setDirty(false);
+      setMonth(null);
+      setLoadedKey("");
+    }
     Promise.all([
       api<{ month: MonthDoc | null }>(`/api/kollel/months/${encodeURIComponent(key)}`),
       api<{ entries: Entry[] }>(`/api/kollel/entries?month=${encodeURIComponent(key)}`),
       api<{ sessions: AttendanceSession[] }>(`/api/kollel/attendance?month=${encodeURIComponent(key)}`).catch(() => ({ sessions: [] })),
-    ]).then(([m, e, a]) => {
-      setMonth(m.month ?? emptyMonth(key));
-      setEntries(e.entries);
-      setSessions(a.sessions);
-    });
+    ])
+      .then(([m, e, a]) => {
+        // תשובה של חודש קודם (מעבר מהיר בין חודשים) או עריכה שהתחילה בינתיים - לא דורסים
+        if (!alive || (dirtyRef.current && !switched)) return;
+        setMonth(m.month ?? emptyMonth(key));
+        setEntries(e.entries);
+        setSessions(a.sessions);
+        setLoadedKey(key);
+      })
+      .catch((err) => alive && setMsg({ ok: false, text: err instanceof Error ? err.message : "שגיאה בטעינת החודש" }));
+    return () => {
+      alive = false;
+    };
   }, [key, tick]);
 
   const [sessions, setSessions] = useState<AttendanceSession[]>([]);
@@ -130,7 +157,7 @@ export function PayrollView({ me }: { me: Me }) {
   }, [key]);
   const lines = useMemo(() => (ov && month ? computePayroll(ov.avrechim, month, entries, ov.settings, sessions) : []), [ov, month, entries, sessions]);
 
-  if (!ov) return <p className="muted">טוען…</p>;
+  if (!ov) return loadErr ? <div className="adm-alert adm-alert--error">{loadErr}</div> : <p className="muted">טוען…</p>;
 
   const s = ov.settings;
   const locked = Boolean(month?.locked);
@@ -145,6 +172,7 @@ export function PayrollView({ me }: { me: Me }) {
   };
 
   const saveMonth = async (next: MonthDoc, text = "נשמר") => {
+    if (loadedKey !== key) return setMsg({ ok: false, text: "החודש עדיין נטען. נסו שוב בעוד רגע." });
     try {
       await put(`/api/kollel/months/${encodeURIComponent(key)}`, next);
       setMonth(next);
@@ -159,14 +187,19 @@ export function PayrollView({ me }: { me: Me }) {
   const createMonth = async () => {
     const label = window.prompt("שם החודש (חודש עברי):", hebrewMonthLabel());
     if (!label?.trim()) return;
-    const k = label.trim();
-    if (ov.months.some((m) => m.id === k)) {
-      setKey(k);
+    const k = normalizeMonthLabel(label);
+    const existing = ov.months.find((m) => m.id === k || normalizeMonthLabel(m.id) === k);
+    if (existing) {
+      setKey(existing.id);
       return;
     }
-    await put(`/api/kollel/months/${encodeURIComponent(k)}`, emptyMonth(k));
-    await loadOv();
-    setKey(k);
+    try {
+      await put(`/api/kollel/months/${encodeURIComponent(k)}`, emptyMonth(k));
+      await loadOv();
+      setKey(k);
+    } catch (e) {
+      setMsg({ ok: false, text: e instanceof Error ? e.message : "שגיאה" });
+    }
   };
 
   // קובץ להעברה בנקאית: שם, ת״ז, בנק, סניף, חשבון, סכום
@@ -194,8 +227,13 @@ export function PayrollView({ me }: { me: Me }) {
     const when = window.prompt("תאריך זיכוי (יום/חודש/שנה):", new Date(Date.now() + 2 * 864e5).toLocaleDateString("he-IL"));
     if (!when) return;
     const [dd, mm, yy] = when.split(/[./-]/).map(Number);
-    const payDate = new Date(yy < 100 ? 2000 + yy : yy, (mm || 1) - 1, dd || 1, 12);
-    if (Number.isNaN(payDate.getTime())) return setMsg({ ok: false, text: "תאריך לא תקין" });
+    const fullYear = yy < 100 ? 2000 + yy : yy;
+    const payDate = new Date(fullYear, (mm || 1) - 1, dd || 1, 12);
+    // 31/02 לא הופך בשקט ל-3 במרץ, ותאריך שעבר לא מתקבל
+    const startToday = new Date();
+    startToday.setHours(0, 0, 0, 0);
+    if (Number.isNaN(payDate.getTime()) || payDate.getDate() !== dd || payDate.getMonth() !== mm - 1 || payDate.getFullYear() !== fullYear) return setMsg({ ok: false, text: "תאריך לא תקין. כותבים יום/חודש/שנה, למשל 10/12/2026" });
+    if (payDate < startToday) return setMsg({ ok: false, text: "תאריך הזיכוי כבר עבר" });
     const pay = lines.filter((l) => l.total > 0);
     const nonPositive = lines.filter((l) => !(l.total > 0));
     const ok = pay.filter((l) => l.avrech.bank?.account && l.avrech.bank?.bankCode && l.avrech.bank?.branchCode);
@@ -537,7 +575,8 @@ export function PayrollView({ me }: { me: Me }) {
         </select>
         <div className="adm-xl-tabs__list">
           {hebrewYearMonthLabels(year).map((label) => {
-            const m = ov.months.find((x) => x.id === label || x.label === label);
+            // התאמה גם לחודשים שנפתחו בשם בכתיב אחר (חשון/חשוון)
+            const m = ov.months.find((x) => x.id === label || x.label === label || normalizeMonthLabel(x.id) === label || normalizeMonthLabel(x.label) === label);
             return (
               <button
                 key={label}
@@ -549,9 +588,13 @@ export function PayrollView({ me }: { me: Me }) {
                   if (dirty && !window.confirm("יש שינויים שלא נשמרו. לעבור בכל זאת?")) return;
                   if (m) return setKey(m.id);
                   if (!window.confirm(`לפתוח את ${label}?`)) return;
-                  await put(`/api/kollel/months/${encodeURIComponent(label)}`, emptyMonth(label));
-                  await loadOv();
-                  setKey(label);
+                  try {
+                    await put(`/api/kollel/months/${encodeURIComponent(label)}`, emptyMonth(label));
+                    await loadOv();
+                    setKey(label);
+                  } catch (e) {
+                    setMsg({ ok: false, text: e instanceof Error ? e.message : "שגיאה" });
+                  }
                 }}
               >
                 {m?.locked ? <Icon name="lock" width={11} height={11} /> : null}
@@ -560,7 +603,7 @@ export function PayrollView({ me }: { me: Me }) {
             );
           })}
           {ov.months
-            .filter((m) => yearNumOf(m.label) === year && !hebrewYearMonthLabels(year).includes(m.label))
+            .filter((m) => yearNumOf(m.label) === year && !hebrewYearMonthLabels(year).includes(normalizeMonthLabel(m.label)))
             .map((m) => (
               <button key={m.id} type="button" role="tab" aria-selected={key === m.id} className={`adm-xl-tab${key === m.id ? " is-on" : ""}`} onClick={() => setKey(m.id)}>
                 {m.label}
@@ -647,6 +690,8 @@ function SettingsModal({ settings, onClose, onSaved }: { settings: KollelSetting
   const [s, setS] = useState(settings);
   const [err, setErr] = useState<string | null>(null);
   const save = async () => {
+    // שדה ריק לא נשמר כ-0 (אחרת כל המשכורות היו יורדות ל-0)
+    if (!(Number(s.fullBase) > 0)) return setErr("בסיס מלא חייב להיות גדול מאפס");
     try {
       await put("/api/kollel/settings", s);
       onSaved();
@@ -662,7 +707,7 @@ function SettingsModal({ settings, onClose, onSaved }: { settings: KollelSetting
         <div className="adm-fields adm-fields--2">
           <label className="field span-2">
             <span className="field__label">בסיס "מלא" (₪)</span>
-            <input className="input" type="number" value={s.fullBase} onChange={(e) => setS({ ...s, fullBase: Number(e.target.value) })} />
+            <input className="input" type="number" value={Number.isNaN(s.fullBase) ? "" : s.fullBase} onChange={(e) => setS({ ...s, fullBase: e.target.value === "" ? NaN : Number(e.target.value) })} />
           </label>
           {(["bat", "ben", "barmitzva"] as const).map((k) => (
             <label key={k} className="field">

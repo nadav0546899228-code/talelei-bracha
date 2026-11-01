@@ -35,6 +35,8 @@ const read = (id: string, cols: Col<unknown>[]): Prefs => {
   return { density: "normal", hidden: cols.filter((c) => c.hidden).map((c) => c.key) };
 };
 
+const HE = new Intl.Collator("he", { numeric: true });
+
 export function SheetTable<T>({
   id,
   rows,
@@ -76,25 +78,39 @@ export function SheetTable<T>({
   const zoom = prefs.zoom ?? 1;
   const setZoom = (z: number) => save({ ...prefs, zoom: Math.round(Math.min(1.8, Math.max(0.6, z)) * 100) / 100 });
   const pinch = useRef<{ d: number; z: number } | null>(null);
+  const pinchZoom = useRef<number | null>(null);
   const dist = (e: TouchLike) => Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
   const visible = cols.filter((c) => c.fixed || !prefs.hidden.includes(c.key));
+  // העמודות מגיעות לרוב כמערך חדש בכל ציור - המיון תלוי רק במפתחות שלהן, כדי לא למיין שוב בכל הקלדה
+  const colsRef = useRef(cols);
+  colsRef.current = cols;
+  const colsSig = cols.map((c) => c.key).join("|");
   const sorted = useMemo(() => {
     if (!sort) return rows;
-    const c = cols.find((x) => x.key === sort.key);
+    const c = colsRef.current.find((x) => x.key === sort.key);
     if (!c?.value) return rows;
     const v = c.value;
-    return [...rows].sort((a, b) => {
-      const x = v(a);
-      const y = v(b);
-      return (typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y), "he")) * sort.dir;
-    });
-  }, [rows, sort, cols]);
+    // מחשבים את ערך המיון פעם אחת לכל שורה, ומשווים בעברית עם Collator (מהיר פי כמה מ-localeCompare)
+    const withVal = rows.map((r) => ({ r, x: v(r) }));
+    withVal.sort((a, b) => (typeof a.x === "number" && typeof b.x === "number" ? a.x - b.x : HE.compare(String(a.x ?? ""), String(b.x ?? ""))) * sort.dir);
+    return withVal.map((w) => w.r);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, sort, colsSig]);
 
-  const groupIndex = useMemo(() => {
-    const m = new Map<string, number>();
-    if (group) for (const r of sorted) { const g = group.key(r); if (!m.has(g)) m.set(g, m.size); }
-    return m;
-  }, [sorted, group]);
+  const groupRef = useRef(group);
+  groupRef.current = group;
+  const { groupIndex, groupCount } = useMemo(() => {
+    const idx = new Map<string, number>();
+    const cnt = new Map<string, number>();
+    const g0 = groupRef.current;
+    if (g0) for (const r of sorted) { const g = g0.key(r); if (!idx.has(g)) idx.set(g, idx.size); cnt.set(g, (cnt.get(g) || 0) + 1); }
+    return { groupIndex: idx, groupCount: cnt };
+  }, [sorted, Boolean(group)]);
+
+  // בטבלאות ארוכות מציגים 300 שורות בכל פעם (הייצוא לאקסל תמיד כולל הכל)
+  const [limit, setLimit] = useState(300);
+  const shown = sorted.length > limit ? sorted.slice(0, limit) : sorted;
+  const tableRef = useRef<HTMLTableElement>(null);
 
   const exportXlsx = () => {
     const ex = visible.filter((c) => c.value);
@@ -154,18 +170,21 @@ export function SheetTable<T>({
         onTouchMove={(e) => {
           if (e.touches.length === 2 && pinch.current) {
             e.preventDefault();
-            const next = pinch.current.z * (dist(e) / pinch.current.d);
-            setPrefs((p) => ({ ...p, zoom: Math.min(1.8, Math.max(0.6, next)) }));
+            // בזמן הצביטה משנים רק את התצוגה, בלי לצייר מחדש את כל השורות; שומרים בסיום
+            const next = Math.min(1.8, Math.max(0.6, pinch.current.z * (dist(e) / pinch.current.d)));
+            pinchZoom.current = next;
+            if (tableRef.current) tableRef.current.style.zoom = String(next);
           }
         }}
         onTouchEnd={() => {
           if (pinch.current) {
             pinch.current = null;
-            setZoom(prefs.zoom ?? 1);
+            if (pinchZoom.current !== null) setZoom(pinchZoom.current);
+            pinchZoom.current = null;
           }
         }}
       >
-        <table className="adm-sheet__t" style={{ zoom }}>
+        <table ref={tableRef} className="adm-sheet__t" style={{ zoom }}>
           <thead>
             <tr>
               {visible.map((c) => (
@@ -183,7 +202,7 @@ export function SheetTable<T>({
             </tr>
           </thead>
           <tbody>
-            {sorted.map((r, i) => {
+            {shown.map((r, i) => {
               const k = rowKey(r);
               const gk = group && !sort ? group.key(r) : null;
               const startsGroup = gk !== null && (i === 0 || group!.key(sorted[i - 1]) !== gk);
@@ -197,7 +216,7 @@ export function SheetTable<T>({
                 </tr>
               );
               if (!startsGroup) return tr;
-              const count = sorted.filter((x) => group!.key(x) === gk).length;
+              const count = groupCount.get(gk) ?? 0;
               return [
                 <tr key={`g:${gk}`} className={`adm-sheet__group adm-sheet__band--${gIndex % 2}`}>
                   <td colSpan={visible.length}>{group!.label(r, count)}</td>
@@ -205,6 +224,15 @@ export function SheetTable<T>({
                 tr,
               ];
             })}
+            {sorted.length > shown.length ? (
+              <tr>
+                <td colSpan={visible.length} className="adm-ut-empty">
+                  <button type="button" className="btn btn--ghost btn--sm" onClick={() => setLimit((n) => n + 300)}>
+                    הצגת עוד {Math.min(300, sorted.length - shown.length)} (מתוך {sorted.length})
+                  </button>
+                </td>
+              </tr>
+            ) : null}
             {!sorted.length ? (
               <tr>
                 <td colSpan={visible.length} className="adm-ut-empty">{empty}</td>

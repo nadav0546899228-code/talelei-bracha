@@ -9,6 +9,9 @@ export function useLiveConnection(enabled: boolean) {
     if (!enabled || typeof EventSource === "undefined") return;
     let es: EventSource | null = null;
     let fallback: number | undefined;
+    let retryT: number | undefined;
+    let backoff = 3000;
+    let stopped = false;
     const fire = (c: string) => window.dispatchEvent(new CustomEvent(EVT, { detail: c }));
     const open = () => {
       es = new EventSource("/api/events");
@@ -20,18 +23,28 @@ export function useLiveConnection(enabled: boolean) {
         }
       };
       es.onopen = () => {
+        backoff = 3000;
         window.clearInterval(fallback);
         fallback = undefined;
       };
       es.onerror = () => {
         // הדפדפן מתחבר מחדש לבד; בינתיים רענון כללי כל 30 שניות
         if (fallback === undefined) fallback = window.setInterval(() => fire("*"), 30_000);
+        // אם הדפדפן הפסיק לנסות (תשובת שגיאה מהשרת) - פותחים מחדש בעצמנו, בהמתנה הולכת וגדלה
+        if (es && es.readyState === EventSource.CLOSED && !stopped) {
+          es.close();
+          window.clearTimeout(retryT);
+          retryT = window.setTimeout(open, backoff);
+          backoff = Math.min(backoff * 2, 60_000);
+        }
       };
     };
     open();
     const onVis = () => document.visibilityState === "visible" && fire("*");
     document.addEventListener("visibilitychange", onVis);
     return () => {
+      stopped = true;
+      window.clearTimeout(retryT);
       es?.close();
       window.clearInterval(fallback);
       document.removeEventListener("visibilitychange", onVis);

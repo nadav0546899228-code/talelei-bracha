@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { dtf } from "../dates";
 import { IsraelMap3D } from "../IsraelMap3D";
 import { Icon, type IconName } from "../../components/Icon";
 import { apiCached, del, post, type View } from "../api";
@@ -82,25 +83,37 @@ const gem = (num:number) => {
   if(n===15) out+="טו"; else if(n===16) out+="טז"; else out+=tens[Math.floor(n/10)]+ones[n%10];
   return out.length>1?`${out.slice(0,-1)}״${out.slice(-1)}`:`${out}׳`;
 };
+// מטמון לפי יום - אותו תאריך מחושב פעם אחת גם כשיש אלפי פעילויות
+const hebCache = new Map<string, { day:number; year:number; month:string }>();
+const dayKeyOf = (d:Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
 const hebParts = (d:Date) => {
-  const p=new Intl.DateTimeFormat("en-US-u-ca-hebrew",{day:"numeric",year:"numeric"}).formatToParts(d);
-  return { day:Number(p.find((x)=>x.type==="day")?.value||1), year:Number(p.find((x)=>x.type==="year")?.value||0), month:new Intl.DateTimeFormat("he-IL-u-ca-hebrew",{month:"long"}).format(d) };
+  const k=dayKeyOf(d);
+  const hit=hebCache.get(k); if(hit) return hit;
+  const p=dtf("en-US-u-ca-hebrew",{day:"numeric",year:"numeric"}).formatToParts(d);
+  const v={ day:Number(p.find((x)=>x.type==="day")?.value||1), year:Number(p.find((x)=>x.type==="year")?.value||0), month:dtf("he-IL-u-ca-hebrew",{month:"long"}).format(d) };
+  if(hebCache.size>20000) hebCache.clear();
+  hebCache.set(k,v); return v;
 };
-const weekday = (d:Date) => new Intl.DateTimeFormat("he-IL",{weekday:"long"}).format(d);
+const weekday = (d:Date) => dtf("he-IL",{weekday:"long"}).format(d);
 /** תאריך מלא - בעברי הכל באותיות (בלי מספרים), בלועזי הכל במספרים */
 const heDay = (iso:string,system:CalendarSystem) => {
   const d=new Date(`${iso}T12:00:00`);
   if(system==="hebrew"){const h=hebParts(d);return `${weekday(d)}, ${gem(h.day)} ${h.month} ${gem(h.year)}`;}
-  return new Intl.DateTimeFormat("he-IL",{weekday:"long",day:"numeric",month:"long",year:"numeric"}).format(d);
+  return dtf("he-IL",{weekday:"long",day:"numeric",month:"long",year:"numeric"}).format(d);
 };
-const monthTitle = (d:Date,system:CalendarSystem) => system==="hebrew" ? `${hebParts(d).month} ${gem(hebParts(d).year)}` : new Intl.DateTimeFormat("he-IL",{month:"long",year:"numeric"}).format(d);
+const monthTitle = (d:Date,system:CalendarSystem) => system==="hebrew" ? `${hebParts(d).month} ${gem(hebParts(d).year)}` : dtf("he-IL",{month:"long",year:"numeric"}).format(d);
 const yearTitle = (d:Date,system:CalendarSystem) => system==="hebrew" ? gem(hebParts(d).year) : String(d.getFullYear());
 const dayLabelOf = (d:Date,system:CalendarSystem) => system==="hebrew" ? gem(hebParts(d).day) : String(d.getDate());
+const calKeyCache = new Map<string,string>();
 const calendarKey = (d:Date,system:CalendarSystem) => {
-  const parts=new Intl.DateTimeFormat(calLocale(system,false),{year:"numeric",month:"long"}).formatToParts(d);
-  return `${parts.find((p)=>p.type==="year")?.value||""}|${parts.find((p)=>p.type==="month")?.value||""}`;
+  const k=`${system}:${dayKeyOf(d)}`;
+  const hit=calKeyCache.get(k); if(hit) return hit;
+  const parts=dtf(calLocale(system,false),{year:"numeric",month:"long"}).formatToParts(d);
+  const v=`${parts.find((p)=>p.type==="year")?.value||""}|${parts.find((p)=>p.type==="month")?.value||""}`;
+  if(calKeyCache.size>20000) calKeyCache.clear();
+  calKeyCache.set(k,v); return v;
 };
-const calendarYearKey = (d:Date,system:CalendarSystem) => new Intl.DateTimeFormat(calLocale(system,false),{year:"numeric"}).format(d);
+const calendarYearKey = (d:Date,system:CalendarSystem) => dtf(calLocale(system,false),{year:"numeric"}).format(d);
 const startOfCalendarMonth = (cursor:Date,system:CalendarSystem) => {
   const key=calendarKey(cursor,system); const d=new Date(cursor); d.setHours(12,0,0,0);
   for(let i=0;i<40;i++){const prev=new Date(d);prev.setDate(d.getDate()-1);if(calendarKey(prev,system)!==key)break;d.setDate(d.getDate()-1);}
@@ -158,7 +171,7 @@ function DateWheel({ value, system, onChange }: { value: string; system: Calenda
   const [day, setDay] = useState(() => Math.round((base.getTime() - startOfCalendarMonth(base, system).getTime()) / 864e5) + 1);
   const dIdx = Math.min(day, mLen);
   const dateOf = (n: number) => { const d = new Date(mStart); d.setDate(d.getDate() + n - 1); return d; };
-  const monthName = (d: Date) => system === "hebrew" ? hebParts(d).month : new Intl.DateTimeFormat("he-IL", { month: "long" }).format(d);
+  const monthName = (d: Date) => system === "hebrew" ? hebParts(d).month : dtf("he-IL", { month: "long" }).format(d);
   const chosen = dateOf(dIdx);
   const last = useRef("");
   useEffect(() => {
@@ -220,7 +233,7 @@ export function ActivityCenterView({ go, mode }: { go: (view: View, tab?: string
   const [city,setCity]=useState("all");
   const [pickOpen,setPickOpen]=useState(false);
   const [denied,setDenied]=useState("");
-  const [calendarSystem,setCalendarSystem]=useState<CalendarSystem>(()=>(localStorage.getItem("tb-calendar-system")==="gregorian"?"gregorian":"hebrew"));
+  const [calendarSystem,setCalendarSystem]=useState<CalendarSystem>(()=>{try{return localStorage.getItem("tb-calendar-system")==="gregorian"?"gregorian":"hebrew";}catch{return "hebrew";}});
   const [calendarView,setCalendarView]=useState<CalendarView>("month");
   const [wall,setWall]=useState<WallData|null>(null);
   const [wallOpen,setWallOpen]=useState(false);
@@ -311,7 +324,7 @@ export function ActivityCenterView({ go, mode }: { go: (view: View, tab?: string
     const d=nextCalendarMonth(cursor,calendarSystem,dir);setCursor(d);setSelectedDate(dayIso(d));
   };
   const jumpToday=()=>{const d=new Date();setCursor(d);setSelectedDate(todayIso());};
-  const setSystem=(v:CalendarSystem)=>{setCalendarSystem(v);localStorage.setItem("tb-calendar-system",v);};
+  const setSystem=(v:CalendarSystem)=>{setCalendarSystem(v);try{localStorage.setItem("tb-calendar-system",v);}catch{/* */}};
 
   const wallBranchLabel=(id:string)=>{
     const b=wall?.branches.find((x)=>x.id===id);
@@ -389,7 +402,7 @@ export function ActivityCenterView({ go, mode }: { go: (view: View, tab?: string
             <article className="adm-field-wall__card" key={x.id}>
               {x.photos?.[0]?<div className="adm-field-wall__cover"><img src={x.photos[0]} alt={x.title}/>{x.photos.length>1?<span>+{x.photos.length-1}</span>:null}</div>:<div className="adm-field-wall__cover is-empty"><Icon name="image"/></div>}
               <div className="adm-field-wall__body">
-                <div className="adm-field-wall__meta"><span>{x.domain==="bnot"?"בנות צילה":"טללי ברכה"}</span><span>{wallBranchLabel(x.branchId)}</span><span>{new Intl.DateTimeFormat("he-IL",{day:"numeric",month:"short"}).format(new Date(`${x.date}T12:00:00`))}</span></div>
+                <div className="adm-field-wall__meta"><span>{x.domain==="bnot"?"בנות צילה":"טללי ברכה"}</span><span>{wallBranchLabel(x.branchId)}</span><span>{dtf("he-IL",{day:"numeric",month:"short"}).format(new Date(`${x.date}T12:00:00`))}</span></div>
                 <h3>{x.title}</h3>{x.note?<p>{x.note}</p>:null}
                 <div className="adm-field-wall__foot"><span className={x.shareApproved?"is-approved":""}>{x.shareApproved?"✓ מאושר לשיתוף":"פנימי בלבד"}</span><small>{x.byName}</small>{x.canDelete?<button type="button" className="adm-icon-btn" onClick={()=>removeWall(x.id)} aria-label="מחיקה"><Icon name="trash"/></button>:null}</div>
               </div>
@@ -460,7 +473,7 @@ export function ActivityCenterView({ go, mode }: { go: (view: View, tab?: string
                 return true;
               }).length;
               return <button type="button" key={key} onClick={()=>{setCursor(m);setSelectedDate(dayIso(m));setCalendarView("month");}}>
-                <span>{calendarSystem==="hebrew"?hebParts(m).month:new Intl.DateTimeFormat("he-IL",{month:"long"}).format(m)}</span><strong>{count}</strong><small>פעילויות</small>
+                <span>{calendarSystem==="hebrew"?hebParts(m).month:dtf("he-IL",{month:"long"}).format(m)}</span><strong>{count}</strong><small>פעילויות</small>
               </button>;
             })}
           </div> : null}
@@ -476,7 +489,7 @@ export function ActivityCenterView({ go, mode }: { go: (view: View, tab?: string
 
           {calendarView==="list" ? <div className="adm-calendar-list">
             {filtered.slice().sort((a,b)=>`${a.date}T${a.time||"99:99"}`.localeCompare(`${b.date}T${b.time||"99:99"}`)).map((x)=><button type="button" key={x.id} onClick={()=>{setSelectedDate(x.date);setCalendarView("day");}}>
-              <span className="adm-calendar-list__date">{calendarSystem==="hebrew"?`${gem(hebParts(new Date(`${x.date}T12:00:00`)).day)} ${hebParts(new Date(`${x.date}T12:00:00`)).month}`:new Intl.DateTimeFormat("he-IL",{day:"numeric",month:"short"}).format(new Date(`${x.date}T12:00:00`))}</span>
+              <span className="adm-calendar-list__date">{calendarSystem==="hebrew"?`${gem(hebParts(new Date(`${x.date}T12:00:00`)).day)} ${hebParts(new Date(`${x.date}T12:00:00`)).month}`:dtf("he-IL",{day:"numeric",month:"short"}).format(new Date(`${x.date}T12:00:00`))}</span>
               <span><strong>{x.title}</strong><small>{[x.time,x.city,x.branch,x.place].filter(Boolean).join(" · ")}</small></span>
               <span className="adm-calendar-list__kind">{x.sourceLabel}</span>
               <Icon name="arrowLeft"/>

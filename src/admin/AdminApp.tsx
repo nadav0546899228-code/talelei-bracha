@@ -20,6 +20,7 @@ import { OrgScopeBar } from "./OrgScopeBar";
 import { disablePush, enablePush, pushState } from "./push";
 import "./admin.css";
 import { useLive, useLiveConnection } from "./live";
+import { ErrorBoundary } from "./ErrorBoundary";
 import { useInstall } from "./install";
 
 /* כל מסך נטען רק כשנכנסים אליו - פתיחה מהירה יותר של המערכת */
@@ -293,7 +294,7 @@ export default function AdminApp() {
       icon.rel = "icon";
       document.head.appendChild(icon);
     }
-    icon.href = brand === "bnot" ? "/brand/logo-bnot-tzila.png" : brand === "kollel" ? "/brand/logo-keren-talelei-bracha.png" : "/brand/icon-combined-192.png";
+    icon.href = brand === "bnot" ? "/brand/logo-bnot-tzila.png" : brand === "kollel" ? "/brand/logo-keren-talelei-bracha.png" : "/brand/app-combined-192.png";
   }, [me?.user.id, me?.account?.id]);
   const [subs, setSubs] = useState<Submission[] | null>(null);
   const [codeOpen, setCodeOpen] = useState(false);
@@ -416,15 +417,26 @@ export default function AdminApp() {
 
   useLiveConnection(state === "ready");
   useEffect(() => {
-    if (state === "ready") prefetchViews();
+    if (state === "ready") {
+      prefetchViews();
+      // נטען בהצלחה - מאפשרים שוב רענון אוטומטי אחד בעדכון גרסה הבא
+      window.setTimeout(() => {
+        try {
+          sessionStorage.removeItem("tb-chunk-reload");
+        } catch {
+          /* */
+        }
+      }, 10_000);
+    }
   }, [state]);
   useLive(["submissions"], () => state === "ready" && refreshSubs());
 
   useEffect(() => {
     if (state !== "ready") return;
     refreshSubs();
-    const id = window.setInterval(refreshSubs, 30_000);
-    const onFocus = () => document.visibilityState === "visible" && refreshSubs();
+    // העדכון החי כבר מרענן כשנכנסת פנייה ובחזרה למסך - כאן רק גיבוי איטי למקרה שהחיבור החי נפל
+    const id = window.setInterval(refreshSubs, 120_000);
+    const onFocus = () => undefined;
     document.addEventListener("visibilitychange", onFocus);
     return () => {
       window.clearInterval(id);
@@ -992,6 +1004,7 @@ export default function AdminApp() {
           {"hub" in current ? (
             <HubView hub={hubs.find((h) => h.id === current.hub)!} badge={leafBadge} onOpen={openLeaf} />
           ) : (
+            <ErrorBoundary resetKey={`${curView}:${curTab ?? ""}:${mode}`}>
             <Suspense fallback={<div className="adm-view-loading" aria-busy="true"><span className="adm-spinner" /></div>}>
               {curView === "dashboard" ? <DashboardView {...ctx} views={me.user.views} dash={dash} /> : null}
               {curView === "smart" ? <SmartCenterView go={go} initialTab={curTab} /> : null}
@@ -1013,6 +1026,7 @@ export default function AdminApp() {
               {curView === "audit" ? <AuditView /> : null}
               {curView === "developer" ? <DeveloperView {...ctx} /> : null}
             </Suspense>
+            </ErrorBoundary>
           )}
         </main>
       </div>

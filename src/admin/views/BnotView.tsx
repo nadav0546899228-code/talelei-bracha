@@ -268,9 +268,13 @@ function Activities({ d, branch, reload }: { d: Data; branch: string; reload: ()
               aria-label="מחיקת הפעילות"
               onClick={async () => {
                 if (!window.confirm("למחוק את הפעילות?")) return;
-                await del(`/api/bnot/activities/${cur.id}`);
-                setOpenId(null);
-                reload();
+                try {
+                  await del(`/api/bnot/activities/${cur.id}`);
+                  setOpenId(null);
+                  reload();
+                } catch (e) {
+                  setErr(e instanceof Error ? e.message : "המחיקה נכשלה");
+                }
               }}
             >
               <Icon name="trash" />

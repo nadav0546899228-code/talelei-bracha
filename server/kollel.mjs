@@ -490,7 +490,7 @@ export async function handleKollel(req, res, url, ctx) {
     if (!manager) return send(403, { error: "אין הרשאה" }), true;
     const b = await readBody(req);
     const doc = {
-      fullBase: num(b.fullBase, DEFAULT_SETTINGS.fullBase),
+      fullBase: num(b.fullBase, 0) > 0 ? num(b.fullBase) : (await settings()).fullBase || DEFAULT_SETTINGS.fullBase,
       simchaRates: {
         bat: num(b.simchaRates?.bat, 10),
         ben: num(b.simchaRates?.ben, 30),
