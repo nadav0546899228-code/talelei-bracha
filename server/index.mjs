@@ -12,6 +12,7 @@ import { readFileSync as readFileSyncTB } from "node:fs";
  */
 import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { gzip, brotliCompress, constants as zc } from "node:zlib";
 import { promisify } from "node:util";
 import { readFile, stat } from "node:fs/promises";
@@ -38,6 +39,7 @@ import { challahReminders, handleMitch, publicChallah, publicMitchShare } from "
 import { handleActivityCenter } from "./activityCenter.mjs";
 import { handleSmart, publicImpact, runSmartAutomationSweep, smartSearch } from "./smart.mjs";
 import * as push from "./webpush.mjs";
+import { migrateInlinePhotos, servePhoto } from "./photos.mjs";
 
 const ROOT = join(fileURLToPath(new URL(".", import.meta.url)), "..", "dist");
 const PORT = Number(process.env.PORT) || 5000;
@@ -72,6 +74,9 @@ if (DEMO && !(await store.list("avrechim", 1)).length) {
   console.log("נתוני דמה נטענו לאתר הפיתוח");
 }
 
+migrateInlinePhotos(store)
+  .then((n) => n && console.log(`הועברו ${n} תמונות לאחסון נפרד`))
+  .catch((e) => console.error("photos migrate", e?.message));
 snapshotLockedMonths(store)
   .then((n) => n && console.log(`צילום מצב נשמר ל-${n} חודשים סגורים`))
   .catch((e) => console.error("snapshot", e?.message));
@@ -89,6 +94,23 @@ function notifyChange(collection) {
       liveClients.delete(c);
     }
   }
+}
+/* ---- "בטל" אחרי מחיקה: כל מחיקה שהגיעה מכפתור במסך (עם X-Undo-Id) נשמרת לרבע שעה בסל זמני,
+   ואפשר להחזיר אותה בלחיצה. מחיקות פנימיות (ניקוי, שחזור, גיבוי) לא נשמרות */
+const reqCtx = new AsyncLocalStorage();
+const NO_TRASH = new Set(["trash", "audit", "backups", "backupData", "pushSubs", "mitchTransfers"]);
+{
+  const origDel = store.del.bind(store);
+  const origGet = store.get.bind(store);
+  const origPut = store.put.bind(store);
+  store.del = async (collection, id) => {
+    const ctx = reqCtx.getStore();
+    if (ctx?.undoId && ctx.userId && !NO_TRASH.has(collection)) {
+      const doc = await origGet(collection, id).catch(() => null);
+      if (doc) await origPut("trash", `${ctx.undoId}:${collection}:${id}`.slice(0, 250), { undoId: ctx.undoId, by: ctx.userId, col: collection, doc, at: new Date().toISOString() });
+    }
+    return origDel(collection, id);
+  };
 }
 for (const fn of ["put", "del", "update"]) {
   const orig = store[fn].bind(store);
@@ -291,7 +313,7 @@ const BACKUP_COLLECTIONS = [
   "users", "phoneUsers", "submissions", "content", "avrechim", "kollelEntries", "kollelMonths", "kollelSettings", "kollelAttendance",
   "orgUnits", "contacts", "broadcasts", "settings", "messages", "bnotMembers", "bnotActivities", "pushSubs",
   "kollelMonthStatus", "bcTemplates", "bcScheduled", "donations", "avrechFiles", "mitchazkim", "challahEvents", "mitchAccess", "mitchUpdates",
-  "smartTasks", "callerAssignments", "mitchTransfers", "activityWall", "kollelBranchExpenses",
+  "smartTasks", "callerAssignments", "mitchTransfers", "activityWall", "kollelBranchExpenses", "photos",
 ];
 async function makeBackup(reason, byName = "מערכת") {
   const data = {};
@@ -322,6 +344,12 @@ async function backupContent(id) {
   return { ...bk, data };
 }
 async function backupIfDue() {
+  try {
+    // ניקוי הסל הזמני של "בטל" (מעל יום)
+    for (const t of await store.list("trash")) if (Date.now() - new Date(t.at).getTime() > 86400_000) await store.del("trash", t.id);
+  } catch {
+    /* */
+  }
   try {
     const last = (await backupList(1))[0];
     if (!last || Date.now() - new Date(last.at || last.createdAt).getTime() > 23.5 * 3600 * 1000) await makeBackup("גיבוי יומי אוטומטי");
@@ -679,6 +707,10 @@ async function api(req, res, url) {
   const demoPhoneSession = IS_PROD && String(session?.email || "").startsWith("phone:demo-");
   const real = session && !demoPhoneSession ? await resolveUser(session.email) : null;
   if (!real) return json(res, 401, { error: "נדרשת התחברות" }, session ? { "Set-Cookie": clearSessionCookie(isSecure(req)) } : {});
+  {
+    const c = reqCtx.getStore();
+    if (c) c.userId = real.id;
+  }
   let user = real;
   let asId = null;
   if (session.as && canImpersonate(real)) {
@@ -718,6 +750,32 @@ async function api(req, res, url) {
     liveClients.add(res);
     req.on("close", () => liveClients.delete(res));
     return;
+  }
+
+  // תמונות מצורפות (עדכוני מתחזקים, תיעוד מהשטח) - רק למי שהסניף של התמונה באחריותו
+  const photoMatch = pathname.match(/^\/api\/photo\/([a-f0-9]{16,64})$/);
+  if (photoMatch && method === "GET") {
+    const org = await loadOrg(store);
+    const { branchScope } = await import("./org.mjs");
+    return servePhoto(res, store, photoMatch[1], (p) => {
+      const dom = p.domain === "bnot" ? "bnot" : "kollel";
+      if (!can(dom)) return false;
+      const sc = branchScope(user, org, dom);
+      return sc === null || !p.branchId || sc.has(p.branchId);
+    });
+  }
+
+  // "בטל" - החזרת מה שנמחק בלחיצה האחרונה (רק מי שמחק, עד רבע שעה)
+  if (pathname === "/api/undo" && method === "POST") {
+    const { id } = await readBody(req);
+    const items = (await store.list("trash")).filter((t) => t.undoId === String(id || "") && t.by === real.id && Date.now() - new Date(t.at).getTime() < 15 * 60_000);
+    if (!items.length) return send(404, { error: "אי אפשר לבטל - עבר יותר מדי זמן" });
+    for (const t of items) {
+      await store.put(t.col, t.doc.id, t.doc);
+      await store.del("trash", t.id);
+    }
+    await audit(real, "ביטול מחיקה", `${items.length} רשומות`);
+    return send(200, { ok: true, restored: items.length });
   }
 
   if (pathname === "/api/auth/me" && method === "GET") {
@@ -1187,7 +1245,16 @@ async function api(req, res, url) {
   // ---- יומן
   if (pathname === "/api/admin/audit" && method === "GET") {
     if (!can("audit")) return send(403, { error: "אין הרשאה" });
-    return send(200, { entries: await store.list("audit", 5000), canDelete: real.roles.includes("developer") && !user.impersonatedBy });
+    // טווח תאריכים (לפי שעון ישראל) - מאפשר להגיע גם לרשומות ישנות, ולא רק ל-5,000 האחרונות
+    const from = /^\d{4}-\d{2}-\d{2}$/.test(url.searchParams.get("from") || "") ? url.searchParams.get("from") : "";
+    const to = /^\d{4}-\d{2}-\d{2}$/.test(url.searchParams.get("to") || "") ? url.searchParams.get("to") : "";
+    const fmtDay = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem" });
+    let all = await store.list("audit");
+    if (from || to) all = all.filter((e) => {
+      const d = fmtDay.format(new Date(e.at || e.createdAt));
+      return (!from || d >= from) && (!to || d <= to);
+    });
+    return send(200, { entries: all.slice(0, 10000), total: all.length, canDelete: real.roles.includes("developer") && !user.impersonatedBy });
   }
   // מחיקת רשומות מהיומן - מתכנת בלבד (נרשמת ביומן עצמו)
   if (pathname === "/api/admin/audit" && method === "DELETE") {
@@ -1393,7 +1460,8 @@ createServer(async (req, res) => {
     if (url.pathname.startsWith("/api/")) {
       // באתר שנרדם כשאין גולשים (Autoscale) - משימות מתוזמנות שהגיע זמנן רצות בכל התעוררות
       runJobs().catch(() => {});
-      return await api(req, res, url);
+      const undoId = String(req.headers["x-undo-id"] || "");
+      return await reqCtx.run({ undoId: /^[\w-]{8,64}$/.test(undoId) && req.method === "DELETE" ? undoId : "", userId: null }, () => api(req, res, url));
     }
     return await serveStatic(req, res, url);
   } catch (e) {

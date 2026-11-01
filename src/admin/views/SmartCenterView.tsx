@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Icon } from "../../components/Icon";
 import { apiCached, api, post, type OrgUnit, type View } from "../api";
 import { useLive } from "../live";
-import { waLink } from "../components";
+import { Combo, waLink } from "../components";
 
 type Approval = { id:string; kind:"mitchUpdate"|"mentor"; title:string; sub:string; at:string; text:string; photos:number; domain:string };
 type FunnelRow = { label:string; value:number };
@@ -195,7 +195,7 @@ function BulkPanel(){
     <div className="adm-bulk-tools">
       <div className="adm-segmented"><button aria-pressed={kind==="member"} onClick={()=>setKind("member")}>משתתפות</button><button aria-pressed={kind==="mitch"} onClick={()=>setKind("mitch")}>מתחזקים/ות</button></div>
       <input className="input" type="search" placeholder="חיפוש" value={q} onChange={(e)=>setQ(e.target.value)}/>
-      <select className="select" value={branch} onChange={(e)=>setBranch(e.target.value)}><option value="all">כל הסניפים</option>{d.branches.map((b)=><option value={b.id} key={b.id}>{b.name}</option>)}</select>
+      <Combo label="סניף" placeholder="כל הסניפים - הקלדה לחיפוש…" value={branch==="all"?"":branch} onChange={(id)=>setBranch(id||"all")} options={[{id:"",label:"כל הסניפים"},...d.branches.map((b)=>({id:b.id,label:b.name}))]}/>
     </div>
     <label className="adm-bulk-all"><input type="checkbox" checked={allSelected} onChange={(e)=>setSel(e.target.checked?new Set(list.map((x)=>x.id)):new Set())}/> בחירת כל {list.length} המוצגים</label>
     <div className="adm-bulk-list">
@@ -205,7 +205,7 @@ function BulkPanel(){
       <select className="select" value={action} onChange={(e)=>{setAction(e.target.value as typeof action);setWa([]);}}>
         <option value="tag">הוספת תגית</option><option value="branch">העברה לסניף</option>{kind==="mitch"?<option value="followup">קביעת מעקב</option>:null}<option value="message">שליחת הודעה</option>
       </select>
-      {action==="branch"?<select className="select" value={value} onChange={(e)=>setValue(e.target.value)}><option value="">בחרו סניף</option>{d.branches.map((b)=><option value={b.id} key={b.id}>{b.name}</option>)}</select>:null}
+      {action==="branch"?<Combo label="סניף" placeholder="בחרו סניף - הקלדה לחיפוש…" value={value} onChange={setValue} options={d.branches.map((b)=>({id:b.id,label:b.name}))}/>:null}
       {action==="tag"?<input className="input" placeholder="שם תגית" value={value} onChange={(e)=>setValue(e.target.value)}/>:null}
       {action==="followup"?<input className="input" type="date" value={value} onChange={(e)=>setValue(e.target.value)}/>:null}
       {action==="message"?<>

@@ -1,5 +1,6 @@
 /** מסך מתכנת: גיבויים יומיים ושחזור, וכתובת לשלוחת הנוכחות בימות המשיח */
 import { useCallback, useEffect, useState } from "react";
+import { ask } from "../ask";
 import { Icon } from "../../components/Icon";
 import { api, fmtDateTime, post } from "../api";
 import { runtime } from "../../config/contentModel";
@@ -26,7 +27,13 @@ export function DevExtras() {
     load();
   };
   const restore = async (b: Backup) => {
-    const ans = window.prompt(`שחזור יחזיר את כל הנתונים למצב של ${fmtDateTime(b.at)}.\nלפני השחזור נשמר גיבוי של המצב הנוכחי.\nלאישור כתבו: שחזור`);
+    const ans = await ask({
+      title: "שחזור מגיבוי",
+      label: `כל הנתונים יחזרו למצב של ${fmtDateTime(b.at)}. לפני השחזור נשמר גיבוי של המצב הנוכחי. לאישור כתבו: שחזור`,
+      okLabel: "שחזור",
+      danger: true,
+      validate: (v) => (v.trim() === "שחזור" ? null : "יש לכתוב את המילה שחזור"),
+    });
     if (ans !== "שחזור") return;
     setBusy(true);
     try {

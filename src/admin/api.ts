@@ -1,5 +1,6 @@
 import { dtf } from "./dates";
 /** קריאות למערכת הניהול בשרת */
+import { newUndoId, showUndo } from "./undo";
 
 export class ApiError extends Error {
   constructor(
@@ -167,7 +168,21 @@ export async function apiCached<T>(path: string, onData: (d: T) => void): Promis
 export const post = <T = unknown>(path: string, body: unknown) => api<T>(path, { method: "POST", body: JSON.stringify(body) });
 export const patch = <T = unknown>(path: string, body: unknown) => api<T>(path, { method: "PATCH", body: JSON.stringify(body) });
 export const put = <T = unknown>(path: string, body: unknown) => api<T>(path, { method: "PUT", body: JSON.stringify(body) });
-export const del = <T = unknown>(path: string) => api<T>(path, { method: "DELETE" });
+/** מחיקה מהמסך - אחריה מוצגת הודעת "נמחק · בטל" */
+const inflightDeletes = new Map<string, Promise<unknown>>();
+export const del = <T = unknown>(path: string): Promise<T> => {
+  const running = inflightDeletes.get(path);
+  if (running) return running as Promise<T>;
+  const undoId = newUndoId();
+  const p = apiRaw<T>(path, { method: "DELETE", headers: { "X-Undo-Id": undoId } })
+    .then((r) => {
+      showUndo(undoId, (id) => api("/api/undo", { method: "POST", body: JSON.stringify({ id }) }));
+      return r;
+    })
+    .finally(() => inflightDeletes.delete(path));
+  inflightDeletes.set(path, p);
+  return p;
+};
 
 /* ---------- טיפוסים ---------- */
 

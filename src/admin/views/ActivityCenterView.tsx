@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { dtf } from "../dates";
+import { Combo } from "../components";
 import { IsraelMap3D } from "../IsraelMap3D";
 import { Icon, type IconName } from "../../components/Icon";
 import { apiCached, del, post, type View } from "../api";
@@ -386,7 +387,7 @@ export function ActivityCenterView({ go, mode }: { go: (view: View, tab?: string
           <div className="adm-panel adm-field-wall__form">
             <div className="adm-fields adm-fields--2">
               
-              <label className="field"><span className="field__label">סניף</span><select className="select" value={wallForm.branchId} onChange={(e)=>setWallForm({...wallForm,branchId:e.target.value})}><option value="">בחירת סניף</option>{wall.branches.filter((b)=>b.domain===wallForm.domain).map((b)=><option key={b.id} value={b.id}>{wallBranchLabel(b.id)}</option>)}</select></label>
+              <label className="field"><span className="field__label">סניף</span><Combo label="סניף" placeholder="הקלדת עיר או סניף…" value={wallForm.branchId} onChange={(branchId)=>setWallForm({...wallForm,branchId})} options={wall.branches.filter((b)=>b.domain===wallForm.domain).map((b)=>({id:b.id,label:wallBranchLabel(b.id)}))}/></label>
               <label className="field"><span className="field__label">תאריך</span><input className="input" type="date" value={wallForm.date} onChange={(e)=>setWallForm({...wallForm,date:e.target.value})}/></label>
               <label className="field"><span className="field__label">כותרת</span><input className="input" value={wallForm.title} onChange={(e)=>setWallForm({...wallForm,title:e.target.value})} placeholder="לדוגמה: ערב לימוד בסניף"/></label>
               <label className="field span-2"><span className="field__label">מה היה?</span><textarea className="textarea" rows={3} value={wallForm.note} onChange={(e)=>setWallForm({...wallForm,note:e.target.value})}/></label>

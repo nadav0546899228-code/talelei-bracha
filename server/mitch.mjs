@@ -3,6 +3,7 @@
  * בנים: כל מתחזק משויך לאברך (חברותא בכולל הערב). הנוכחות שלו נרשמת במפגש הערב יחד עם האברך.
  * בנות: הפרשת חלה עם הרשמה ← משתתפת הופכת למתחזקת ← קשר מתמשך (יומן קשר + מעקב הבא).
  */
+import { storePhotos } from "./photos.mjs";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { isPrivileged } from "./roles.mjs";
 import { branchScope, loadOrg } from "./org.mjs";
@@ -509,7 +510,8 @@ export async function publicMitchShare(req, res, url, { store, json, readBody, c
       rawText: text,
       cleanText: null,
       aiStatus: "not_processed",
-      photos,
+      // התמונות נשמרות בנפרד - ברשומה רק הכתובות שלהן
+      photos: await storePhotos(store, photos, { domain: m.domain, branchId: m.branchId, owner: `mitchUpdate:${id}` }),
       status: "pending",
       submittedAt,
     });

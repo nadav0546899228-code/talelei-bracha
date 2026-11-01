@@ -105,6 +105,32 @@ export function SubmissionsView({ me, subs, refreshSubs, forms, title, initialFo
 
   const selected = all.find((s) => s.id === selectedId) ?? null;
 
+  // בחירה מרובה - עדכון סטטוס לכמה פניות יחד
+  const [picking, setPicking] = useState(false);
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const togglePicked = (id: string) => setPicked((p) => {
+    const n = new Set(p);
+    if (n.has(id)) n.delete(id);
+    else n.add(id);
+    return n;
+  });
+  const bulkStatus = async (status: Status) => {
+    if (!picked.size) return;
+    setBusy(true);
+    let failed = 0;
+    for (const id of picked) {
+      const sub = (subs ?? []).find((x) => x.id === id);
+      if (!sub || !STATUS_FLOW[sub.form].includes(status)) {
+        failed++;
+        continue;
+      }
+      await patch(`/api/admin/submissions/${id}`, { status }).catch(() => failed++);
+    }
+    setBusy(false);
+    setMsg(failed ? `עודכנו ${picked.size - failed}, לא עודכנו ${failed}` : `עודכנו ${picked.size} פניות`);
+    setPicked(new Set());
+    await refreshSubs();
+  };
   const update = async (body: Record<string, unknown>) => {
     if (!selected) return;
     setBusy(true);
@@ -242,7 +268,21 @@ export function SubmissionsView({ me, subs, refreshSubs, forms, title, initialFo
         <span className="muted" aria-live="polite">
           {rows.length} רשומות
         </span>
+        <button type="button" className={`btn btn--ghost btn--sm${picking ? " is-on" : ""}`} onClick={() => (setPicking(!picking), setPicked(new Set()))}>
+          <Icon name="check" /> {picking ? "סיום בחירה" : "בחירה"}
+        </button>
       </div>
+      {picking ? (
+        <div className="adm-bulkbar" role="toolbar" aria-label="פעולות על כמה פניות">
+          <label style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <input type="checkbox" checked={rows.length > 0 && rows.every((r) => picked.has(r.id))} onChange={(e) => setPicked(e.target.checked ? new Set(rows.map((r) => r.id)) : new Set())} />
+            הכל
+          </label>
+          <strong>נבחרו {picked.size}</strong>
+          <button type="button" className="btn btn--sm" disabled={!picked.size || busy} onClick={() => bulkStatus("done")}>סימון כטופלו</button>
+          <button type="button" className="btn btn--ghost btn--sm" disabled={!picked.size || busy} onClick={() => bulkStatus("archived")}>לארכיון</button>
+        </div>
+      ) : null}
 
       <ToneLegend
         items={[
@@ -259,6 +299,8 @@ export function SubmissionsView({ me, subs, refreshSubs, forms, title, initialFo
             <p className="muted">טוען…</p>
           ) : rows.length ? (
             rows.map((s) => (
+              <div key={s.id} className={picking ? "adm-pickrow" : undefined}>
+              {picking ? <input type="checkbox" className="adm-pickrow__box" checked={picked.has(s.id)} onChange={() => togglePicked(s.id)} aria-label={`בחירת ${displayName(s)}`} /> : null}
               <SwipeRow
                 key={s.id}
                 phone={typeof s.data.phone === "string" ? s.data.phone : undefined}
@@ -285,6 +327,7 @@ export function SubmissionsView({ me, subs, refreshSubs, forms, title, initialFo
                   {s.data.subject ? ` · ${valueText(s.data.subject)}` : ""}
                 </span>
               </SwipeRow>
+              </div>
             ))
           ) : (
             <div className="adm-empty adm-panel">

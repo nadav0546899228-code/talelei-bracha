@@ -40,15 +40,23 @@ export function AuditView() {
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [limit, setLimit] = useState(200);
 
+  const [total, setTotal] = useState(0);
+  // טווח תאריכים נשלח לשרת - כך אפשר להגיע גם לרשומות ישנות
+  const rangeKey = from && to && to < from ? "" : `${from}|${to}`;
   const load = useCallback(() => {
     setErr(null);
-    api<{ entries: Entry[]; canDelete?: boolean }>("/api/admin/audit")
+    const [f, t] = rangeKey.split("|");
+    const qs = new URLSearchParams();
+    if (f) qs.set("from", f);
+    if (t) qs.set("to", t);
+    api<{ entries: Entry[]; total?: number; canDelete?: boolean }>(`/api/admin/audit${qs.toString() ? `?${qs}` : ""}`)
       .then((r) => {
         setEntries(r.entries);
+        setTotal(r.total ?? r.entries.length);
         setCanDelete(Boolean(r.canDelete));
       })
       .catch((e) => setErr(e.message));
-  }, []);
+  }, [rangeKey]);
   useEffect(() => {
     load();
   }, [load]);
@@ -175,7 +183,10 @@ export function AuditView() {
       {entries ? (
         <>
           <p className="adm-au-count">
-            <span>{rows.length} פעולות תואמות · מוצגות {shown.length}</span>
+            <span>
+              {rows.length} פעולות תואמות · מוצגות {shown.length}
+              {total > (entries?.length ?? 0) ? ` · נטענו ${entries?.length ?? 0} האחרונות מתוך ${total} - לרשומות ישנות יותר בוחרים טווח תאריכים` : ""}
+            </span>
             {canDelete && rows.length ? (
               <>
                 <button type="button" className="adm-ut-link" onClick={() => backup(rows)}>

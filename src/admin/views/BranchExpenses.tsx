@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Icon } from "../../components/Icon";
 import { api, del, post } from "../api";
-import { Chips, ExportBtn, money } from "../components";
+import { Chips, Combo, ExportBtn, money } from "../components";
 import { EXPENSE_CATEGORIES, type BranchExpense } from "../kollelCalc";
 import { buildXlsx, downloadBlob, type Sheet } from "../xlsx";
 import { useLive } from "../live";
@@ -104,15 +104,8 @@ export function BranchExpenses({ ov, month, locked }: { ov: Overview; month: str
         open ? (
           <div className="adm-bx__form">
             {branches.length > 1 ? (
-              <select className="input" value={form.branchId} onChange={(e) => setForm({ ...form, branchId: e.target.value })} aria-label="סניף">
-                <option value="">בחירת סניף…</option>
-                {branches.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {ov.cities.find((c) => c.id === b.parentId)?.name ? `${ov.cities.find((c) => c.id === b.parentId)?.name} · ` : ""}
-                    {b.name}
-                  </option>
-                ))}
-              </select>
+              <Combo label="סניף" placeholder="הקלדת עיר או סניף…" value={form.branchId} onChange={(branchId) => setForm({ ...form, branchId })}
+                options={branches.map((b) => { const c = ov.cities.find((x) => x.id === b.parentId)?.name; return { id: b.id, label: c ? `${c} · ${b.name}` : b.name }; })} />
             ) : null}
             <Chips<string> value={form.category} onChange={(category) => setForm({ ...form, category })} items={EXPENSE_CATEGORIES.map((c) => ({ id: c, label: c }))} />
             <div className="adm-bx__row">

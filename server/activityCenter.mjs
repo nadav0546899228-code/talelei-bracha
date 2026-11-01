@@ -2,6 +2,7 @@
  * מרכז פעילות ארצי - שכבת קריאה מאוחדת מעל הנתונים הקיימים.
  * אין כאן מאגר פעילות נוסף: כל פריט מגיע מהמקור שבו כבר הוזן.
  */
+import { deletePhotos, storePhotos } from "./photos.mjs";
 import { randomUUID } from "node:crypto";
 import { isPrivileged } from "./roles.mjs";
 import { branchScope, loadOrg } from "./org.mjs";
@@ -116,7 +117,8 @@ export async function handleActivityCenter(req, res, url, ctx) {
       date,
       title: title || "מהשטח",
       note,
-      photos,
+      // התמונות נשמרות בנפרד - ברשומה רק הכתובות שלהן
+      photos: await storePhotos(store, photos, { domain, branchId, owner: `activityWall:${id}` }),
       shareApproved: body.shareApproved === true,
       createdAt: new Date().toISOString(),
       by: user.id,
@@ -133,6 +135,7 @@ export async function handleActivityCenter(req, res, url, ctx) {
     if (!row || !wallVisible(row)) return send(404, { error: "לא נמצא" }), true;
     if (!canDeleteWall(row)) return send(403, { error: "אין הרשאה למחוק" }), true;
     await store.del("activityWall", row.id);
+    await deletePhotos(store, row.photos);
     await audit(user, "מחיקת תיעוד מהשטח", row.title || row.id);
     return send(200, { ok: true }), true;
   }

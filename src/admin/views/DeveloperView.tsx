@@ -10,6 +10,7 @@ type System = {
   node: string;
   uptimeSec: number;
   storage: "postgres" | "file";
+  forwardedFor?: string;
   counts: Record<string, number>;
   checks: { key: string; ok: boolean; note: string }[];
   bootstrap: { developer: string[]; ceo: string[] };
@@ -64,6 +65,14 @@ export function DeveloperView({ me, openImpersonate }: AdminCtx) {
           </div>
         ))}
       </div>
+
+      {sys.forwardedFor !== undefined ? (
+        <section className="adm-panel">
+          <h2>אבחון כתובת גולש</h2>
+          <p className="muted">לכיול הגבלת הניסיונות בטפסים. יש לשלוח את השורה הזו למתכנת (Claude).</p>
+          <code dir="ltr" style={{ display: "block", wordBreak: "break-all", userSelect: "all" }}>{sys.forwardedFor || "(ריק)"}</code>
+        </section>
+      ) : null}
 
       <section className="adm-panel">
         <h2>בדיקות והגדרות</h2>

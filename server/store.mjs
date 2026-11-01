@@ -21,7 +21,7 @@ export async function createStore() {
  * כך שגם כשרצים כמה שרתים במקביל לא מוצגים נתונים ישנים.
  * מוחזר תמיד עותק, כדי ששינוי של אובייקט בקוד לא ישבש את המטמון.
  */
-const NO_CACHE = new Set(["backupData", "backups", "avrechFiles", "mitchUpdates", "activityWall"]);
+const NO_CACHE = new Set(["backupData", "backups", "avrechFiles", "photos"]);
 function withCache(base) {
   const cache = new Map(); // col -> { ver, rows, at }
   const inflight = new Map();

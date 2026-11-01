@@ -30,3 +30,18 @@ export function dtf(locale: string, opts: Intl.DateTimeFormatOptions = {}): Intl
   }
   return f;
 }
+
+/** כותרת יום בסגנון וואטסאפ: היום, אתמול, מחר, שם היום (עד שבוע), ואחר כך תאריך */
+export function dayHeading(iso: string | null | undefined): string {
+  const day = ilDayOf(iso);
+  if (!day) return "";
+  const today = ilDay();
+  const diff = Math.round((Date.parse(`${day}T12:00:00Z`) - Date.parse(`${today}T12:00:00Z`)) / 86400000);
+  if (diff === 0) return "היום";
+  if (diff === -1) return "אתמול";
+  if (diff === 1) return "מחר";
+  const d = new Date(`${day}T12:00:00`);
+  if (Math.abs(diff) < 7) return dtf("he-IL", { weekday: "long" }).format(d);
+  const sameYear = day.slice(0, 4) === today.slice(0, 4);
+  return dtf("he-IL", { day: "numeric", month: "long", ...(sameYear ? {} : { year: "numeric" }) }).format(d);
+}

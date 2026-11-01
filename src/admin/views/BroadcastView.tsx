@@ -3,6 +3,7 @@
  * ווואטסאפ/מייל מהמכשיר. נמענים: אברכים, רכזים, מלוות, נרשמות לעדכונים, מחזקים ואנשי קשר.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { ask } from "../ask";
 import { Icon } from "../../components/Icon";
 import { api, del, fmtDateTime, post, put, type Me } from "../api";
 import { groupInMode, MODE_LABELS, type Mode } from "../nav";
@@ -237,7 +238,7 @@ function SendTab({ setup, me, reload }: { setup: Setup; me: Me; reload: () => vo
                 type="button"
                 className="adm-chip"
                 onClick={async () => {
-                  const name = window.prompt("שם לתבנית:", "");
+                  const name = await ask({ title: "שמירה כתבנית", label: "שם לתבנית", placeholder: "למשל: תזכורת לשיעור", okLabel: "שמירה", validate: (v) => (v.trim() ? null : "יש לכתוב שם") });
                   if (!name?.trim()) return;
                   await post("/api/broadcast/saved", { name, text });
                   loadSaved();

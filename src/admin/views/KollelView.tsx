@@ -1,5 +1,6 @@
 /** כולל ערב: אברכים לפי ערים וסניפים, דיווח נסיעות והוצאות */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ask } from "../ask";
 import { Icon } from "../../components/Icon";
 import { apiCached, api, del, post, put, type Me, type OrgUnit } from "../api";
 import { Chips, Combo, ContactActions, ExportBtn, Fab, money, ToneLegend, waLink } from "../components";
@@ -631,8 +632,8 @@ function AttendanceTab({ ov }: { ov: Overview }) {
     const nextPresent = !on && m.avrechId && !present.has(m.avrechId) ? [...present, m.avrechId] : [...present];
     save(nextPresent, { mPresent });
   };
-  const editNote = (avrechId: string, name: string) => {
-    const v = window.prompt(`מה למדו היום (${name})?`, cur?.notes?.[avrechId] ?? "");
+  const editNote = async (avrechId: string, name: string) => {
+    const v = await ask({ title: `מה למדו היום`, label: name, kind: "textarea", initial: cur?.notes?.[avrechId] ?? "", okLabel: "שמירה" });
     if (v === null) return;
     save([...present], { notes: { ...(cur?.notes ?? {}), [avrechId]: v } });
   };
@@ -1062,7 +1063,14 @@ function AvrechFiles({ av }: { av: Avrech }) {
       r.onload = () => resolve(String(r.result).split(",")[1] || "");
       r.readAsDataURL(f);
     });
-    const label = window.prompt("מה המסמך? (למשל: צילום ת״ז, אישור ניהול חשבון)", "") || "";
+    const label = await ask({
+      title: "צירוף מסמך",
+      label: "מה המסמך?",
+      kind: "select",
+      options: ["צילום ת״ז", "אישור ניהול חשבון", "צ׳ק מבוטל", "טופס 101", "אחר"].map((x) => ({ value: x, label: x })),
+      okLabel: "העלאה",
+    });
+    if (label === null) return;
     try {
       await post(`/api/kollel/avrechim/${av.id}/files`, { name: f.name, type: f.type, data, label });
       load();

@@ -1,5 +1,6 @@
 /** הודעות פנימיות: תיבה אחת, השבה, סימון כמה יחד, מחיקה וסימון כנקרא */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, Fragment } from "react";
+import { dayHeading } from "../dates";
 import { Icon } from "../../components/Icon";
 import { api, fmtDateTime, post, type Me } from "../api";
 import type { Mode } from "../nav";
@@ -82,8 +83,10 @@ export function MessagesView({ me, mode }: { me: Me; mode: Mode }) {
 
       <div className="adm-split">
         <div className="adm-list">
-          {rows.map((m) => (
-            <div key={m.id} className={`adm-msg${m.read ? "" : " is-unread"}${open?.id === m.id ? " is-open" : ""}`}>
+          {rows.map((m, i) => (
+            <Fragment key={m.id}>
+            {i === 0 || dayHeading(rows[i - 1].createdAt) !== dayHeading(m.createdAt) ? <div className="adm-dayhead">{dayHeading(m.createdAt)}</div> : null}
+            <div className={`adm-msg${m.read ? "" : " is-unread"}${open?.id === m.id ? " is-open" : ""}`}>
               {!readOnly ? (
                 <input type="checkbox" className="adm-msg__pick" checked={picked.has(m.id)} onChange={() => togglePick(m.id)} aria-label="בחירה" />
               ) : null}
@@ -93,6 +96,7 @@ export function MessagesView({ me, mode }: { me: Me; mode: Mode }) {
                 <span className="adm-msg__text">{m.text}</span>
               </button>
             </div>
+            </Fragment>
           ))}
           {list && !rows.length ? (
             <div className="adm-panel adm-empty">

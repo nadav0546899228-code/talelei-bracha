@@ -1,5 +1,6 @@
 /** עזרים למבנה הארגוני: ארצי -> אזור -> עיר -> סניף */
 import { useCallback, useEffect, useState } from "react";
+import { Combo } from "./components";
 import { api, DOMAIN_LABELS, ROLE_SCOPE, type OrgUnit, type Role, type Scope } from "./api";
 
 export type OrgPerson = { id: string; kind: "google" | "phone"; name: string; phone: string; email: string; roles: Role[]; scope: Scope };
@@ -73,29 +74,15 @@ export function ScopePicker({
           const cities = org.cities.filter((c) => c.domain === rs.domain);
           return <label key={r} className="field">
             <span className="field__label">עיר - {roleLabels[r]}</span>
-            <select className="select" value={s.cityId || ""} onChange={(e) => onChange({ ...scope, [rs.domain]: { cityId: e.target.value || undefined } })}>
-              <option value="">בחירת עיר…</option>
-              {org.regions.filter((reg)=>reg.domain===rs.domain).map((reg)=>(
-                <optgroup key={reg.id} label={reg.name}>
-                  {cities.filter((c)=>c.parentId===reg.id).map((c)=><option key={c.id} value={c.id}>{c.name}</option>)}
-                </optgroup>
-              ))}
-            </select>
+            <Combo label={`עיר - ${roleLabels[r]}`} placeholder="הקלדת שם עיר…" value={s.cityId || ""} onChange={(id) => onChange({ ...scope, [rs.domain]: { cityId: id || undefined } })}
+              options={cities.map((c) => ({ id: c.id, label: c.name, sub: org.regions.find((reg) => reg.id === c.parentId)?.name }))} />
           </label>;
         }
         const branches = org.branches.filter((b) => b.domain === rs.domain);
         return <label key={r} className="field">
           <span className="field__label">סניף - {roleLabels[r]}</span>
-          <select className="select" value={s.branchId || ""} onChange={(e) => onChange({ ...scope, [rs.domain]: { branchId: e.target.value || undefined } })}>
-            <option value="">בחירת סניף…</option>
-            {org.regions.filter((reg)=>reg.domain===rs.domain).map((reg)=>(
-              <optgroup key={reg.id} label={reg.name}>
-                {org.cities.filter((c)=>c.parentId===reg.id).flatMap((c)=>
-                  branches.filter((b)=>b.parentId===c.id).map((b)=><option key={b.id} value={b.id}>{c.name} · {b.name}</option>)
-                )}
-              </optgroup>
-            ))}
-          </select>
+          <Combo label={`סניף - ${roleLabels[r]}`} placeholder="הקלדת עיר או סניף…" value={s.branchId || ""} onChange={(id) => onChange({ ...scope, [rs.domain]: { branchId: id || undefined } })}
+            options={branches.map((b) => { const c = org.cities.find((x) => x.id === b.parentId); return { id: b.id, label: `${c?.name ?? ""} · ${b.name}`, sub: org.regions.find((reg) => reg.id === c?.parentId)?.name }; })} />
         </label>;
       })}
     </div>

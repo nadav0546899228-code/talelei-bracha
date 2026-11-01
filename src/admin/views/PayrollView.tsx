@@ -1,5 +1,7 @@
 /** משכורות כולל ערב - חודש בכל פעם, לפי הכללים הקבועים, עם סגירה לתשלום וייצוא לאקסל */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ask } from "../ask";
+import { ilDay, ilDayPlus } from "../dates";
 import { Icon } from "../../components/Icon";
 import { api, del, post, put, type Me } from "../api";
 import { BranchExpenses, branchExpensesSheet, useBranchExpenses } from "./BranchExpenses";
@@ -185,7 +187,10 @@ export function PayrollView({ me }: { me: Me }) {
   };
 
   const createMonth = async () => {
-    const label = window.prompt("שם החודש (חודש עברי):", hebrewMonthLabel());
+    // בחירה מרשימת חודשי השנה (בלי הקלדה חופשית - כך אין שני חודשים בכתיב שונה)
+    const yNow = hebrewYearNum();
+    const choices = [...hebrewYearMonthLabels(yNow), ...hebrewYearMonthLabels(yNow + 1)].filter((l) => !ov.months.some((m) => normalizeMonthLabel(m.id) === l));
+    const label = await ask({ title: "פתיחת חודש משכורת", label: "חודש", kind: "select", initial: choices.includes(hebrewMonthLabel()) ? hebrewMonthLabel() : choices[0], options: choices.map((l) => ({ value: l, label: l })), okLabel: "פתיחה" });
     if (!label?.trim()) return;
     const k = normalizeMonthLabel(label);
     const existing = ov.months.find((m) => m.id === k || normalizeMonthLabel(m.id) === k);
@@ -216,7 +221,7 @@ export function PayrollView({ me }: { me: Me }) {
   };
 
   // קובץ מס״ב - זיכוי ישיר לחשבונות האברכים
-  const exportMasav = () => {
+  const exportMasav = async () => {
     if (!month) return;
     const cfg = s.masav;
     if (!cfg?.institutionCode) {
@@ -224,9 +229,17 @@ export function PayrollView({ me }: { me: Me }) {
       setSettingsOpen(true);
       return;
     }
-    const when = window.prompt("תאריך זיכוי (יום/חודש/שנה):", new Date(Date.now() + 2 * 864e5).toLocaleDateString("he-IL"));
-    if (!when) return;
-    const [dd, mm, yy] = when.split(/[./-]/).map(Number);
+    const todayStr = ilDay();
+    const whenIso = await ask({
+      title: "קובץ מס״ב",
+      label: "תאריך הזיכוי בחשבונות",
+      kind: "date",
+      initial: ilDayPlus(2),
+      okLabel: "הפקת קובץ",
+      validate: (v) => (!/^\d{4}-\d{2}-\d{2}$/.test(v) ? "יש לבחור תאריך" : v < todayStr ? "תאריך הזיכוי כבר עבר" : null),
+    });
+    if (!whenIso) return;
+    const [yy, mm, dd] = whenIso.split("-").map(Number);
     const fullYear = yy < 100 ? 2000 + yy : yy;
     const payDate = new Date(fullYear, (mm || 1) - 1, dd || 1, 12);
     // 31/02 לא הופך בשקט ל-3 במרץ, ותאריך שעבר לא מתקבל
