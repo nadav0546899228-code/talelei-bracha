@@ -12,6 +12,8 @@ import { readFileSync as readFileSyncTB } from "node:fs";
  */
 import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
+import { gzip, brotliCompress, constants as zc } from "node:zlib";
+import { promisify } from "node:util";
 import { readFile, stat } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -84,7 +86,7 @@ function notifyChange(collection) {
     }
   }
 }
-for (const fn of ["put", "del"]) {
+for (const fn of ["put", "del", "update"]) {
   const orig = store[fn].bind(store);
   store[fn] = async (collection, ...rest) => {
     const r = await orig(collection, ...rest);
@@ -111,9 +113,37 @@ const SECURITY = {
   "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
 };
 
+const gzipP = promisify(gzip);
+const brotliP = promisify(brotliCompress);
+/** דחיסה לפי מה שהדפדפן תומך (br / gzip). תשובות קטנות נשלחות כמו שהן */
+function pickEncoding(req) {
+  const ae = String(req?.headers?.["accept-encoding"] || "");
+  return /\bbr\b/.test(ae) ? "br" : /\bgzip\b/.test(ae) ? "gzip" : "";
+}
+async function compress(buf, enc, quality = 4) {
+  if (enc === "br") return brotliP(buf, { params: { [zc.BROTLI_PARAM_QUALITY]: quality, [zc.BROTLI_PARAM_SIZE_HINT]: buf.length } });
+  if (enc === "gzip") return gzipP(buf, { level: 6 });
+  return buf;
+}
 function json(res, status, body, headers = {}) {
-  res.writeHead(status, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", ...SECURITY, ...headers });
-  res.end(JSON.stringify(body));
+  const buf = Buffer.from(JSON.stringify(body));
+  const enc = buf.length > 1400 ? pickEncoding(res.req) : "";
+  const head = { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", Vary: "Accept-Encoding", ...SECURITY, ...headers };
+  if (!enc) {
+    res.writeHead(status, head);
+    return res.end(buf);
+  }
+  compress(buf, enc)
+    .then((out) => {
+      if (res.headersSent) return;
+      res.writeHead(status, { ...head, "Content-Encoding": enc });
+      res.end(out);
+    })
+    .catch(() => {
+      if (res.headersSent) return;
+      res.writeHead(status, head);
+      res.end(buf);
+    });
 }
 
 async function readBody(req, limit = 64 * 1024) {
@@ -267,14 +297,29 @@ async function makeBackup(reason, byName = "מערכת") {
     count += data[c].length;
   }
   const id = `${new Date().toISOString().replace(/[:.]/g, "-")}`;
-  await store.put("backups", id, { at: new Date().toISOString(), reason, byName, count, data });
-  const all = await store.list("backups", 1000);
-  for (const old of all.slice(14)) await store.del("backups", old.id);
+  // התוכן המלא נשמר בנפרד, כדי שרשימת הגיבויים תהיה קלה ומהירה
+  await store.put("backupData", id, { data });
+  await store.put("backups", id, { at: new Date().toISOString(), reason, byName, count, split: true });
+  const all = await backupList();
+  for (const old of all.slice(14)) {
+    await store.del("backups", old.id);
+    await store.del("backupData", old.id);
+  }
   return id;
+}
+/** רשימת הגיבויים בלי התוכן עצמו (גיבויים ישנים שמרו את התוכן בתוך הרשומה - מסירים אותו מהתשובה) */
+async function backupList(limit = 1000) {
+  return (await store.list("backups", limit)).map(({ data: _d, ...b }) => b);
+}
+async function backupContent(id) {
+  const bk = await store.get("backups", id);
+  if (!bk) return null;
+  const data = bk.data || (await store.get("backupData", id))?.data || {};
+  return { ...bk, data };
 }
 async function backupIfDue() {
   try {
-    const last = (await store.list("backups", 1))[0];
+    const last = (await backupList(1))[0];
     if (!last || Date.now() - new Date(last.at || last.createdAt).getTime() > 23.5 * 3600 * 1000) await makeBackup("גיבוי יומי אוטומטי");
   } catch (e) {
     console.error("backup", e?.message);
@@ -304,8 +349,19 @@ async function everyMinute() {
     const parts = Object.fromEntries(new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Jerusalem", hour: "2-digit", minute: "2-digit", weekday: "short", hour12: false }).formatToParts(new Date()).map((p) => [p.type, p.value]));
     const day = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(parts.weekday);
     const today = israelDate();
-    if (`${parts.hour}:${parts.minute}` !== rem.time || !(rem.days || []).includes(day) || rem.lastSent === today) return;
-    await store.put("settings", "kollelReminder", { ...rem, lastSent: today });
+    // נשלח גם אם השרת היה רדום בדקה המדויקת - עד שעתיים אחרי השעה שנקבעה
+    const nowMin = Number(parts.hour) * 60 + Number(parts.minute);
+    const [rh, rm] = String(rem.time || "").split(":").map(Number);
+    const due = rh * 60 + rm;
+    if (!(nowMin >= due && nowMin - due <= 120) || !(rem.days || []).includes(day) || rem.lastSent === today) return;
+    // תפיסה אטומית - שרת אחד בלבד שולח
+    let claimed = false;
+    await store.update("settings", "kollelReminder", (cur) => {
+      if (!cur || cur.lastSent === today) return null;
+      claimed = true;
+      return { ...cur, lastSent: today };
+    });
+    if (!claimed) return;
     const sessions = new Set((await store.list("kollelAttendance", 50000)).filter((x) => x.date === today).map((x) => x.branchId));
     const branches = (await store.list("orgUnits")).filter((u) => u.type === "branch" && u.domain === "kollel" && !sessions.has(u.id));
     if (!branches.length) return;
@@ -325,9 +381,22 @@ async function everyMinute() {
     console.error("reminder", e?.message);
   }
 }
-setInterval(everyMinute, 60_000).unref();
+let jobsRunning = false;
+let lastJobs = 0;
+async function runJobs() {
+  if (jobsRunning || Date.now() - lastJobs < 50_000) return;
+  jobsRunning = true;
+  lastJobs = Date.now();
+  try {
+    await everyMinute();
+  } finally {
+    jobsRunning = false;
+  }
+}
+setInterval(runJobs, 60_000).unref();
 
 setTimeout(backupIfDue, 60_000).unref();
+setTimeout(runJobs, 5_000).unref();
 setInterval(backupIfDue, 60 * 60_000).unref();
 
 /** תאריך היום לפי שעון ישראל YYYY-MM-DD */
@@ -342,6 +411,8 @@ async function getFeatureFlags() {
   const saved = (await store.get("settings", "features")) || {};
   return { donations: saved.donations === true };
 }
+
+let impactCache = null;
 
 /* ------------------------------------------------------------------ ניתוב API */
 
@@ -421,16 +492,24 @@ async function api(req, res, url) {
     if (!month) return say("אין כרגע חודש פתוח לדיווח");
     const date = israelDate();
     const id = `${av.branchId}_${date}`;
-    const prev = await store.get("kollelAttendance", id);
-    if (prev?.present?.includes(av.id)) return say(`שלום ${av.name} הנוכחות שלך היום כבר רשומה`);
-    await store.put("kollelAttendance", id, {
-      branchId: av.branchId,
-      date,
-      month: prev?.month || month.id,
-      present: [...(prev?.present || []), av.id],
-      by: prev?.by || "yemot",
-      byName: prev?.byName || "ימות המשיח",
+    // עדכון אטומי: כמה אברכים שמתקשרים באותו רגע לא דורסים זה את זה
+    let already = false;
+    await store.update("kollelAttendance", id, (prev) => {
+      if (prev?.present?.includes(av.id)) {
+        already = true;
+        return null;
+      }
+      return {
+        ...(prev || {}),
+        branchId: av.branchId,
+        date,
+        month: prev?.month || month.id,
+        present: [...(prev?.present || []), av.id],
+        by: prev?.by || "yemot",
+        byName: prev?.byName || "ימות המשיח",
+      };
     });
+    if (already) return say(`שלום ${av.name} הנוכחות שלך היום כבר רשומה`);
     return say(`שלום ${av.name} הנוכחות שלך נרשמה תודה`);
   }
 
@@ -445,7 +524,9 @@ async function api(req, res, url) {
   }
 
   if (pathname === "/api/public/live-impact" && method === "GET") {
-    return json(res, 200, await publicImpact(store));
+    // נתוני "הפעילות שלנו" לדף הבית - מחושבים לכל היותר פעם בדקה ולא בכל כניסה של גולש
+    if (!impactCache || Date.now() - impactCache.at > 60_000) impactCache = { at: Date.now(), data: await publicImpact(store) };
+    return json(res, 200, impactCache.data, { "Cache-Control": "public, max-age=60" });
   }
 
   // גרסת האתר הבנוי - לפי שם קובץ הסקריפט הראשי (משתנה בכל בנייה). משמש להודעת "יש גרסה חדשה"
@@ -878,13 +959,13 @@ async function api(req, res, url) {
       await audit(user, "גיבוי ידני");
       return send(200, { ok: true, id });
     }
-    const rows = (await store.list("backups", 100)).map(({ data: _d, ...b }) => b);
+    const rows = await backupList(100);
     return send(200, { backups: rows });
   }
   const bkMatch = pathname.match(/^\/api\/admin\/backups\/([\w-]+)(\/restore)?$/);
   if (bkMatch) {
     if (!can("developer")) return send(403, { error: "אין הרשאה" });
-    const bk = await store.get("backups", bkMatch[1]);
+    const bk = await backupContent(bkMatch[1]);
     if (!bk) return send(404, { error: "לא נמצא" });
     if (!bkMatch[2] && method === "GET") {
       const data = { ...bk.data, phoneUsers: (bk.data.phoneUsers || []).map(({ codeHash: _h, ...u }) => u), settings: (bk.data.settings || []).filter((x) => x.id !== "vapid") };
@@ -924,7 +1005,7 @@ async function api(req, res, url) {
   // ---- איפוס נתוני הדמה (אתר פיתוח בלבד)
   if (pathname === "/api/admin/demo/reset" && method === "POST") {
     if (!DEMO || !can("developer")) return send(403, { error: "זמין רק באתר הפיתוח" });
-    for (const c of [...BACKUP_COLLECTIONS, "backups", "audit"]) for (const d of await store.list(c, 100000)) await store.del(c, d.id);
+    for (const c of [...BACKUP_COLLECTIONS, "backups", "backupData", "audit"]) for (const d of await store.list(c, 100000)) await store.del(c, d.id);
     const { seedDemo } = await import("./demoSeed.mjs");
     await seedDemo(store);
     return send(200, { ok: true });
@@ -1227,15 +1308,36 @@ async function serveStatic(req, res, url) {
     const html = (await readFile(file, "utf8"))
       .replace('href="/manifest.webmanifest"', 'href="/admin.webmanifest"')
       .replace('href="/brand/icon-180.png"', `href="/brand/app-${brand}-180.png"`);
-    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache", "X-Robots-Tag": "noindex, nofollow", ...SECURITY });
-    return res.end(html);
+    const henc = pickEncoding(req);
+    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache", "X-Robots-Tag": "noindex, nofollow", ...SECURITY, ...(henc ? { "Content-Encoding": henc, Vary: "Accept-Encoding" } : {}) });
+    return res.end(henc ? await compress(Buffer.from(html), henc) : html);
   }
   const ext = extname(file);
   const cache = file.includes(join(ROOT, "assets")) ? "public, max-age=31536000, immutable" : ext === ".html" ? "no-cache" : "public, max-age=3600";
   const headers = { "Content-Type": TYPES[ext] || "application/octet-stream", "Cache-Control": cache, ...SECURITY };
   if (url.pathname.startsWith("/admin") || !IS_PROD) headers["X-Robots-Tag"] = "noindex, nofollow";
-  res.writeHead(200, headers);
-  res.end(await readFile(file));
+  const enc = COMPRESSIBLE.has(ext) ? pickEncoding(req) : "";
+  if (!enc) {
+    res.writeHead(200, headers);
+    return res.end(await readFile(file));
+  }
+  const out = await staticCompressed(file, enc);
+  res.writeHead(200, { ...headers, "Content-Encoding": enc, Vary: "Accept-Encoding" });
+  res.end(out);
+}
+
+/* קבצי טקסט (סקריפטים, עיצוב, HTML) נשלחים דחוסים - נדחסים פעם אחת ונשמרים בזיכרון */
+const COMPRESSIBLE = new Set([".html", ".js", ".css", ".json", ".webmanifest", ".xml", ".txt", ".svg"]);
+const staticCache = new Map();
+async function staticCompressed(file, enc) {
+  const st = await stat(file);
+  const key = `${enc}:${file}`;
+  const hit = staticCache.get(key);
+  if (hit && hit.mtime === st.mtimeMs) return hit.buf;
+  const raw = await readFile(file);
+  const buf = await compress(raw, enc, 11);
+  staticCache.set(key, { mtime: st.mtimeMs, buf });
+  return buf;
 }
 
 /* ------------------------------------------------------------------ הפעלה */
@@ -1243,12 +1345,18 @@ async function serveStatic(req, res, url) {
 createServer(async (req, res) => {
   const url = new URL(req.url || "/", "http://localhost");
   try {
-    if (url.pathname.startsWith("/api/")) return await api(req, res, url);
+    if (url.pathname.startsWith("/api/")) {
+      // באתר שנרדם כשאין גולשים (Autoscale) - משימות מתוזמנות שהגיע זמנן רצות בכל התעוררות
+      runJobs().catch(() => {});
+      return await api(req, res, url);
+    }
     return await serveStatic(req, res, url);
   } catch (e) {
     const status = e?.status || 500;
-    if (status === 500) console.error(e);
-    if (!res.headersSent) json(res, status, { error: status === 500 ? "שגיאת שרת" : e.message });
+    // מזהה שגיאה קצר - מופיע למשתמש וביומן השרת, כדי שאפשר לאתר בדיוק מה קרה
+    const errId = status === 500 ? `E-${Date.now().toString(36).slice(-5)}-${randomUUID().slice(0, 4)}` : "";
+    if (status === 500) console.error(errId, req.method, url.pathname, e);
+    if (!res.headersSent) json(res, status, { error: status === 500 ? `שגיאת שרת (${errId}). אפשר לשלוח את הקוד למתכנת.` : e.message, ...(errId ? { errorId: errId } : {}) });
     else res.end();
   }
 }).listen(PORT, "0.0.0.0", () => {

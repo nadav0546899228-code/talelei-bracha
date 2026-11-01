@@ -197,11 +197,17 @@ export function PayrollView({ me }: { me: Me }) {
     const payDate = new Date(yy < 100 ? 2000 + yy : yy, (mm || 1) - 1, dd || 1, 12);
     if (Number.isNaN(payDate.getTime())) return setMsg({ ok: false, text: "תאריך לא תקין" });
     const pay = lines.filter((l) => l.total > 0);
+    const nonPositive = lines.filter((l) => !(l.total > 0));
     const ok = pay.filter((l) => l.avrech.bank?.account && l.avrech.bank?.bankCode && l.avrech.bank?.branchCode);
     const bad = pay.filter((l) => !ok.includes(l));
-    const r = buildMasav(cfg, ok.map((l) => ({ name: l.avrech.bank?.holder || l.avrech.name.replace(" (דמה)", ""), idNumber: l.avrech.bank?.idNumber || "", bankCode: l.avrech.bank!.bankCode, branchCode: l.avrech.bank!.branchCode, account: l.avrech.bank!.account, amount: l.total, ref: month.label })), payDate);
+    let r: ReturnType<typeof buildMasav>;
+    try {
+      r = buildMasav(cfg, ok.map((l) => ({ name: l.avrech.bank?.holder || l.avrech.name.replace(" (דמה)", ""), idNumber: l.avrech.bank?.idNumber || "", bankCode: l.avrech.bank!.bankCode, branchCode: l.avrech.bank!.branchCode, account: l.avrech.bank!.account, amount: l.total, ref: month.label })), payDate);
+    } catch (e) {
+      return setMsg({ ok: false, text: e instanceof Error ? e.message : "שגיאה בהפקת קובץ מס״ב" });
+    }
     downloadBlob(r.blob, `מסב ${month.label}.txt`);
-    setMsg({ ok: !bad.length, text: `קובץ מס״ב: ${r.count} מוטבים · ${money(r.total)}${bad.length ? ` · לא נכללו ${bad.length} בלי פרטי בנק: ${bad.slice(0, 5).map((l) => l.avrech.name).join(", ")}${bad.length > 5 ? "…" : ""}` : ""}` });
+    setMsg({ ok: !bad.length && !nonPositive.length, text: `קובץ מס״ב: ${r.count} מוטבים · ${money(r.total)}${bad.length ? ` · לא נכללו ${bad.length} בלי פרטי בנק: ${bad.slice(0, 5).map((l) => l.avrech.name).join(", ")}${bad.length > 5 ? "…" : ""}` : ""}${nonPositive.length ? ` · לא נכללו ${nonPositive.length} עם סכום 0 או מינוס: ${nonPositive.slice(0, 5).map((l) => `${l.avrech.name} (${money(l.total)})`).join(", ")}${nonPositive.length > 5 ? "…" : ""}` : ""}` });
   };
 
   const exportMonth = () => {

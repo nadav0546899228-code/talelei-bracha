@@ -4,7 +4,7 @@
  * שני מצבים - טללי ברכה (בנים) ובנות צילה (בנות) - בלי ערבוב. החלפה בלוגו שבשורה העליונה.
  * ניווט: כפתורי-על שנכנסים פנימה, ושורה תחתונה שזזה לצדדים וניתנת לעריכה.
  */
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { Icon, type IconName } from "../components/Icon";
 import { Logo } from "../components/Logo";
 import { runtime } from "../config/contentModel";
@@ -18,25 +18,56 @@ import { useAlerts, type Alert } from "./alerts";
 import { SearchModal } from "./Search";
 import { OrgScopeBar } from "./OrgScopeBar";
 import { disablePush, enablePush, pushState } from "./push";
-import { OrgView } from "./views/OrgView";
-import { MessagesView } from "./views/MessagesView";
-import { BnotView } from "./views/BnotView";
-import { ReportsHub } from "./views/ExportCenter";
-import { DonationsView } from "./views/DonationsView";
 import "./admin.css";
-import { AuditView } from "./views/AuditView";
-import { ContentView } from "./views/ContentView";
-import { DashboardView } from "./views/DashboardView";
-import { ActivityCenterView } from "./views/ActivityCenterView";
-import { SmartCenterView } from "./views/SmartCenterView";
-import { DeveloperView } from "./views/DeveloperView";
-import { SubmissionsView } from "./views/SubmissionsView";
-import { UsersView } from "./views/UsersView";
-import { KollelView } from "./views/KollelView";
-import { PayrollView } from "./views/PayrollView";
-import { BroadcastView } from "./views/BroadcastView";
 import { useLive, useLiveConnection } from "./live";
 import { useInstall } from "./install";
+
+/* כל מסך נטען רק כשנכנסים אליו - פתיחה מהירה יותר של המערכת */
+const OrgView = lazy(() => import("./views/OrgView").then((m) => ({ default: m.OrgView })));
+const MessagesView = lazy(() => import("./views/MessagesView").then((m) => ({ default: m.MessagesView })));
+const BnotView = lazy(() => import("./views/BnotView").then((m) => ({ default: m.BnotView })));
+const ReportsHub = lazy(() => import("./views/ExportCenter").then((m) => ({ default: m.ReportsHub })));
+const DonationsView = lazy(() => import("./views/DonationsView").then((m) => ({ default: m.DonationsView })));
+const AuditView = lazy(() => import("./views/AuditView").then((m) => ({ default: m.AuditView })));
+const ContentView = lazy(() => import("./views/ContentView").then((m) => ({ default: m.ContentView })));
+const DashboardView = lazy(() => import("./views/DashboardView").then((m) => ({ default: m.DashboardView })));
+const ActivityCenterView = lazy(() => import("./views/ActivityCenterView").then((m) => ({ default: m.ActivityCenterView })));
+const SmartCenterView = lazy(() => import("./views/SmartCenterView").then((m) => ({ default: m.SmartCenterView })));
+const DeveloperView = lazy(() => import("./views/DeveloperView").then((m) => ({ default: m.DeveloperView })));
+const SubmissionsView = lazy(() => import("./views/SubmissionsView").then((m) => ({ default: m.SubmissionsView })));
+const UsersView = lazy(() => import("./views/UsersView").then((m) => ({ default: m.UsersView })));
+const KollelView = lazy(() => import("./views/KollelView").then((m) => ({ default: m.KollelView })));
+const PayrollView = lazy(() => import("./views/PayrollView").then((m) => ({ default: m.PayrollView })));
+const BroadcastView = lazy(() => import("./views/BroadcastView").then((m) => ({ default: m.BroadcastView })));
+
+/** טעינה מוקדמת ברקע של שאר המסכים, אחרי שהמערכת נפתחה - כך המעבר בין מסכים מיידי */
+let prefetched = false;
+function prefetchViews() {
+  if (prefetched) return;
+  prefetched = true;
+  const all = [
+    () => import("./views/ActivityCenterView"),
+    () => import("./views/AuditView"),
+    () => import("./views/BnotView"),
+    () => import("./views/BroadcastView"),
+    () => import("./views/ContentView"),
+    () => import("./views/DashboardView"),
+    () => import("./views/DeveloperView"),
+    () => import("./views/DonationsView"),
+    () => import("./views/ExportCenter"),
+    () => import("./views/KollelView"),
+    () => import("./views/MessagesView"),
+    () => import("./views/OrgView"),
+    () => import("./views/PayrollView"),
+    () => import("./views/SmartCenterView"),
+    () => import("./views/SubmissionsView"),
+    () => import("./views/UsersView"),
+  ];
+  const run = () => all.forEach((f, i) => window.setTimeout(() => void f().catch(() => {}), i * 150));
+  const w = window as Window & { requestIdleCallback?: (cb: () => void) => void };
+  if (w.requestIdleCallback) w.requestIdleCallback(run);
+  else window.setTimeout(run, 1500);
+}
 
 
 /* ------------------------------------------------------------------ כניסה */
@@ -384,6 +415,9 @@ export default function AdminApp() {
   }, []);
 
   useLiveConnection(state === "ready");
+  useEffect(() => {
+    if (state === "ready") prefetchViews();
+  }, [state]);
   useLive(["submissions"], () => state === "ready" && refreshSubs());
 
   useEffect(() => {
@@ -958,7 +992,7 @@ export default function AdminApp() {
           {"hub" in current ? (
             <HubView hub={hubs.find((h) => h.id === current.hub)!} badge={leafBadge} onOpen={openLeaf} />
           ) : (
-            <>
+            <Suspense fallback={<div className="adm-view-loading" aria-busy="true"><span className="adm-spinner" /></div>}>
               {curView === "dashboard" ? <DashboardView {...ctx} views={me.user.views} dash={dash} /> : null}
               {curView === "smart" ? <SmartCenterView go={go} initialTab={curTab} /> : null}
               {curView === "activity" ? <ActivityCenterView key={`act-${mode}`} go={go} mode={mode} /> : null}
@@ -978,7 +1012,7 @@ export default function AdminApp() {
               {curView === "users" ? <UsersView key={`u-${mode}`} me={me} mode={mode} /> : null}
               {curView === "audit" ? <AuditView /> : null}
               {curView === "developer" ? <DeveloperView {...ctx} /> : null}
-            </>
+            </Suspense>
           )}
         </main>
       </div>

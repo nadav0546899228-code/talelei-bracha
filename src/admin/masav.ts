@@ -12,7 +12,8 @@ const isHeb = (c: string) => c >= "א" && c <= "ת";
 /** טקסט חופשי בסדר חזותי, מיושר ימינה כמקובל */
 const text = (v: string, len: number) => {
   let s = String(v || "").replace(/["'״׳]/g, "").replace(/\s+/g, " ").trim();
-  if (/[א-ת]/.test(s)) s = [...s].reverse().join("");
+  // סדר חזותי: הופכים את כל השורה, ומחזירים לסדרם מספרים ואותיות לועזיות (אחרת "סניף 12" יוצא "21")
+  if (/[א-ת]/.test(s)) s = [...s].reverse().join("").replace(/[0-9A-Za-z]+/g, (m) => [...m].reverse().join(""));
   s = s.slice(0, len);
   return s.padEnd(len, " ");
 };
@@ -31,6 +32,8 @@ export function buildMasav(cfg: MasavSettings, lines: MasavLine[], payDate: Date
   let total = 0;
   for (const l of lines) {
     const ag = Math.round(l.amount * 100);
+    // הגנה: סכום אפס או שלילי שובר את מבנה הקובץ והבנק דוחה אותו
+    if (!(ag > 0)) throw new Error(`סכום לא תקין למס״ב: ${l.name} (${l.amount})`);
     total += ag;
     rows.push(
       `1${inst}00${"0".repeat(6)}${digits(l.bankCode, 2)}${digits(l.branchCode, 3)}0000${digits(l.account, 9)}0${digits(l.idNumber, 9)}${text(l.name, 16)}${String(ag).padStart(13, "0")}${text(l.ref || "", 20)}${period}000006${"0".repeat(18)}  `,

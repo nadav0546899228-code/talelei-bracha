@@ -22,6 +22,9 @@ export type Avrech = {
   simchaExternal: boolean;
   active: boolean;
   notes?: string;
+  /** תאריך הצטרפות (אם הוזן), אחרת תאריך יצירת הרשומה */
+  startDate?: string;
+  createdAt?: string;
   /** פרטי תשלום - מגיעים מהשרת רק להנהלה */
   bank?: { idNumber: string; bankCode: string; branchCode: string; account: string; holder: string } | null;
 };
@@ -97,7 +100,9 @@ export function computePayroll(avrechim: Avrech[], month: MonthDoc | null, entri
       additions.push({ label: x.note || SIMCHA_LABELS[x.type], amount: s.simchaRates[x.type] * fundCount });
     }
     // נוכחות: הורדה ליום היעדרות רק אם הוגדר תעריף בהגדרות
-    const mine = a.branchId ? sessions.filter((x) => x.branchId === a.branchId) : [];
+    // מפגשים שהיו לפני שהאברך הצטרף לא נספרים כהיעדרות
+    const joined = (a.startDate || a.createdAt || "").slice(0, 10);
+    const mine = a.branchId ? sessions.filter((x) => x.branchId === a.branchId && (!joined || x.date >= joined || x.present.includes(a.id))) : [];
     const came = mine.filter((x) => x.present.includes(a.id)).length;
     const missed = mine.length - came;
     if (missed > 0 && (s.absenceRate ?? 0) > 0) additions.push({ label: `היעדרות ${missed} ימים`, amount: -missed * (s.absenceRate ?? 0) });

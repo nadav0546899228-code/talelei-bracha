@@ -109,18 +109,32 @@ export async function dispatch(channel, text, templateId, settings, phones) {
   if (channel === "tzintuk") return yemot.runTzintuk({ callerId: settings.callerId, recipients: phones });
   // SMS: אם יש {שם} - שליחה אישית לכל נמען, אחרת שליחה אחת
   if (text.includes("{שם}")) {
-    const results = [];
-    for (const r of phones.slice(0, 500)) results.push(await yemot.sendSms({ from: settings.smsFrom, message: personalize(text, r), recipients: [r] }));
-    return { personalized: results.length };
+    // שליחה אישית לכל הנמענים (בלי תקרה), 5 במקביל
+    let ok = 0;
+    const failed = [];
+    for (let i = 0; i < phones.length; i += 5) {
+      const chunk = phones.slice(i, i + 5);
+      const res = await Promise.allSettled(chunk.map((r) => yemot.sendSms({ from: settings.smsFrom, message: personalize(text, r), recipients: [r] })));
+      res.forEach((x, j) => (x.status === "fulfilled" ? ok++ : failed.push(chunk[j].phone)));
+    }
+    if (!ok && failed.length) throw new Error("השליחה נכשלה לכל הנמענים");
+    return { personalized: ok, failed: failed.length, failedPhones: failed.slice(0, 50) };
   }
   return yemot.sendSms({ from: settings.smsFrom, message: text, recipients: phones });
 }
 
 /** הרצת תפוצות מתוזמנות שהגיע זמנן (נקרא מהשרת כל דקה) */
 export async function runScheduled(store, audit) {
-  const due = (await store.list("bcScheduled", 500)).filter((x) => x.status === "scheduled" && new Date(x.at).getTime() <= Date.now());
-  for (const job of due) {
-    await store.put("bcScheduled", job.id, { ...job, status: "running" });
+  const all = await store.list("bcScheduled", 500);
+  // תפוצה שנתקעה במצב "בשליחה" יותר משעה (השרת נפל באמצע) - מסומנת כשגיאה לבדיקה ידנית, לא נשלחת שוב אוטומטית
+  for (const x of all.filter((j) => j.status === "running" && Date.now() - new Date(j.startedAt || j.at).getTime() > 3600_000)) {
+    await store.put("bcScheduled", x.id, { ...x, status: "error", error: "השליחה נקטעה - יש לבדוק בהיסטוריה של ימות המשיח לפני שליחה חוזרת" });
+  }
+  const due = all.filter((x) => x.status === "scheduled" && new Date(x.at).getTime() <= Date.now());
+  for (const candidate of due) {
+    // תפיסה אטומית - גם אם רצים כמה שרתים, רק אחד שולח
+    const job = await store.update("bcScheduled", candidate.id, (cur) => (cur && cur.status === "scheduled" ? { ...cur, status: "running", startedAt: new Date().toISOString() } : null));
+    if (!job) continue;
     const settings = (await store.get("settings", "broadcast")) || {};
     const { phones, ...log } = job;
     try {
@@ -288,12 +302,17 @@ export async function handleBroadcast(req, res, url, ctx) {
       const text = clean(b.text, 1000).trim();
       if (!name || !text) return send(400, { error: "חסר שם או נוסח" }), true;
       const id = b.id ? String(b.id) : randomUUID();
-      await store.put("bcTemplates", id, { name, text, by: user.id });
+      const prevT = b.id ? await store.get("bcTemplates", id) : null;
+      if (prevT && !priv && prevT.by && prevT.by !== user.id) return send(403, { error: "אפשר לערוך רק תבנית ששמרת" }), true;
+      await store.put("bcTemplates", id, { name, text, by: prevT?.by || user.id });
       return send(200, { ok: true, id }), true;
     }
   }
   const svMatch = pathname.match(/^\/api\/broadcast\/saved\/([\w-]+)$/);
   if (svMatch && method === "DELETE") {
+    const t = await store.get("bcTemplates", svMatch[1]);
+    if (!t) return send(404, { error: "לא נמצא" }), true;
+    if (!priv && t.by && t.by !== user.id) return send(403, { error: "אפשר למחוק רק תבנית ששמרת" }), true;
     await store.del("bcTemplates", svMatch[1]);
     return send(200, { ok: true }), true;
   }

@@ -476,13 +476,15 @@ export async function publicMitchShare(req, res, url, { store, json, readBody, c
 /** תזכורת יום לפני לנרשמות (נקרא מהשרת כל דקה; שולח פעם אחת בשעה 18:00) */
 export async function challahReminders(store, sendSms) {
   const hour = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Jerusalem", hour: "2-digit", hour12: false }).format(new Date());
-  if (hour !== "18") return;
+  // מ-18:00 ועד סוף היום (גם אם השרת היה רדום בדיוק בשש)
+  if (Number(hour) < 18) return;
   const tomorrow = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(Date.now() + 86400_000));
   for (const ev of await store.list("challahEvents", 2000)) {
     if (ev.date !== tomorrow || ev.reminderSent) continue;
     const phones = (ev.registrations || []).filter((r) => validPhone(r.phone)).map((r) => ({ name: r.name, phone: r.phone }));
-    await store.put("challahEvents", ev.id, { ...ev, reminderSent: true });
-    if (!phones.length) continue;
+    // תפיסה אטומית - התזכורת נשלחת פעם אחת בלבד
+    const claimed = await store.update("challahEvents", ev.id, (cur) => (cur && !cur.reminderSent ? { ...cur, reminderSent: true } : null));
+    if (!claimed || !phones.length) continue;
     const text = `תזכורת: מחר ${ev.title}${ev.time ? ` בשעה ${ev.time}` : ""}${ev.place ? ` ב${ev.place}` : ""}. מחכות לך!`;
     await sendSms(text, phones).catch(() => undefined);
   }
