@@ -196,7 +196,17 @@ async function readBody(req, limit = 64 * 1024) {
 }
 
 const isSecure = (req) => req.headers["x-forwarded-proto"] === "https" || IS_PROD;
-const clientIp = (req) => String(req.headers["x-forwarded-for"] || req.socket.remoteAddress || "").split(",")[0].trim();
+/**
+ * כתובת הגולש האמיתית. נבדק מול האתר החי (1.11.2026): השרתים של Replit/Google מוסיפים 3 כתובות משלהם בסוף
+ * X-Forwarded-For, והכתובת שלפניהן היא של הגולש. הכתובת הראשונה ברשימה נשלטת על ידי הגולש (אפשר לזייף אותה),
+ * ולכן לא משתמשים בה כשיש שרשרת מלאה.
+ */
+const TRUSTED_HOPS = 3;
+const clientIp = (req) => {
+  const xs = String(req.headers["x-forwarded-for"] || "").split(",").map((x) => x.trim()).filter(Boolean);
+  if (xs.length > TRUSTED_HOPS) return xs[xs.length - 1 - TRUSTED_HOPS];
+  return xs[0] || String(req.socket.remoteAddress || "");
+};
 const isLocalRequest = (req) => {
   const host = String(req.headers.host || "").split(":")[0].toLowerCase();
   return host === "localhost" || host === "127.0.0.1" || host === "::1";
@@ -576,11 +586,6 @@ async function api(req, res, url) {
   // עדכון אישי של מתחזק/ת דרך קישור מאובטח מוואטסאפ
   if (pathname === "/api/public/mitch-share") {
     if (await publicMitchShare(req, res, url, { store, json, readBody, clean, rateLimited, clientIp, notify })) return;
-  }
-
-  // אבחון: איך כתובת הגולש מגיעה דרך השרתים של Replit (מחזיר רק את הכתובת של מי ששואל - לכיול הגבלת הקצב)
-  if (pathname === "/api/public/ip-check" && method === "GET") {
-    return json(res, 200, { forwardedFor: String(req.headers["x-forwarded-for"] || ""), realIp: String(req.headers["x-real-ip"] || ""), remote: String(req.socket.remoteAddress || "") });
   }
 
   if (pathname === "/api/public/live-impact" && method === "GET") {
@@ -1293,8 +1298,6 @@ async function api(req, res, url) {
       env: IS_PROD ? "production" : "development",
       node: process.version,
       uptimeSec: Math.round((Date.now() - STARTED) / 1000),
-      // לאבחון: איך כתובת הגולש מגיעה דרך השרתים של Replit (לכיול הגבלת הקצב)
-      forwardedFor: String(req.headers["x-forwarded-for"] || ""),
       storage: store.kind,
       counts: await store.counts(),
       checks: [
