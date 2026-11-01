@@ -21,7 +21,7 @@ export async function createStore() {
  * כך שגם כשרצים כמה שרתים במקביל לא מוצגים נתונים ישנים.
  * מוחזר תמיד עותק, כדי ששינוי של אובייקט בקוד לא ישבש את המטמון.
  */
-const NO_CACHE = new Set(["backupData", "backups"]);
+const NO_CACHE = new Set(["backupData", "backups", "avrechFiles", "mitchUpdates", "activityWall"]);
 function withCache(base) {
   const cache = new Map(); // col -> { ver, rows, at }
   const inflight = new Map();
@@ -53,7 +53,10 @@ function withCache(base) {
     },
     async get(col, id) {
       if (NO_CACHE.has(col)) return base.get(col, id);
-      return base.get(col, id);
+      // מתוך המטמון של האוסף (אם הוא עדכני) - בלי שאילתה נוספת למסד
+      const rows = await full(col);
+      const hit = rows.find((r) => r.id === id);
+      return hit ? clone(hit) : null;
     },
     async put(col, id, data) {
       await base.put(col, id, data);
@@ -135,6 +138,21 @@ async function createPgStore(url) {
         client.release();
       }
     },
+    /** רשימה בלי שדות כבדים (תמונות/קבצים) - מחזיר רק את מספר הפריטים בשדה */
+    async listLight(col, fields, limit = 1_000_000) {
+      let expr = "data";
+      const params = [col, limit];
+      for (const f of fields) {
+        params.push(f);
+        const i = params.length;
+        expr = `(${expr} - $${i}::text) || jsonb_build_object($${i}::text || 'Count', CASE jsonb_typeof(data->$${i}::text) WHEN 'array' THEN jsonb_array_length(data->$${i}::text) WHEN 'string' THEN 1 ELSE 0 END)`;
+      }
+      const { rows } = await pool.query(
+        `SELECT id, ${expr} AS data, created_at, updated_at FROM docs WHERE collection=$1 ORDER BY created_at DESC LIMIT $2`,
+        params,
+      );
+      return rows.map(row);
+    },
     /** חתימת גרסה זולה לאוסף - משתנה בכל הוספה, עדכון או מחיקה */
     async version(col) {
       const { rows } = await pool.query("SELECT count(*)::int AS n, max(updated_at) AS m FROM docs WHERE collection=$1", [col]);
@@ -205,6 +223,16 @@ async function createFileStore(file) {
       };
       const p = (locks = locks.then(run, run));
       return p;
+    },
+    async listLight(c, fields, limit = 1_000_000) {
+      return (await this.list(c, limit)).map((d) => {
+        const out = { ...d };
+        for (const f of fields) {
+          out[`${f}Count`] = Array.isArray(d[f]) ? d[f].length : d[f] ? 1 : 0;
+          delete out[f];
+        }
+        return out;
+      });
     },
     async version(c) {
       return `${Object.keys(col(c)).length}:${Math.max(0, ...Object.values(col(c)).map((r) => new Date(r.updated_at).getTime()))}`;

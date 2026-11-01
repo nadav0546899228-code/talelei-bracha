@@ -32,7 +32,9 @@ export function ChallahPanel() {
   const saveEv = async (x: Partial<Ev>) => {
     setMsg(null);
     try {
-      const r = await post<{ id: string }>("/api/challah", x);
+      // baseRegistrations: הרשימה כפי שנטענה - השרת ממזג רק את מה ששיניתי, ונרשמות חדשות שנכנסו בינתיים נשמרות
+      const loaded = x.id ? d.events.find((e) => e.id === x.id) : undefined;
+      const r = await post<{ id: string }>("/api/challah", loaded ? { ...x, baseRegistrations: loaded.registrations } : x);
       setOpenId(r.id);
       await load();
       return true;

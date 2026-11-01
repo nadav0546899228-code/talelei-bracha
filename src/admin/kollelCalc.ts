@@ -35,7 +35,8 @@ export const EXPENSE_CATEGORIES = ["כיבוד", "ספרים", "שכירות", "
 export type Entry = { id: string; avrechId: string; month: string; type: EntryType; amount: number; description: string; by: string; byName: string; createdAt: string };
 export type Simcha = { id: string; celebrantId: string; type: "bat" | "ben" | "barmitzva"; note: string };
 export type MonthRow = { base: number | null; travel: number | null; confirmed: boolean; note: string };
-export type MonthDoc = { label: string; order: number; rows: Record<string, MonthRow>; extraIds: string[]; simchas: Simcha[]; locked: boolean; notes: string };
+export type MonthSnapshot = { at: string; settings: Omit<KollelSettings, "masav">; avrechim: Partial<Avrech>[] };
+export type MonthDoc = { label: string; order: number; rows: Record<string, MonthRow>; extraIds: string[]; simchas: Simcha[]; locked: boolean; notes: string; snapshot?: MonthSnapshot };
 export type MasavSettings = { institutionCode: string; senderCode: string; institutionName: string };
 export type KollelSettings = { fullBase: number; simchaRates: { bat: number; ben: number; barmitzva: number }; absenceRate?: number; masav?: MasavSettings };
 export type AttendanceSession = { branchId: string; date: string; present: string[] };
@@ -72,7 +73,14 @@ export function monthMembers(avrechim: Avrech[], month: MonthDoc | null): Avrech
   return avrechim.filter((a) => (a.active && a.inPayroll) || extra.has(a.id));
 }
 
-export function computePayroll(avrechim: Avrech[], month: MonthDoc | null, entries: Entry[], s: KollelSettings, sessions: AttendanceSession[] = []): PayrollLine[] {
+export function computePayroll(avrechimNow: Avrech[], month: MonthDoc | null, entries: Entry[], sNow: KollelSettings, sessions: AttendanceSession[] = []): PayrollLine[] {
+  // חודש שנסגר: לפי צילום המצב מרגע הסגירה (בסיס, נסיעות, סניף, קופת שמחות), לא לפי הנתונים של היום
+  const snap = month?.snapshot;
+  const s: KollelSettings = snap?.settings ? { ...sNow, ...snap.settings } : sNow;
+  const snapBy = new Map((snap?.avrechim ?? []).map((x) => [x.id, x]));
+  // אברך שהצטרף אחרי סגירת החודש לא נכנס אליו (אלא אם נוסף ידנית לחודש)
+  const extraNow = new Set(month?.extraIds ?? []);
+  const avrechim = snap ? avrechimNow.filter((a) => snapBy.has(a.id) || extraNow.has(a.id)).map((a) => (snapBy.has(a.id) ? { ...a, ...snapBy.get(a.id), name: a.name, bank: a.bank } : a)) : avrechimNow;
   const members = monthMembers(avrechim, month);
   const fund = members.filter((a) => a.simchaFund);
   const fundCount = fund.length;

@@ -582,7 +582,9 @@ function AttendanceTab({ ov }: { ov: Overview }) {
       const rest = (list ?? []).filter((x) => !(x.branchId === branch && x.date === date));
       return [...rest, { id: `${branch}_${date}`, branchId: branch, date, month, present: next, mPresent, notes, byName: "" }];
     });
-    const body = { branchId: branch, date, month, present: next, mPresent, notes };
+    // basePresent / basemPresent: מה שהיה על המסך לפני השינוי - השרת ממזג רק את מה ששיניתי,
+    // כך שנוכחות שנרשמה בינתיים (ימות המשיח או מכשיר אחר) לא נמחקת
+    const body = { branchId: branch, date, month, present: next, mPresent, notes, basePresent: [...present], basemPresent: [...(cur?.mPresent ?? [])] };
     try {
       await put("/api/kollel/attendance", body);
     } catch (e) {

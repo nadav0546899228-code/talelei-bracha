@@ -4,7 +4,7 @@
  */
 import { randomUUID } from "node:crypto";
 import { branchScope, loadOrg } from "./org.mjs";
-import { FORM_VIEW, isPrivileged, normalizeRoles } from "./roles.mjs";
+import { FORM_VIEW, isKollelManager, isPrivileged, normalizeRoles } from "./roles.mjs";
 import { normalizePhone, validPhone } from "./phoneAuth.mjs";
 import { dispatch } from "./broadcast.mjs";
 
@@ -35,13 +35,13 @@ function branchInfo(org, id) {
 async function getApprovals(user, store) {
   const { org, sees } = await visibleData(user, store);
   const items = [];
-  for (const u of await store.list("mitchUpdates", 5000)) {
+  for (const u of await store.listLight("mitchUpdates", ["photos"], 5000)) {
     if (u.status !== "pending" || !sees(u.domain === "bnot" ? "bnot" : "kollel", u.branchId)) continue;
     const loc = branchInfo(org, u.branchId);
     items.push({
       id:u.id, kind:"mitchUpdate", title:`עדכון מ${u.mitchName || "מתחזק/ת"}`,
       sub:[loc.city,loc.branch].filter(Boolean).join(" · "), at:u.submittedAt || u.createdAt,
-      text:cleanText(u.text,500), photos:Array.isArray(u.photos)?u.photos.length:0, domain:u.domain
+      text:cleanText(u.text,500), photos:u.photosCount||0, domain:u.domain
     });
   }
   for (const s of await store.list("submissions", 5000)) {
@@ -119,9 +119,11 @@ async function branchHealth(user, store) {
 }
 
 async function callerWorkload(user, store) {
+  // טלפניות שייכות לבנות צילה בלבד - לא מוצגות בטללי ברכה, ורק בסניפים שבאחריות המשתמש
+  if (!user.views.includes("bnot")) return { callers: [], unassigned: 0, total: 0 };
   const { org, sees } = await visibleData(user, store);
   const callers = (await store.list("phoneUsers",5000))
-    .filter((u)=>u.active!==false && normalizeRoles(u.roles).includes("bnot_caller"))
+    .filter((u)=>u.active!==false && normalizeRoles(u.roles).includes("bnot_caller") && (!u.scope?.bnot?.branchId || sees("bnot", u.scope.bnot.branchId)))
     .map((u)=>({id:u.id,name:u.name||u.phone,phone:u.phone,branchId:u.scope?.bnot?.branchId||null}));
   const assignments=(await store.list("callerAssignments",30000)).filter((a)=>a.active!==false);
   const members=(await store.list("bnotMembers",30000)).filter((m)=>m.active!==false&&sees("bnot",m.branchId));
@@ -170,7 +172,7 @@ async function person360(user, store, kind, id) {
   const timeline=[];
   if(kind==="mitch"){
     for(const x of person.log||[]) timeline.push({at:x.date,type:x.type||"קשר",title:x.note||x.type,by:x.by||""});
-    for(const u of await store.list("mitchUpdates",5000)) if(u.mitchId===id&&u.status==="approved") timeline.push({at:u.submittedAt,type:"עדכון עצמי",title:u.cleanText||u.text||"עדכון",by:u.reviewedBy||""});
+    for(const u of await store.listLight("mitchUpdates",["photos"],5000)) if(u.mitchId===id&&u.status==="approved") timeline.push({at:u.submittedAt,type:"עדכון עצמי",title:u.cleanText||u.text||"עדכון",by:u.reviewedBy||""});
   }
   if(kind==="member"){
     for(const a of await store.list("bnotActivities",10000)) if((a.present||[]).includes(id)) timeline.push({at:a.date,type:"פעילות",title:a.title||"פעילות",by:a.byName||""});
@@ -193,7 +195,9 @@ async function person360(user, store, kind, id) {
   return {
     kind,id,name:person.name||person.data?.fullName||person.data?.name||"ללא שם",phone:person.phone||person.data?.phone||"",
     email:person.email||person.data?.email||"",domain,branchId,branch:loc.branch,city:loc.city,status:person.status|| (person.active===false?"לא פעיל":"פעיל"),
-    stage:person.stage||"",source:person.source||"",notes:person.notes||person.data?.notes||person.data?.experience||"",
+    stage:person.stage||"",source:person.source||"",
+    // הערות על אברך - רק להנהלת הכולל ולרכז עיר (כמו במסך האברכים), לא למנהל סניף
+    notes:kind==="avrech"&&!(isKollelManager(user.roles)||user.roles.includes("kollel_city")||user.roles.includes("kollel_region"))?"":(person.notes||person.data?.notes||person.data?.experience||""),
     tags:person.tags||[],nextFollowUp:person.nextFollowUp||null,stats:{timeline:timeline.length},timeline:timeline.slice(0,100)
   };
 }
@@ -238,20 +242,23 @@ async function aiAssist(card) {
 export async function runSmartAutomationSweep(store, notify) {
   const today=day();
   const created=[];
+  // שאילתה אחת לכל המשימות הקיימות (ולא שאילתה לכל מעקב בכל דקה)
+  const existing=new Set((await store.list("smartTasks",100000)).map((t)=>t.id));
+  const org=await loadOrg(store);
+  // התראה רק למי שהסניף באחריותו (ולא לכל הצוות בארץ)
+  const inBranch=(view,domain,branchId)=>(u)=>u.views.includes(view)&&(!branchId||((sc)=>sc===null||sc.has(branchId))(branchScope(u,org,domain)));
   const putTask=async(id,doc,filter,pushData)=>{
-    const prev=await store.get("smartTasks",id);
-    if(prev?.resolved) return;
-    if(!prev){
-      await store.put("smartTasks",id,{...doc,createdAt:new Date().toISOString(),resolved:false});
-      created.push(id);
-      if(filter&&pushData) notify(filter,pushData);
-    }
+    if(existing.has(id)) return;
+    existing.add(id);
+    await store.put("smartTasks",id,{...doc,createdAt:new Date().toISOString(),resolved:false});
+    created.push(id);
+    if(filter&&pushData) notify(filter,pushData);
   };
   for(const m of await store.list("mitchazkim",20000)){
     if(m.status!=="active"||!m.nextFollowUp||m.nextFollowUp>today) continue;
     const id=`followup:${m.id}:${m.nextFollowUp}`;
     await putTask(id,{type:"followup",domain:m.domain,branchId:m.branchId,targetId:m.id,title:`מעקב ל${m.name}`},
-      (u)=>u.views.includes(m.domain==="bnot"?"bnot":"kollel"),
+      inBranch(m.domain==="bnot"?"bnot":"kollel",m.domain==="bnot"?"bnot":"kollel",m.branchId),
       {title:"מעקב שממתין",body:`${m.name} הגיע/ה למועד המעקב`,url:`/admin?v=${m.domain==="bnot"?"bnot":"kollel"}&t=mitch:q:${encodeURIComponent(m.name)}`});
   }
   for(const s of await store.list("submissions",5000)){
@@ -259,10 +266,10 @@ export async function runSmartAutomationSweep(store, notify) {
     await putTask(`isha-unassigned:${s.id}`,{type:"isha_unassigned",domain:"bnot",targetId:s.id,title:"בקשת אישה לאישה ללא שיבוץ מעל 24 שעות"},
       (u)=>u.views.includes("isha"),{title:"אישה לאישה",body:"בקשה ממתינה לשיבוץ מעל 24 שעות",url:"/admin?v=isha&t=ishaRequest"});
   }
-  for(const u of await store.list("mitchUpdates",5000)){
+  for(const u of await store.listLight("mitchUpdates",["photos"],5000)){
     if(u.status!=="pending"||ageHours(u.submittedAt)<24) continue;
     await putTask(`approval:${u.id}`,{type:"approval",domain:u.domain,branchId:u.branchId,targetId:u.id,title:"עדכון מתחזק/ת ממתין לאישור מעל 24 שעות"},
-      (x)=>x.views.includes(u.domain==="bnot"?"bnot":"kollel"),{title:"ממתין לאישור",body:"עדכון אישי ממתין לאישור מעל 24 שעות",url:"/admin?v=smart&t=approvals"});
+      inBranch(u.domain==="bnot"?"bnot":"kollel",u.domain==="bnot"?"bnot":"kollel",u.branchId),{title:"ממתין לאישור",body:"עדכון אישי ממתין לאישור מעל 24 שעות",url:"/admin?v=smart&t=approvals"});
   }
   return created.length;
 }
@@ -336,13 +343,14 @@ export async function handleSmart(req,res,url,ctx){
       if(!u||u.status!=="pending") return send(404,{error:"לא נמצא"}),true;
       const {sees}=await visibleData(user,store);
       if(!user.views.includes(uDomain)||!sees(uDomain,u.branchId)) return send(404,{error:"לא נמצא"}),true;
+      if(action==="approve"&&!(await store.get("mitchazkim",u.mitchId))) return send(404,{error:"לא נמצא"}),true;
+      // תפיסה אטומית - אישור כפול משני מסכים לא יוצר רישום כפול
+      const claimed=await store.update("mitchUpdates",u.id,(cur)=>cur?.status==="pending"?{...cur,status:action==="approve"?"approved":"rejected",reviewedAt:new Date().toISOString(),reviewedBy:user.name||user.email}:null);
+      if(!claimed) return send(400,{error:"העדכון כבר טופל"}),true;
       if(action==="approve"){
-        const m=await store.get("mitchazkim",u.mitchId);
-        if(!m) return send(404,{error:"לא נמצא"}),true;
         const entry={id:randomUUID().slice(0,8),date:day(new Date(u.submittedAt||Date.now())),type:"דיווח עצמי",note:u.cleanText||u.text||"",by:`אושר ע״י ${user.name||"צוות"}`,updateId:u.id};
-        await store.put("mitchazkim",m.id,{...m,log:[entry,...(m.log||[])].slice(0,300),lastContact:entry.date});
-        await store.put("mitchUpdates",u.id,{...u,status:"approved",reviewedAt:new Date().toISOString(),reviewedBy:user.name||user.email});
-      } else await store.put("mitchUpdates",u.id,{...u,status:"rejected",reviewedAt:new Date().toISOString(),reviewedBy:user.name||user.email});
+        await store.update("mitchazkim",u.mitchId,(cur)=>cur?{...cur,log:[entry,...(cur.log||[])].slice(0,300),lastContact:entry.date>(cur.lastContact||"")?entry.date:cur.lastContact}:null);
+      }
     } else if(kind==="mentor"){
       const s=await store.get("submissions",id);
       if(!s||s.form!=="ishaMentor"||!user.views.includes("isha")) return send(404,{error:"לא נמצא"}),true;
@@ -361,6 +369,8 @@ export async function handleSmart(req,res,url,ctx){
   }
 
   if(pathname==="/api/smart/callers/auto-assign"&&method==="POST"){
+    const r0=user.roles;
+    if(!(isPrivileged(r0)||r0.includes("chief_coordinator")||r0.includes("bnot_region")||r0.includes("bnot_city"))) return send(403,{error:"חלוקה לטלפניות - רכזת עיר ומעלה"}),true;
     const work=await callerWorkload(user,store);
     if(!work.callers.length) return send(400,{error:"אין טלפניות פעילות במערכת"}),true;
     const { sees }=await visibleData(user,store);
@@ -371,7 +381,9 @@ export async function handleSmart(req,res,url,ctx){
     let n=0;
     for(const m of members.filter((x)=>!assigned.has(x.id))){
       const candidates=work.callers.filter((c)=>!c.branchId||c.branchId===m.branchId);
-      const pool=candidates.length?candidates:work.callers;
+      // אין טלפנית בסניף - לא משייכים לטלפנית מסניף אחר (היא הייתה רואה משתתפות שלא באחריותה)
+      if(!candidates.length) continue;
+      const pool=candidates;
       pool.sort((a,b)=>(loads.get(a.id)||0)-(loads.get(b.id)||0));
       const c=pool[0];
       await store.put("callerAssignments",randomUUID(),{callerId:c.id,memberId:m.id,branchId:m.branchId,active:true,assignedAt:new Date().toISOString(),by:user.id});

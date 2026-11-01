@@ -75,7 +75,7 @@ export default function ShareUpdate() {
     setState("sending");
     setMessage("");
     try {
-      const r = await fetch("/api/public/mitch-share", {
+      const r = await fetch(`/api/public/mitch-share?t=${encodeURIComponent(token)}`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify({ token, text, photos }),

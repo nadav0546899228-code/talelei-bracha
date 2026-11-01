@@ -49,9 +49,21 @@ async function allowedRecipientsAll(user, staff, store) {
     const rs = ROLE_SCOPE[r];
     if (!rs) continue;
     const s = user.scope?.[rs.domain] || {};
+    if (rs.level === "region" && s.regionId) {
+      // רכז אזור: רכזי הערים ומנהלי הסניפים באזור שלו
+      const cities = new Set(org.cities.filter((c) => c.parentId === s.regionId).map((c) => c.id));
+      const branches = new Set(org.branches.filter((b) => cities.has(b.parentId)).map((b) => b.id));
+      for (const u of staff) {
+        if (u.roles.includes(`${rs.domain}_city`) && cities.has(u.scope?.[rs.domain]?.cityId)) out.set(u.id, u);
+        if (u.roles.includes(`${rs.domain}_branch`) && branches.has(u.scope?.[rs.domain]?.branchId)) out.set(u.id, u);
+      }
+    }
     if (rs.level === "city" && s.cityId) {
       const branches = new Set(org.branches.filter((b) => b.parentId === s.cityId).map((b) => b.id));
       for (const u of staff) if (u.roles.includes(`${rs.domain}_branch`) && branches.has(u.scope?.[rs.domain]?.branchId)) out.set(u.id, u);
+      // ורכז האזור שמעליו
+      const regionId = org.cities.find((c) => c.id === s.cityId)?.parentId;
+      if (regionId) for (const u of staff) if (u.roles.includes(`${rs.domain}_region`) && u.scope?.[rs.domain]?.regionId === regionId) out.set(u.id, u);
     }
     if (rs.level === "branch" && s.branchId) {
       const cityId = org.branches.find((b) => b.id === s.branchId)?.parentId;
@@ -128,12 +140,14 @@ export async function handleMessages(req, res, url, ctx) {
     const { ids } = await readBody(req);
     const field = pathname.endsWith("read") ? "readBy" : "deletedBy";
     for (const id of (Array.isArray(ids) ? ids : []).slice(0, 500)) {
-      const m = await store.get("messages", String(id));
-      if (!m || !(m.to.includes(user.id) || m.from === user.id)) continue;
-      const set = new Set(m[field] || []);
-      if (set.has(user.id)) continue;
-      set.add(user.id);
-      await store.put("messages", m.id, { ...m, [field]: [...set] });
+      // עדכון אטומי - כמה נמענים שמסמנים יחד לא מוחקים זה לזה את הסימון
+      await store.update("messages", String(id), (m) => {
+        if (!m || !((m.to || []).includes(user.id) || m.from === user.id)) return null;
+        const set = new Set(m[field] || []);
+        if (set.has(user.id)) return null;
+        set.add(user.id);
+        return { ...m, [field]: [...set] };
+      });
     }
     return send(200, { ok: true }), true;
   }

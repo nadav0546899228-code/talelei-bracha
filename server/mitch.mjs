@@ -34,11 +34,8 @@ export async function handleMitch(req, res, url, ctx) {
     const s = scopeOf(domain);
     return s === null || s.has(branchId);
   };
-  const canManageWorkflow = (domain) =>
-    isPrivileged(user.roles) ||
-    user.roles.includes("chief_coordinator") ||
-    user.roles.includes(`${domain}_region`) ||
-    user.roles.includes(`${domain}_city`);
+  // שלבי המעקב חלים על כל הארגון - לכן רק הנהלה ורכז ארצי (בעבר גם רכזי עיר ואזור)
+  const canManageWorkflow = () => isPrivileged(user.roles) || user.roles.includes("chief_coordinator");
 
   /* ---------------- מתחזקים / מתחזקות */
   if (pathname === "/api/mitch" && method === "GET") {
@@ -49,7 +46,7 @@ export async function handleMitch(req, res, url, ctx) {
     const rows = await enrichMitchRows(store, baseRows, domain, config);
     const rowIds = new Set(rows.map((m) => m.id));
     const pendingByMitch = {};
-    for (const u of await store.list("mitchUpdates", 5000)) {
+    for (const u of await store.listLight("mitchUpdates", ["photos"], 5000)) {
       if (u.status === "pending" && rowIds.has(u.mitchId)) pendingByMitch[u.mitchId] = (pendingByMitch[u.mitchId] || 0) + 1;
     }
     const branches = org.branches.filter((b) => b.domain === domain && inScope(domain, b.id));
@@ -74,7 +71,8 @@ export async function handleMitch(req, res, url, ctx) {
 
   if (pathname === "/api/mitch/settings" && method === "PUT") {
     const domain = url.searchParams.get("domain") === "bnot" ? "bnot" : "kollel";
-    if (!can(domain) || !canManageWorkflow(domain)) return send(403, { error: "אין הרשאה לשנות הגדרות מעקב" }), true;
+    // ההגדרות חלות על כל הארגון - רק הנהלה ורכז ארצי
+    if (!can(domain) || !canManageWorkflow()) return send(403, { error: "שינוי שלבי המעקב - רכז ארצי, מנכ״ל או מתכנת" }), true;
     const body = await readBody(req);
     const next = normalizeMitchConfig(domain, body);
     await store.put("settings", `mitchWorkflow:${domain}`, next);
@@ -141,22 +139,26 @@ export async function handleMitch(req, res, url, ctx) {
     if (update.status !== "pending") return send(400, { error: "העדכון כבר טופל" }), true;
     const reviewer = user.name || user.email || user.phone || "רכז/ת";
     const reviewedAt = new Date().toISOString();
+    // תפיסה אטומית: אם שני רכזים מאשרים יחד - רק אחד מצליח (בלי רישום כפול ביומן)
+    if (reviewMatch[2] === "approve" && !(await store.get("mitchazkim", update.mitchId))) return send(404, { error: "המתחזק/ת לא נמצא/ה" }), true;
+    const status = reviewMatch[2] === "approve" ? "approved" : "rejected";
+    const claimed = await store.update("mitchUpdates", update.id, (cur) => (cur?.status === "pending" ? { ...cur, status, reviewedAt, reviewedBy: reviewer } : null));
+    if (!claimed) return send(400, { error: "העדכון כבר טופל" }), true;
     if (reviewMatch[2] === "approve") {
       const m = await store.get("mitchazkim", update.mitchId);
       if (!m) return send(404, { error: "המתחזק/ת לא נמצא/ה" }), true;
       const entry = {
         id: randomUUID().slice(0, 8),
-        date: String(update.submittedAt || reviewedAt).slice(0, 10),
+        // תאריך לפי שעון ישראל (עדכון שנשלח ב-01:30 שייך לאותו יום, לא לאתמול)
+        date: new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem" }).format(new Date(update.submittedAt || reviewedAt)),
         type: "דיווח עצמי",
         note: update.text || (update.photos?.length ? `צורפו ${update.photos.length} תמונות` : ""),
         by: `אושר ע״י ${reviewer}`,
         updateId: update.id,
       };
-      await store.put("mitchazkim", m.id, { ...m, log: [entry, ...(m.log || [])].slice(0, 300), lastContact: entry.date });
-      await store.put("mitchUpdates", update.id, { ...update, status: "approved", reviewedAt, reviewedBy: reviewer });
+      await store.update("mitchazkim", m.id, (cur) => (cur ? { ...cur, log: [entry, ...(cur.log || [])].slice(0, 300), lastContact: entry.date > (cur.lastContact || "") ? entry.date : cur.lastContact } : null));
       await audit(user, "אישור עדכון מתחזק", m.name);
     } else {
-      await store.put("mitchUpdates", update.id, { ...update, status: "rejected", reviewedAt, reviewedBy: reviewer });
       await audit(user, "דחיית עדכון מתחזק", update.mitchName || update.mitchId);
     }
     return send(200, { ok: true }), true;
@@ -252,18 +254,18 @@ export async function handleMitch(req, res, url, ctx) {
     const stageEntry = stageChanged
       ? { id: randomUUID().slice(0, 8), date: today(), type: "שינוי שלב", note: `${m.stage || "ללא שלב"} → ${stage}`, by: user.name || user.email || user.phone || "" }
       : null;
-    const nextLog = [entry, ...(stageEntry ? [stageEntry] : []), ...(m.log || [])].slice(0, 300);
-    await store.put("mitchazkim", m.id, {
-      ...m,
-      log: nextLog,
+    // עדכון אטומי - שני רישומי קשר במקביל לא מוחקים זה את זה
+    await store.update("mitchazkim", m.id, (cur) => cur && ({
+      ...cur,
+      log: [entry, ...(stageEntry ? [stageEntry] : []), ...(cur.log || [])].slice(0, 300),
       lastContact: entry.date,
       nextFollowUp: next,
       stage,
       stageChangedAt: stageChanged ? now : m.stageChangedAt || m.startDate || now,
       stageHistory: stageChanged
-        ? [{ stage, at: now, by: user.name || user.email || user.phone || "" }, ...(m.stageHistory || [])].slice(0, 100)
-        : m.stageHistory || [],
-    });
+        ? [{ stage, at: now, by: user.name || user.email || user.phone || "" }, ...(cur.stageHistory || [])].slice(0, 100)
+        : cur.stageHistory || [],
+    }));
     return send(200, { ok: true }), true;
   }
 
@@ -294,15 +296,35 @@ export async function handleMitch(req, res, url, ctx) {
     const id = b.id ? String(b.id) : randomUUID();
     const prev = await store.get("challahEvents", id);
     if (prev && !inScope("bnot", prev.branchId)) return send(403, { error: "אין הרשאה" }), true;
-    const regs = (Array.isArray(b.registrations) ? b.registrations : prev?.registrations || []).slice(0, 500).map((r) => ({
-      id: String(r.id || randomUUID().slice(0, 8)),
-      name: clean(r.name, 80),
-      phone: normalizePhone(r.phone),
-      arrived: Boolean(r.arrived),
-      at: r.at || new Date().toISOString(),
-      mitchId: r.mitchId || null,
-    }));
-    await store.put("challahEvents", id, {
+    const norm = (r) => ({
+      id: String(r?.id || randomUUID().slice(0, 8)),
+      name: clean(r?.name, 80),
+      phone: normalizePhone(r?.phone),
+      arrived: Boolean(r?.arrived),
+      at: r?.at || new Date().toISOString(),
+      mitchId: r?.mitchId || null,
+    });
+    const sameReg = (a, x) => a && x && a.name === x.name && a.phone === x.phone && a.arrived === x.arrived && (a.mitchId || null) === (x.mitchId || null);
+    const clientRegs = Array.isArray(b.registrations) ? b.registrations.filter((r) => r && typeof r === "object").slice(0, 3000).map(norm) : null;
+    const baseRegs = Array.isArray(b.baseRegistrations) ? b.baseRegistrations.filter((r) => r && typeof r === "object").map(norm) : null;
+    // מיזוג: משנים רק מה שהמשתמש שינה ביחס למה שראה. נרשמות שנכנסו בינתיים מהקישור הציבורי - נשמרות
+    const mergeRegs = (curRegs) => {
+      if (!clientRegs) return curRegs || [];
+      if (!baseRegs) return clientRegs;
+      const base = new Map(baseRegs.map((r) => [r.id, r]));
+      const cur = new Map((curRegs || []).map((r) => [r.id, r]));
+      const out = [];
+      const seen = new Set();
+      for (const r of clientRegs) {
+        seen.add(r.id);
+        const was = base.get(r.id);
+        out.push(was && sameReg(was, r) && cur.has(r.id) ? cur.get(r.id) : r);
+      }
+      for (const r of curRegs || []) if (!seen.has(r.id) && !base.has(r.id)) out.push(r);
+      return out;
+    };
+    await store.update("challahEvents", id, (cur) => ({
+      ...(cur || {}),
       title: clean(b.title, 120) || "הפרשת חלה",
       date: b.date,
       time: clean(b.time, 5),
@@ -312,9 +334,9 @@ export async function handleMitch(req, res, url, ctx) {
       notes: clean(b.notes, 1000),
       summary: clean(b.summary, 2000),
       open: b.open !== false,
-      registrations: regs,
-      reminderSent: prev?.reminderSent || false,
-    });
+      registrations: mergeRegs(cur?.registrations),
+      reminderSent: cur?.reminderSent || false,
+    }));
     if (!prev) await audit(user, "אירוע הפרשת חלה חדש", `${b.date} · ${clean(b.title, 60)}`);
     return send(200, { ok: true, id }), true;
   }
@@ -345,7 +367,8 @@ export async function handleMitch(req, res, url, ctx) {
       }
       regs.push({ ...r, mitchId: mid });
     }
-    await store.put("challahEvents", ev.id, { ...ev, registrations: regs });
+    const mids = new Map(regs.map((r) => [r.id, r.mitchId]));
+    await store.update("challahEvents", ev.id, (cur) => (cur ? { ...cur, registrations: (cur.registrations || []).map((r) => (mids.get(r.id) ? { ...r, mitchId: mids.get(r.id) } : r)) } : null));
     await audit(user, "העברת משתתפות למעקב", `${ev.title} · ${added}`);
     return send(200, { ok: true, added }), true;
   }
@@ -377,16 +400,32 @@ export async function publicChallah(req, res, url, { store, json, readBody, clea
   }
   if (req.method === "POST") {
     if (rateLimited(`chreg:${clientIp(req)}`, 10, 10 * 60_000)) return json(res, 429, { error: "יותר מדי ניסיונות" }), true;
+    if (rateLimited(`chreg-ev:${ev.id}`, 300, 60 * 60_000)) return json(res, 429, { error: "יותר מדי הרשמות בזמן קצר. נסו שוב מאוחר יותר." }), true;
     if (full) return json(res, 400, { error: "האירוע מלא" }), true;
     const b = await readBody(req, 8 * 1024);
     const name = clean(b.name, 80).trim();
     const phone = normalizePhone(b.phone);
     if (!name || !validPhone(phone)) return json(res, 400, { error: "יש למלא שם וטלפון תקין" }), true;
     if (b.website) return json(res, 200, { ok: true }), true; // מלכודת
-    const regs = ev.registrations || [];
-    if (!regs.some((r) => r.phone === phone)) regs.push({ id: randomUUID().slice(0, 8), name, phone, arrived: false, at: new Date().toISOString(), mitchId: null });
-    await store.put("challahEvents", ev.id, { ...ev, registrations: regs });
-    notify?.((u) => u.views.includes("bnot"), { title: "נרשמה להפרשת חלה", body: `${name} · ${ev.title}`, url: "/admin?v=bnot&t=challah" });
+    // הוספה אטומית - הרבה נרשמות באותו רגע לא דורסות זו את זו
+    let result = "ok";
+    await store.update("challahEvents", ev.id, (cur) => {
+      if (!cur?.open) return (result = "closed"), null;
+      const regs = cur.registrations || [];
+      if (regs.some((r) => r.phone === phone)) return null;
+      if ((cur.capacity > 0 && regs.length >= cur.capacity) || regs.length >= 3000) return (result = "full"), null;
+      result = "added";
+      return { ...cur, registrations: [...regs, { id: randomUUID().slice(0, 8), name, phone, arrived: false, at: new Date().toISOString(), mitchId: null }] };
+    });
+    if (result === "closed") return json(res, 400, { error: "ההרשמה נסגרה" }), true;
+    if (result === "full") return json(res, 400, { error: "האירוע מלא" }), true;
+    if (result === "added") {
+      // התראה רק לצוות שהסניף באחריותו
+      notify?.(
+        (u) => u.views.includes("bnot") && ((sc) => sc === null || sc.has(ev.branchId))(branchScope(u, org, "bnot")),
+        { title: "נרשמה להפרשת חלה", body: `${name} · ${ev.title}`, url: "/admin?v=bnot&t=challah" },
+      );
+    }
     return json(res, 200, { ok: true }), true;
   }
   return false;
@@ -399,8 +438,16 @@ export async function publicMitchShare(req, res, url, { store, json, readBody, c
   let token = url.searchParams.get("t") || "";
   let body = null;
   if (method === "POST") {
+    // הגבלת קצב לפי כתובת לפני קריאת גוף הבקשה (עד 6MB) - מונע הצפה בלי קישור תקין
+    if (rateLimited(`mshare-ip:${clientIp(req)}`, 20, 10 * 60_000)) return json(res, 429, { error: "יותר מדי ניסיונות. נסו שוב מאוחר יותר." }), true;
+    // אם הקישור נשלח בכתובת (?t=) - בודקים אותו לפני שמקבלים את התמונות
+    if (token) {
+      if (token.length < 30 || token.length > 100) return json(res, 404, { error: "הקישור אינו תקין" }), true;
+      const a0 = await store.get("mitchAccess", tokenHash(token));
+      if (!a0 || a0.active === false) return json(res, 404, { error: "הקישור אינו פעיל. יש לבקש קישור חדש מהרכז/ת." }), true;
+    }
     body = await readBody(req, 6 * 1024 * 1024);
-    token = String(body?.token || "");
+    token = String(body?.token || token || "");
   }
   if (token.length < 30 || token.length > 100) return json(res, 404, { error: "הקישור אינו תקין" }), true;
   const hash = tokenHash(token);
@@ -415,7 +462,7 @@ export async function publicMitchShare(req, res, url, { store, json, readBody, c
   const city = org.cities.find((c) => c.id === branch?.parentId);
 
   if (method === "GET") {
-    const pending = (await store.list("mitchUpdates", 2000)).filter((u) => u.mitchId === m.id && u.status === "pending").length;
+    const pending = (await store.listLight("mitchUpdates", ["photos"], 2000)).filter((u) => u.mitchId === m.id && u.status === "pending").length;
     return json(res, 200, {
       name: m.name,
       domain: m.domain,

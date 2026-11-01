@@ -73,3 +73,11 @@ test("מס״ב: מספרים בשם לא מתהפכים", async () => {
   const line = Buffer.from(bytes).toString("latin1").split("\r\n")[1];
   assert.ok(line.includes("12 "), "הספרות נשארות 12 ולא 21");
 });
+
+test("חודש סגור: לפי צילום המצב - שינוי בסיס או אברך חדש לא משנים אותו", () => {
+  const snapMonth = month({ locked: true, snapshot: { at: "", settings: { fullBase: 1500, simchaRates: S.simchaRates, absenceRate: 0 }, avrechim: [{ id: "a", monthlyTravel: 100, inPayroll: true, active: true, simchaFund: true, simchaExternal: false, branchId: "b1" }] } });
+  const now = { ...S, fullBase: 1600, absenceRate: 0 };
+  const lines = computePayroll([av("a", { monthlyTravel: 300 }), av("new")], snapMonth, [], now);
+  assert.equal(lines.length, 1);
+  assert.equal(lines[0].total, 1500 + 100);
+});

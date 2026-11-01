@@ -24,6 +24,27 @@ const num = (v, d = 0) => {
   return Number.isFinite(n) ? Math.round(n * 100) / 100 : d;
 };
 
+/** צילום מצב של חודש שנסגר: ההגדרות ונתוני האברכים באותו רגע,
+    כדי ששינוי עתידי (בסיס, נסיעות, העברת סניף, השבתה) לא ישנה משכורת שכבר שולמה */
+export async function makeMonthSnapshot(store) {
+  const settings = { ...DEFAULT_SETTINGS, ...((await store.get("kollelSettings", "main")) || {}) };
+  const { masav: _m, ...payrollSettings } = settings;
+  const avrechim = (await store.list("avrechim")).map((a) => ({
+    id: a.id, name: a.name, monthlyTravel: a.monthlyTravel ?? 0, inPayroll: a.inPayroll !== false, active: a.active !== false,
+    simchaFund: a.simchaFund !== false, simchaExternal: Boolean(a.simchaExternal), branchId: a.branchId || null,
+    startDate: a.startDate || null, createdAt: a.createdAt || null,
+  }));
+  return { at: new Date().toISOString(), settings: payrollSettings, avrechim };
+}
+/** חודשים שנסגרו לפני שהיה צילום מצב - מצלמים פעם אחת לפי הנתונים הנוכחיים */
+export async function snapshotLockedMonths(store) {
+  const months = (await store.list("kollelMonths")).filter((m) => m.locked && !m.snapshot);
+  if (!months.length) return 0;
+  const snap = await makeMonthSnapshot(store);
+  for (const m of months) await store.put("kollelMonths", m.id, { ...m, snapshot: snap });
+  return months.length;
+}
+
 export async function handleKollel(req, res, url, ctx) {
   const { pathname } = url;
   if (!pathname.startsWith("/api/kollel/")) return false;
@@ -122,6 +143,7 @@ export async function handleKollel(req, res, url, ctx) {
     let added = 0;
     let updated = 0;
     for (const r of rows) {
+      if (!r || typeof r !== "object") continue;
       const name = clean(r.name, 80).trim();
       if (!name) continue;
       const found = existing.find((a) => a.name === name);
@@ -148,7 +170,7 @@ export async function handleKollel(req, res, url, ctx) {
     const av = await store.get("avrechim", fMatch[1]);
     if (!av) return send(404, { error: "לא נמצא" }), true;
     if (method === "GET") {
-      const files = (await store.list("avrechFiles", 5000)).filter((f) => f.avrechId === av.id).map(({ data: _d, ...f }) => f);
+      const files = (await store.listLight("avrechFiles", ["data"], 5000)).filter((f) => f.avrechId === av.id).map(({ dataCount: _d, ...f }) => f);
       return send(200, { files }), true;
     }
     if (method === "POST") {
@@ -187,24 +209,30 @@ export async function handleKollel(req, res, url, ctx) {
     const month = clean(body ? body.month : url.searchParams.get("month"), 40);
     const m = await monthDoc(month);
     if (!m) return send(400, { error: "חודש לא קיים" }), true;
-    const st = (await store.get("kollelMonthStatus", month)) || { branches: {}, cities: {} };
+    let st = (await store.get("kollelMonthStatus", month)) || { branches: {}, cities: {} };
     if (method === "POST") {
       const b = body || {};
       if (m.locked) return send(400, { error: "החודש נסגר לתשלום" }), true;
       const stamp = { by: user.id, byName: user.name || user.email || user.phone, at: new Date().toISOString() };
       const id = String(b.id || "");
+      let field;
       if (b.action === "branchDone" || b.action === "branchUndo") {
         if (!myBranches.some((x) => x.id === id)) return send(403, { error: "הסניף אינו באחריותך" }), true;
-        if (b.action === "branchDone") st.branches[id] = stamp;
-        else delete st.branches[id];
+        field = "branches";
       } else if (b.action === "cityApprove" || b.action === "cityUndo") {
         const city = myCities.find((c) => c.id === id);
         const isCityCoord = user.roles.includes("kollel_city") && user.scope?.kollel?.cityId === id;
         if (!city || !(manager || isCityCoord)) return send(403, { error: "אישור עיר - רכז העיר או הרכז הראשי" }), true;
-        if (b.action === "cityApprove") st.cities[id] = stamp;
-        else delete st.cities[id];
+        field = "cities";
       } else return send(400, { error: "פעולה לא מוכרת" }), true;
-      await store.put("kollelMonthStatus", month, st);
+      const on = b.action === "branchDone" || b.action === "cityApprove";
+      // עדכון אטומי - כמה מנהלי סניפים שלוחצים "סיימתי" יחד לא דורסים זה את זה
+      st = await store.update("kollelMonthStatus", month, (cur) => {
+        const next = { branches: { ...(cur?.branches || {}) }, cities: { ...(cur?.cities || {}) } };
+        if (on) next[field][id] = stamp;
+        else delete next[field][id];
+        return next;
+      });
       await audit(user, "סטטוס חודש", `${m.label} · ${b.action}`);
     }
     return (
@@ -385,7 +413,22 @@ export async function handleKollel(req, res, url, ctx) {
     const notes = {};
     const srcNotes = b.notes && typeof b.notes === "object" ? b.notes : prev?.notes || {};
     for (const [k, v] of Object.entries(srcNotes)) if (inBranch.has(k)) notes[k] = clean(v, 300);
-    await store.put("kollelAttendance", id, { branchId, date, month, present, mPresent, notes, by: user.id, byName: user.name || user.email || user.phone });
+    // מיזוג אטומי: מוסיפים ומורידים רק את מה שהמשתמש שינה ביחס למה שראה על המסך.
+    // נוכחות שנרשמה בינתיים (ימות המשיח, מכשיר אחר) נשמרת.
+    const merge = (curList, next, base) => {
+      if (!Array.isArray(base)) return next;
+      const b = new Set(base.map(String));
+      const n = new Set(next);
+      const out = new Set((curList || []).map(String));
+      for (const x of n) if (!b.has(x)) out.add(x);
+      for (const x of b) if (!n.has(x)) out.delete(x);
+      return [...out];
+    };
+    await store.update("kollelAttendance", id, (cur) => {
+      const finalPresent = merge(cur?.present, present, b.basePresent).filter((x) => inBranch.has(x));
+      const finalM = merge(cur?.mPresent, mPresent, b.basemPresent).filter((x) => mInBranch.has(x));
+      return { ...(cur || {}), branchId, date, month, present: finalPresent, mPresent: finalM, notes: { ...(cur?.notes || {}), ...notes }, by: user.id, byName: user.name || user.email || user.phone };
+    });
     if (!prev) await audit(user, "פתיחת מפגש נוכחות", `${date} · ${myBranches.find((x) => x.id === branchId)?.name || ""}`);
     return send(200, { ok: true, id }), true;
   }
@@ -433,6 +476,9 @@ export async function handleKollel(req, res, url, ctx) {
         locked: Boolean(b.locked),
         notes: clean(b.notes, 1000),
       };
+      // סגירה לתשלום: צילום מצב חדש. פתיחה מחדש: הצילום נשמר (שינוי בהגדרות לא משנה חודש שולם)
+      if (doc.locked && !prev?.locked) doc.snapshot = await makeMonthSnapshot(store);
+      else if (prev?.snapshot) doc.snapshot = prev.snapshot;
       await store.put("kollelMonths", key, doc);
       if (!prev && notify) notify((u) => u.views.includes("kollel"), { title: `נפתח חודש ${doc.label}`, body: "אפשר לדווח נסיעות, הוצאות ונוכחות", url: "/admin?v=kollel&t=entries" });
       await audit(user, prev ? (doc.locked && !prev.locked ? "סגירת חודש לתשלום" : !doc.locked && prev.locked ? "פתיחת חודש סגור" : "עדכון חודש משכורת") : "פתיחת חודש משכורת", doc.label);

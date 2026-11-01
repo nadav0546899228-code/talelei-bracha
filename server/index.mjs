@@ -29,7 +29,7 @@ import { BOOTSTRAP, FORM_VIEW, ROLES, ROLE_SCOPE, VIEW_LABELS, bootstrapRoles, g
 import { canAssignScope, cleanScope, handleOrg, loadOrg } from "./org.mjs";
 import { createStore } from "./store.mjs";
 import * as phone from "./phoneAuth.mjs";
-import { handleKollel } from "./kollel.mjs";
+import { handleKollel, snapshotLockedMonths } from "./kollel.mjs";
 import { dispatch, handleBroadcast, runScheduled } from "./broadcast.mjs";
 import { yemotConfigured } from "./yemot.mjs";
 import { handleMessages } from "./messages.mjs";
@@ -71,6 +71,10 @@ if (DEMO && !(await store.list("avrechim", 1)).length) {
   await seedDemo(store);
   console.log("נתוני דמה נטענו לאתר הפיתוח");
 }
+
+snapshotLockedMonths(store)
+  .then((n) => n && console.log(`צילום מצב נשמר ל-${n} חודשים סגורים`))
+  .catch((e) => console.error("snapshot", e?.message));
 
 /* ---- עדכונים בזמן אמת (Server-Sent Events): כל שינוי נתונים מודיע לכל המחוברים איזה אוסף השתנה */
 const liveClients = new Set();
@@ -399,6 +403,25 @@ setTimeout(backupIfDue, 60_000).unref();
 setTimeout(runJobs, 5_000).unref();
 setInterval(backupIfDue, 60 * 60_000).unref();
 
+/** החודש העברי הנוכחי בפורמט של מסך המשכורות, למשל "חשוון תשפ״ז" */
+function hebrewMonthLabelNow() {
+  try {
+    const parts = new Intl.DateTimeFormat("he-u-ca-hebrew", { month: "long", year: "numeric", timeZone: "Asia/Jerusalem" }).formatToParts(new Date());
+    const monthName = parts.find((p) => p.type === "month")?.value ?? "";
+    const n = Number(parts.find((p) => p.type === "year")?.value) % 1000;
+    const ones = ["", "א", "ב", "ג", "ד", "ה", "ו", "ז", "ח", "ט"];
+    const tens = ["", "י", "כ", "ל", "מ", "נ", "ס", "ע", "פ", "צ"];
+    const hundreds = ["", "ק", "ר", "ש", "ת", "תק", "תר", "תש", "תת", "תתק"];
+    let y = hundreds[Math.floor(n / 100)] ?? "";
+    const r = n % 100;
+    y += r === 15 ? "טו" : r === 16 ? "טז" : tens[Math.floor(r / 10)] + ones[r % 10];
+    y = y.length === 1 ? y + "׳" : y.slice(0, -1) + "״" + y.slice(-1);
+    return `${monthName} ${y}`;
+  } catch {
+    return "";
+  }
+}
+
 /** תאריך היום לפי שעון ישראל YYYY-MM-DD */
 const israelDate = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 
@@ -488,7 +511,10 @@ async function api(req, res, url) {
     const av = (await store.list("avrechim", 20000)).find((a) => a.active !== false && a.phone && a.phone === caller);
     if (!av) return say("המספר שממנו התקשרת אינו רשום בכולל");
     if (!av.branchId) return say(`שלום ${av.name} לא הוגדר לך סניף`);
-    const month = (await store.list("kollelMonths")).filter((m) => !m.locked).sort((a, b) => (b.order || 0) - (a.order || 0))[0];
+    // החודש העברי של היום (למשל "חשוון תשפ״ז"); אם לא נפתח - החודש הפתוח הוותיק ביותר (לא החודש הבא שנפתח מוקדם)
+    const openMonths = (await store.list("kollelMonths")).filter((m) => !m.locked).sort((a, b) => (a.order || 0) - (b.order || 0));
+    const nowLabel = hebrewMonthLabelNow();
+    const month = openMonths.find((m) => String(m.label || "").trim() === nowLabel) || openMonths[0];
     if (!month) return say("אין כרגע חודש פתוח לדיווח");
     const date = israelDate();
     const id = `${av.branchId}_${date}`;
@@ -546,6 +572,8 @@ async function api(req, res, url) {
     const formId = formMatch[1];
     if (!FORM_VIEW[formId]) return json(res, 404, { error: "טופס לא קיים" });
     if (rateLimited(`form:${clientIp(req)}`, 8, 10 * 60_000)) return json(res, 429, { error: "נשלחו יותר מדי פניות. נסו שוב מאוחר יותר." });
+    // תקרה כללית לטפסים - גם אם מישהו מזייף כתובת IP בכל בקשה
+    if (rateLimited(`form-all:${formId}`, 200, 10 * 60_000)) return json(res, 429, { error: "המערכת עמוסה כרגע. נסו שוב בעוד כמה דקות." });
     const body = await readBody(req, 32 * 1024);
     const data = body?.data;
     if (!data || typeof data !== "object" || Array.isArray(data) || Object.keys(data).length > 25) {
@@ -848,6 +876,14 @@ async function api(req, res, url) {
     if (user.impersonatedBy) return send(400, { error: "בתצוגה של משתמש אחר אי אפשר" });
     const { subscription } = await readBody(req);
     if (!subscription?.endpoint || !subscription?.keys?.p256dh || !subscription?.keys?.auth) return send(400, { error: "מנוי לא תקין" });
+    // רק שירותי ההתראות של הדפדפנים (שהשרת לא ישלח בקשות לכתובות שרירותיות)
+    try {
+      const u = new URL(String(subscription.endpoint));
+      const okHost = /(^|\.)(fcm\.googleapis\.com|push\.apple\.com|push\.services\.mozilla\.com|notify\.windows\.com|android\.googleapis\.com)$/.test(u.hostname);
+      if (u.protocol !== "https:" || !okHost) return send(400, { error: "שירות התראות לא מוכר" });
+    } catch {
+      return send(400, { error: "מנוי לא תקין" });
+    }
     const sub = { endpoint: String(subscription.endpoint).slice(0, 1000), keys: { p256dh: String(subscription.keys.p256dh).slice(0, 200), auth: String(subscription.keys.auth).slice(0, 100) } };
     await store.put("pushSubs", push.subId(sub.endpoint), { userId: user.id, sub, ua: clean(req.headers["user-agent"], 200) });
     return send(200, { ok: true });
@@ -1184,6 +1220,8 @@ async function api(req, res, url) {
       env: IS_PROD ? "production" : "development",
       node: process.version,
       uptimeSec: Math.round((Date.now() - STARTED) / 1000),
+      // לאבחון: איך כתובת הגולש מגיעה דרך השרתים של Replit (לכיול הגבלת הקצב)
+      forwardedFor: String(req.headers["x-forwarded-for"] || ""),
       storage: store.kind,
       counts: await store.counts(),
       checks: [
@@ -1275,7 +1313,13 @@ async function serveStatic(req, res, url) {
     res.writeHead(200, { "Content-Type": TYPES[".webmanifest"], "Cache-Control": "no-cache", ...SECURITY });
     return res.end(JSON.stringify(m));
   }
-  const safe = normalize(decodeURIComponent(url.pathname)).replace(/^(\.\.[/\\])+/, "");
+  let decoded;
+  try {
+    decoded = decodeURIComponent(url.pathname);
+  } catch {
+    decoded = url.pathname;
+  }
+  const safe = normalize(decoded).replace(/^(\.\.[/\\])+/, "");
   let file = join(ROOT, safe);
   if (!file.startsWith(ROOT) || !(await isFile(file))) {
     if (extname(safe)) {
@@ -1352,7 +1396,7 @@ createServer(async (req, res) => {
     }
     return await serveStatic(req, res, url);
   } catch (e) {
-    const status = e?.status || 500;
+    const status = e?.status || (e instanceof URIError ? 400 : 500);
     // מזהה שגיאה קצר - מופיע למשתמש וביומן השרת, כדי שאפשר לאתר בדיוק מה קרה
     const errId = status === 500 ? `E-${Date.now().toString(36).slice(-5)}-${randomUUID().slice(0, 4)}` : "";
     if (status === 500) console.error(errId, req.method, url.pathname, e);

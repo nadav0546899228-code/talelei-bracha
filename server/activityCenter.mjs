@@ -23,7 +23,14 @@ const coordFor = (city) => {
   const key = Object.keys(CITY_COORDS).find((k) => name.includes(k) || k.includes(name));
   return key ? CITY_COORDS[key] : null;
 };
-const isoDay = (v) => String(v || "").slice(0,10);
+// תאריך לפי שעון ישראל: מחרוזת תאריך נשארת כמו שהיא, וחותמת זמן (עם שעה) מומרת ליום בישראל
+const IL_DAY = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem", year: "numeric", month: "2-digit", day: "2-digit" });
+const isoDay = (v) => {
+  const t = String(v || "");
+  if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
+  const d = new Date(t);
+  return Number.isNaN(d.getTime()) ? t.slice(0, 10) : IL_DAY.format(d);
+};
 const inRange = (date, from, to) => (!from || date >= from) && (!to || date <= to);
 
 export async function handleActivityCenter(req, res, url, ctx) {

@@ -104,14 +104,14 @@ export function branchScope(user, org, domain) {
   return new Set([...base].filter((id)=>selected.has(id)));
 }
 
+/** הרשאת כתיבה ליחידה: רק היחידה שבאחריות המשתמש ומה שמתחתיה - לא יחידות שמעליו
+    (regionScope/cityScope כוללות גם את יחידות האב, כדי שיוכל לראות אותן - לא לערוך) */
 function unitAllowedForUser(user,org,domain,level,id){
   if(seesAll(user)) return true;
-  if(level==="region"){
-    const rs=regionScope(user,org,domain); return rs?.has(id)||false;
-  }
-  if(level==="city"){
-    const cs=cityScope(user,org,domain); return cs?.has(id)||false;
-  }
+  const s=user.scope?.[domain]||{};
+  const has=(lvl)=>user.roles.some((r)=>ROLE_SCOPE[r]?.domain===domain&&ROLE_SCOPE[r]?.level===lvl);
+  if(level==="region") return has("region")&&s.regionId===id;
+  if(level==="city") return (has("city")&&s.cityId===id)||(has("region")&&org.cities.some((c)=>c.id===id&&c.domain===domain&&c.parentId===s.regionId));
   const bs=baseBranchScope(user,org,domain); return bs?.has(id)||false;
 }
 
@@ -207,7 +207,11 @@ export async function handleOrg(req,res,url,ctx){
     const id=b.id?String(b.id):randomUUID();
     const prev=await store.get("orgUnits",id);
     if(prev&&!unitAllowedForUser(user,org,prev.domain,prev.type,prev.id)) return send(403,{error:"אין הרשאה"}),true;
-    await store.put("orgUnits",id,{type,domain,name,parentId});
+    if(prev&&(prev.type!==type||prev.domain!==domain)) return send(400,{error:"אי אפשר לשנות סוג יחידה או ארגון"}),true;
+    if(prev&&!seesAll(user)&&(prev.parentId||null)!==parentId) return send(403,{error:"העברת יחידה למקום אחר במבנה - רכז ארצי, מנכ״ל או מתכנת בלבד"}),true;
+    if(parentId&&parentId===id) return send(400,{error:"יחידה לא יכולה להיות תחת עצמה"}),true;
+    // שומרים שדות קיימים (למשל מיקום במפה) ולא מוחקים אותם בעריכת שם
+    await store.put("orgUnits",id,{...(prev||{}),type,domain,name,parentId});
     const label=type==="region"?"אזור":type==="city"?"עיר":"סניף";
     await audit(user,prev?"עדכון יחידה במבנה":`הוספת ${label}`,`${DOMAINS[domain]} · ${name}`);
     return send(200,{ok:true,id}),true;

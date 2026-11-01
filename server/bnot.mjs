@@ -42,7 +42,8 @@ export async function handleBnot(req, res, url, ctx) {
     if (prev && !memberInScope(prev)) return send(403, { error: "אין הרשאה" }), true;
     const keepsOwnBranch = prev && assigned.has(prev.id) && prev.branchId === branchId;
     if (!ids.has(branchId) && !keepsOwnBranch) return send(400, { error: "יש לבחור סניף" }), true;
-    await store.put("bnotMembers", id, { name, phone: normalizePhone(b.phone), branchId, active: b.active !== false, notes: clean(b.notes, 500) });
+    // שומרים שדות נוספים (למשל תגיות) שהטופס לא שולח
+    await store.put("bnotMembers", id, { ...(prev || {}), name, phone: normalizePhone(b.phone), branchId, active: b.active !== false, notes: clean(b.notes, 500) });
     await audit(user, prev ? "עדכון משתתפת" : "הוספת משתתפת", name);
     return send(200, { ok: true, id }), true;
   }
@@ -59,6 +60,7 @@ export async function handleBnot(req, res, url, ctx) {
     const members = new Set((await store.list("bnotMembers", 20000)).filter((m) => m.branchId === branchId).map((m) => m.id));
     const time = /^([01]\d|2[0-3]):[0-5]\d$/.test(String(b.time || "")) ? String(b.time) : "";
     await store.put("bnotActivities", id, {
+      ...(prev || {}),
       branchId,
       date,
       time,

@@ -92,8 +92,9 @@ function consecutiveMissed(m, sessions) {
   let n = 0;
   for (const s of sessions) {
     if (s.date && m.startDate && String(s.date) < String(m.startDate)) continue;
-    const present = Array.isArray(s.mPresent) ? s.mPresent : [];
-    if (present.includes(m.id)) break;
+    // מפגש שלא סומנה בו נוכחות מתחזקים (למשל נרשם רק מימות המשיח) - לא נחשב "החסיר"
+    if (!Array.isArray(s.mPresent)) continue;
+    if (s.mPresent.includes(m.id)) break;
     n++;
   }
   return n;
