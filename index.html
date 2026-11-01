@@ -21,10 +21,16 @@
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- הגופנים נטענים בלי לעכב את הצגת הדף (הטקסט מופיע מיד בגופן רגיל ומתחלף כשהגופן מגיע) -->
     <link
-      rel="stylesheet"
+      rel="preload"
+      as="style"
       href="https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@500;700;900&family=Assistant:wght@400;500;600;700&display=swap"
+      onload="this.onload=null;this.rel='stylesheet'"
     />
+    <noscript>
+      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@500;700;900&family=Assistant:wght@400;500;600;700&display=swap" />
+    </noscript>
     <link rel="preload" as="image" href="/brand/logo-keren-talelei-bracha.webp" type="image/webp" />
   </head>
   <body>

@@ -1,8 +1,22 @@
 // Service Worker - התקנה כאפליקציה, עבודה בסיסית בלי קליטה (קבצי האתר נשמרים במכשיר) והתראות לטלפון.
 // הנתונים עצמם (API) תמיד מהשרת, והדפים תמיד מהשרת כשיש חיבור - כך רואים תמיד את הגרסה העדכנית.
-const CACHE = "tb-v1";
+const CACHE = "tb-v2";
 self.addEventListener("install", () => self.skipWaiting());
-self.addEventListener("activate", (e) => e.waitUntil(self.clients.claim()));
+// ניקוי מטמונים ישנים (בגרסה הקודמת קבצי כל העדכונים הצטברו במכשיר בלי סוף)
+self.addEventListener("activate", (e) =>
+  e.waitUntil(
+    caches
+      .keys()
+      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+      .then(() => self.clients.claim()),
+  ),
+);
+/** שומרים לכל היותר 120 קבצים - הוותיקים נמחקים */
+async function trim(c) {
+  const keys = await c.keys();
+  const extra = keys.length - 120;
+  for (let i = 0; i < extra; i++) await c.delete(keys[i]);
+}
 
 // עבודה גם בלי קליטה: קבצי האתר נשמרים במכשיר; הנתונים (API) תמיד מהשרת
 self.addEventListener("fetch", (e) => {
@@ -13,10 +27,10 @@ self.addEventListener("fetch", (e) => {
       fetch(e.request)
         .then((res) => {
           const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put("/__shell", copy));
+          caches.open(CACHE).then((c) => c.put(shellKey(url), copy));
           return res;
         })
-        .catch(async () => (await caches.match("/__shell")) || offlinePage()),
+        .catch(async () => (await caches.match(shellKey(url))) || (await caches.match("/__shell")) || offlinePage()),
     );
     return;
   }
@@ -28,7 +42,7 @@ self.addEventListener("fetch", (e) => {
           fetch(e.request).then((res) => {
             if (res.ok) {
               const copy = res.clone();
-              caches.open(CACHE).then((c) => c.put(e.request, copy));
+              caches.open(CACHE).then((c) => c.put(e.request, copy).then(() => trim(c)));
             }
             return res;
           }),
@@ -36,6 +50,9 @@ self.addEventListener("fetch", (e) => {
     );
   }
 });
+
+// מערכת הניהול והאתר הציבורי נשמרים בנפרד (לכל אחד מניפסט ואייקון משלו)
+const shellKey = (url) => (url.pathname.startsWith("/admin") ? "/__shell-admin" : "/__shell");
 
 function offlinePage() {
   return new Response(
